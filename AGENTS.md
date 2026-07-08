@@ -21,7 +21,7 @@
 
 ```
 backend/          # Go 后端
-  main.go         # 入口，Unix Socket / TCP 自动切换
+  main.go         # 入口，Unix Socket
   api/            # Gin 路由 + WebSocket Hub
   db/             # SQLite 数据模型 (6 表)
   dockerclient/   # Docker 引擎交互、版本检测、升级/回滚、任务队列
@@ -40,7 +40,6 @@ build.cmd         # 一键构建脚本
 
 - **单二进制部署**: Go 后端通过 `//go:embed` 嵌入前端 dist 产物
 - **生产环境**: Unix Domain Socket (`${TRIM_APPDEST}/web.sock`)，由飞牛统一网关代理
-- **开发环境**: 自动回退 TCP `:9090`
 - **路径前缀**: 所有请求统一在 `/app/docker-updater/` 下
 - **全站无 emoji**: 日志标签使用 `[INFO]`, `[WARNING]`, `[ERROR]`, `[SUCCESS]`
 
