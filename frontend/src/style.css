@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #0066cc;          /* Action Blue */
+  --color-primary-focus: #0071e3;    /* Focus Blue */
+  --color-ink: #1d1d1f;              /* Near-Black Ink */
+  --color-body-muted: #7a7a7a;       /* Ink Muted 48 */
+  --color-canvas-parchment: #f5f5f7;  /* Parchment */
+  --color-surface-pearl: #fafafc;     /* Pearl Button */
+  --color-surface-tile: #272729;      /* Dark Tile */
+  --color-hairline: #e0e0e0;          /* 1px border */
+  --color-divider-soft: #f0f0f0;      /* Soft divider */
+  
+  --font-sans: "SF Pro Text", "Inter", "system-ui", sans-serif;
+  
+  --radius-sm: 8px;                  /* Utility Button */
+  --radius-md: 11px;                 /* Pearl Capsule */
+  --radius-lg: 18px;                 /* Store Utility Card */
+  --radius-pill: 9999px;             /* Primary Blue Pill */
+}
+
+/* 页面基底，采用 Signature Parchment 背景 */
+html, body {
+  font-family: var(--font-sans);
+  background-color: var(--color-canvas-parchment);
+  color: var(--color-ink);
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Apple 紧凑字距标题 */
+.apple-headline {
+  letter-spacing: -0.01em;
+}
+
+/* 扁平无阴影 1px 细线 Apple Card */
+.apple-card {
+  background-color: #ffffff;
+  border: 1px solid var(--color-hairline);
+  box-shadow: none;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+
+/* 极简状态点 (Apple 细腻发光指示) */
+.status-dot-green {
+  background-color: #34c759;
+  box-shadow: 0 0 4px rgba(52, 199, 89, 0.4);
+  border: 1px solid rgba(52, 199, 89, 0.2);
+}
+.status-dot-red {
+  background-color: #ff3b30;
+  box-shadow: 0 0 4px rgba(255, 59, 48, 0.4);
+  border: 1px solid rgba(255, 59, 48, 0.2);
+}
+.status-dot-amber {
+  background-color: #ff9500;
+  box-shadow: 0 0 4px rgba(255, 149, 0, 0.4);
+  border: 1px solid rgba(255, 149, 0, 0.2);
+}
+
+/* 全局按钮缩放微动作 */
+.active-scale:active {
+  transform: scale(0.95) !important;
+}
+
+.n-button {
+  transition: transform 0.1s ease !important;
+}
+.n-button:active {
+  transform: scale(0.95) !important;
+}
+
+/* 针对 Naive UI Checkbox 的极简微调 */
+.n-checkbox {
+  --n-border-radius: 4px !important;
+}
+
+/* SPA 页面淡入微动效 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.view-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

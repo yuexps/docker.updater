@@ -1,0 +1,10 @@
+appname               = docker.updater
+version               = 1.0.0
+display_name          = Docker Updater
+desc                  = Docker 容器 更新
+arch                  = x86_64
+source                = thirdparty
+maintainer            = yuexps
+distributor           = yuexps
+desktop_uidir         = ui
+desktop_applaunchname = docker.updater.Application
