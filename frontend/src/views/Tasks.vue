@@ -26,7 +26,7 @@
       </div>
 
       <div v-else class="apple-card p-8 text-center text-body-muted rounded-lg select-none">
-        当前没有正在运行的升级或回退任务
+        当前没有正在运行的升级或回滚任务
       </div>
     </div>
 
@@ -34,51 +34,53 @@
     <div>
       <h2 class="text-[15px] font-semibold text-slate-500 uppercase tracking-wider mb-4 select-none">等待排队队列</h2>
       
-      <div v-if="queuedTasks.length > 0" class="apple-card rounded-lg overflow-hidden">
-        <table class="w-full border-collapse text-left">
-          <thead>
-            <tr class="border-b border-hairline bg-slate-50/50 text-[13px] font-semibold text-slate-500 select-none">
-              <th class="py-4 px-6 w-[100px]">排队序号</th>
-              <th class="py-4 px-6">容器名称</th>
-              <th class="py-4 px-6 w-[140px]">任务类型</th>
-              <th class="py-4 px-6">入队时间</th>
-              <th class="py-4 px-6 text-right w-[150px]">操作</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-hairline">
-            <tr 
-              v-for="(task, index) in queuedTasks" 
-              :key="task.container_name"
-              class="text-[14px] text-slate-700 hover:bg-slate-50/30 transition-colors"
-            >
-              <td class="py-4 px-6 font-mono font-semibold text-slate-500">
-                #{{ index + 1 }}
-              </td>
-              <td class="py-4 px-6 font-semibold text-slate-800">
-                {{ task.container_name }}
-              </td>
-              <td class="py-4 px-6">
-                <n-tag v-if="task.type === 'update'" size="small" round>升级</n-tag>
-                <n-tag v-else type="warning" size="small" round>回滚</n-tag>
-              </td>
-              <td class="py-4 px-6 text-[13px] text-body-muted font-mono">
-                {{ formatDate(task.added_at) }}
-              </td>
-              <td class="py-4 px-6 text-right">
-                <n-button 
-                  type="error"
-                  size="small"
-                  quaternary
-                  round
-                  class="active-scale"
-                  @click="cancelQueuedTask(task.container_name)"
-                >
-                  取消排队
-                </n-button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div v-if="queuedTasks.length > 0" class="apple-card rounded-lg p-4 sm:p-6 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full border-collapse text-left min-w-[550px]">
+            <thead>
+              <tr class="border-b border-hairline bg-slate-50/50 text-[13px] font-semibold text-slate-500 select-none">
+                <th class="py-4 px-6 w-[100px]">排队序号</th>
+                <th class="py-4 px-6">容器名称</th>
+                <th class="py-4 px-6 w-[140px]">任务类型</th>
+                <th class="py-4 px-6">入队时间</th>
+                <th class="py-4 px-6 text-right w-[150px]">操作</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-hairline">
+              <tr 
+                v-for="(task, index) in queuedTasks" 
+                :key="task.container_name"
+                class="text-[14px] text-slate-700 hover:bg-slate-50/30 transition-colors"
+              >
+                <td class="py-4 px-6 font-mono font-semibold text-slate-500">
+                  #{{ index + 1 }}
+                </td>
+                <td class="py-4 px-6 font-semibold text-slate-800">
+                  {{ task.container_name }}
+                </td>
+                <td class="py-4 px-6">
+                  <n-tag v-if="task.type === 'update'" size="small" round>升级</n-tag>
+                  <n-tag v-else type="warning" size="small" round>回滚</n-tag>
+                </td>
+                <td class="py-4 px-6 text-[13px] text-body-muted font-mono">
+                  {{ formatDate(task.added_at) }}
+                </td>
+                <td class="py-4 px-6 text-right">
+                  <n-button 
+                    type="error"
+                    size="small"
+                    quaternary
+                    round
+                    class="active-scale"
+                    @click="cancelQueuedTask(task.container_name)"
+                  >
+                    取消排队
+                  </n-button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div v-else class="apple-card p-8 text-center text-body-muted rounded-lg select-none">

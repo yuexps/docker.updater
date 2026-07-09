@@ -3,7 +3,7 @@
       <!-- Page Header -->
       <div class="flex items-center justify-between mb-8 select-none">
         <div>
-          <h1 class="text-[28px] font-semibold tracking-tight text-slate-800 apple-headline">控制面板</h1>
+          <h1 class="text-[28px] font-semibold tracking-tight text-slate-800 apple-headline">概览</h1>
         </div>
         <div class="flex items-center space-x-3">
           <n-button 
@@ -30,27 +30,27 @@
       </div>
 
       <!-- Stats Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 select-none">
+      <div class="grid grid-cols-3 gap-3 md:gap-6 mb-10 select-none">
         <!-- Card 1 -->
-        <div class="apple-card p-6 rounded-lg">
+        <div class="apple-card p-3 sm:p-6 rounded-lg">
           <span class="text-[12px] font-normal text-body-muted uppercase tracking-wider">待升级</span>
           <span class="text-[34px] font-semibold tracking-tight block mt-2 text-primary">{{ updateCount }}</span>
         </div>
         <!-- Card 2 -->
-        <div class="apple-card p-6 rounded-lg">
-          <span class="text-[12px] font-normal text-body-muted uppercase tracking-wider">已挂起</span>
+        <div class="apple-card p-3 sm:p-6 rounded-lg">
+          <span class="text-[12px] font-normal text-body-muted uppercase tracking-wider">已暂挂</span>
           <span class="text-[34px] font-semibold tracking-tight block mt-2 text-amber-600">{{ deferredCount }}</span>
         </div>
         <!-- Card 3 -->
-        <div class="apple-card p-6 rounded-lg">
+        <div class="apple-card p-3 sm:p-6 rounded-lg">
           <span class="text-[12px] font-normal text-body-muted uppercase tracking-wider">最后检测</span>
-          <span class="text-[14px] font-semibold block mt-4 text-slate-700 break-all">{{ formatCheckTime(lastCheck) }}</span>
+          <span class="text-[11px] sm:text-[14px] font-semibold block mt-4 text-slate-700 break-all">{{ formatCheckTime(lastCheck) }}</span>
         </div>
       </div>
 
       <!-- Section: Pending Updates Grid -->
       <div>
-        <h2 class="text-[21px] font-semibold tracking-tight mb-6 apple-headline">可用更新服务</h2>
+        <h2 class="text-[21px] font-semibold tracking-tight mb-6 apple-headline">可升级容器</h2>
 
         <div v-if="loading" class="flex justify-center py-20">
           <n-spin size="large" />
@@ -64,7 +64,7 @@
           <div 
             v-for="c in pendingContainers" 
             :key="c.name"
-            class="apple-card rounded-lg p-6 flex flex-col justify-between min-h-[220px] hover:border-primary transition-all duration-200"
+            class="apple-card rounded-lg p-4 sm:p-6 flex flex-col justify-between min-h-[220px] hover:border-primary transition-all duration-200"
           >
             <!-- Top Header -->
             <div>
@@ -82,7 +82,7 @@
 
                 <div class="flex items-center space-x-2">
                   <span class="text-[12px] font-normal text-body-muted">
-                    {{ c.status === 'update' ? '待升级' : '已挂起' }}
+                    {{ c.status === 'update' ? '待升级' : '已暂挂' }}
                   </span>
                   <div 
                     class="w-2 h-2 rounded-full"
@@ -416,7 +416,7 @@ const deleteBackup = async (name: string) => {
     onPositiveClick: async () => {
       try {
         await axios.delete(`${apiBase}/backup/${name}`)
-        message.success('备份容器已物理清除')
+        message.success('备份容器已彻底清除')
       } catch (err) {
         message.error('清除备份失败')
       }

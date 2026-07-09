@@ -21,7 +21,7 @@
           <div 
             v-for="c in containers" 
             :key="c.name"
-            class="apple-card rounded-lg p-6 flex flex-col justify-between min-h-[220px] hover:border-primary transition-all duration-200"
+            class="apple-card rounded-lg p-4 sm:p-6 flex flex-col justify-between min-h-[220px] hover:border-primary transition-all duration-200"
           >
             <!-- Top Info -->
             <div>
@@ -32,7 +32,7 @@
 
                 <div class="flex items-center space-x-2">
                   <span class="text-[12px] font-normal text-body-muted">
-                    {{ c.status === 'update' ? '待升级' : c.status === 'deferred' ? '已挂起' : '最新' }}
+                    {{ c.status === 'update' ? '待升级' : c.status === 'deferred' ? '已暂挂' : '最新' }}
                   </span>
                   <div 
                     class="w-2 h-2 rounded-full"
@@ -377,7 +377,7 @@ const deleteBackup = async (name: string) => {
     onPositiveClick: async () => {
       try {
         await axios.delete(`${apiBase}/backup/${name}`)
-        message.success('备份容器已物理清除')
+        message.success('备份容器已彻底清除')
       } catch (err) {
         message.error('清除备份失败')
       }

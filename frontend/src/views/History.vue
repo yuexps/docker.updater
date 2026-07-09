@@ -8,7 +8,7 @@
       </div>
 
       <!-- History Table Card -->
-      <div class="apple-card rounded-lg p-8">
+      <div class="apple-card rounded-lg p-4 sm:p-8">
         <div v-if="loading" class="flex justify-center py-20">
           <n-spin size="large" />
         </div>
@@ -18,7 +18,7 @@
         </div>
 
         <div v-else class="overflow-x-auto">
-          <table class="w-full text-left text-[14px] text-slate-700 leading-relaxed border-collapse">
+          <table class="w-full text-left text-[14px] text-slate-700 leading-relaxed border-collapse min-w-[650px]">
             <thead>
               <tr class="border-b border-hairline text-slate-400 font-semibold">
                 <th class="py-3 px-4 font-semibold text-[12px] uppercase tracking-wider">目标容器</th>
@@ -53,7 +53,7 @@
                     class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale"
                     @click="viewHistoricalLog(h.ContainerName)"
                   >
-                    查看详情日志
+                    查看日志
                   </n-button>
                 </td>
               </tr>

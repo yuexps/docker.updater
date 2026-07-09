@@ -1,5 +1,5 @@
 <template>
-  <div class="view-fade-in flex flex-col h-[calc(100vh-80px)] lg:h-[calc(100vh-100px)]">
+  <div class="view-fade-in flex flex-col h-[calc(100vh-148px)] md:h-[calc(100vh-80px)] lg:h-[calc(100vh-100px)]">
     <!-- Page Header -->
     <div class="flex items-center justify-between mb-6 shrink-0 select-none">
       <div>
@@ -20,7 +20,7 @@
     </div>
 
     <!-- Logs Content Card (Flex fill) -->
-    <div class="apple-card p-6 rounded-lg flex-1 flex flex-col min-h-0">
+    <div class="apple-card p-4 sm:p-6 rounded-lg flex-1 flex flex-col min-h-0">
       <div v-if="loading" class="flex justify-center items-center flex-1">
         <n-spin size="large" />
       </div>
@@ -33,7 +33,7 @@
       <div 
         v-else 
         ref="logContainer"
-        class="font-mono text-[13px] leading-relaxed text-slate-600 bg-slate-50/50 p-6 rounded-lg border border-hairline flex-1 overflow-y-auto scrollbar-thin select-text"
+        class="font-mono text-[13px] leading-relaxed text-slate-600 bg-slate-50/50 p-4 sm:p-6 rounded-lg border border-hairline flex-1 overflow-y-auto scrollbar-thin select-text"
       >
         <div v-for="(line, idx) in logLines" :key="idx" class="py-0.5 whitespace-pre-wrap">
           <span v-if="line.includes('[SUCCESS]')" class="text-emerald-600 font-semibold">{{ line }}</span>

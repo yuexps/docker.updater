@@ -1,7 +1,7 @@
 <template>
   <div class="view-fade-in">
     <!-- Page Header -->
-    <div class="flex items-center justify-between mb-8 select-none">
+    <div class="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between mb-8 select-none">
       <div class="flex items-baseline space-x-3">
         <h1 class="text-[28px] font-semibold tracking-tight text-slate-800 apple-headline">设置</h1>
         <span 
@@ -17,24 +17,26 @@
     <div class="space-y-6">
       
       <!-- Card 1: Backup Toggle -->
-      <div class="apple-card rounded-lg p-6 flex items-center justify-between min-h-[90px]">
+      <div class="apple-card rounded-lg p-4 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between min-h-[90px]">
         <div>
-          <div class="text-[15px] font-semibold text-slate-800">自动备份服务容器</div>
-          <div class="text-[13px] text-body-muted mt-1">在容器更新重建前克隆备份旧版实例，若出现故障则支持自愈回退。</div>
+          <div class="text-[15px] font-semibold text-slate-800">保留旧版容器备份</div>
+          <div class="text-[13px] text-body-muted mt-1">升级成功后长久保留旧容器实例。若新版本运行出现问题，支持随时手动一键回滚。</div>
         </div>
-        <n-switch v-model:value="settings.backup_enabled" @update:value="autoSaveSettings" />
+        <div class="shrink-0">
+          <n-switch v-model:value="settings.backup_enabled" @update:value="autoSaveSettings" />
+        </div>
       </div>
 
       <!-- Card 2: Expiry Hours -->
       <div 
-        class="apple-card rounded-lg p-6 flex items-center justify-between min-h-[90px] transition-opacity duration-200"
+        class="apple-card rounded-lg p-4 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between min-h-[90px] transition-opacity duration-200"
         :class="settings.backup_enabled ? 'opacity-100' : 'opacity-50 pointer-events-none select-none'"
       >
         <div>
           <div class="text-[15px] font-semibold text-slate-800">备份自动清除周期</div>
           <div class="text-[13px] text-body-muted mt-1">超出保留期后，系统后台会自动物理清除旧容器备份以释放磁盘空间。</div>
         </div>
-        <div class="w-[180px]">
+        <div class="w-full sm:w-[180px] shrink-0">
           <n-select 
             v-model:value="settings.backup_hours" 
             :options="hoursOptions" 
@@ -45,29 +47,31 @@
       </div>
 
       <!-- Card 3: Sibling Restart Toggle -->
-      <div class="apple-card rounded-lg p-6 flex items-center justify-between min-h-[90px]">
+      <div class="apple-card rounded-lg p-4 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between min-h-[90px]">
         <div>
           <div class="text-[15px] font-semibold text-slate-800">自动重启同 Compose 项目服务</div>
           <div class="text-[13px] text-body-muted mt-1">当服务更新重建后，自动重启同 Compose 项目下的其它关联服务。</div>
         </div>
-        <n-switch v-model:value="settings.restart_stack" @update:value="autoSaveSettings" />
+        <div class="shrink-0">
+          <n-switch v-model:value="settings.restart_stack" @update:value="autoSaveSettings" />
+        </div>
       </div>
 
       <!-- Card 4: Private Registry Credentials Management -->
-      <div class="apple-card rounded-lg p-6 space-y-4">
+      <div class="apple-card rounded-lg p-4 sm:p-6 space-y-4">
         <div>
-          <div class="text-[15px] font-semibold text-slate-800">Registry 凭证</div>
+          <div class="text-[15px] font-semibold text-slate-800">仓库凭证</div>
           <div class="text-[13px] text-body-muted mt-1">配置镜像源仓库（如阿里云、自建 Harbor 等）的认证账号，用于拉取和比对私有镜像。</div>
         </div>
 
         <!-- Credentials List -->
         <div v-if="registries.length > 0" class="border border-hairline rounded overflow-hidden divide-y divide-hairline">
-          <div v-for="r in registries" :key="r.id" class="flex items-center justify-between p-4 bg-slate-50/10">
+          <div v-for="r in registries" :key="r.id" class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4 bg-slate-50/10">
             <div>
               <div class="text-[14px] font-semibold text-slate-800 break-all pr-4">{{ r.registry }}</div>
-              <div class="text-[12px] text-body-muted mt-0.5">Username: {{ r.username }}</div>
+              <div class="text-[12px] text-body-muted mt-0.5">用户名: {{ r.username }}</div>
             </div>
-            <div class="flex items-center space-x-2 shrink-0">
+            <div class="flex items-center space-x-2 shrink-0 self-end sm:self-auto">
               <n-button size="tiny" round class="active-scale" @click="editRegistry(r)">
                 编辑
               </n-button>
@@ -79,7 +83,7 @@
         </div>
 
         <div v-else class="text-center py-8 text-body-muted text-[13px] bg-canvas-parchment rounded border border-dashed border-hairline select-none">
-          暂未配置任何 Registry 凭证
+          暂未配置任何仓库凭证
         </div>
 
         <div class="pt-2">
@@ -90,15 +94,15 @@
             class="active-scale bg-surface-pearl border border-divider-soft text-slate-700 w-full"
             @click="openAddRegistryModal"
           >
-            添加 Registry 凭证
+            添加仓库凭证
           </n-button>
         </div>
       </div>
 
       <!-- Card 5: System Registry Mirrors (Read-Only) -->
-      <div class="apple-card rounded-lg p-6 space-y-4">
+      <div class="apple-card rounded-lg p-4 sm:p-6 space-y-4">
         <div>
-          <div class="text-[15px] font-semibold text-slate-800">系统 Registry Mirrors</div>
+          <div class="text-[15px] font-semibold text-slate-800">系统镜像加速源</div>
           <div class="text-[13px] text-body-muted mt-1">只读获取宿主机本地全局生效的 Docker 镜像加速源。</div>
         </div>
 
@@ -113,9 +117,9 @@
       </div>
 
       <!-- Card 6: Temporary Registry Mirrors (Read & Write) -->
-      <div class="apple-card rounded-lg p-6 space-y-4">
+      <div class="apple-card rounded-lg p-4 sm:p-6 space-y-4">
         <div>
-          <div class="text-[15px] font-semibold text-slate-800">临时 Pull Mirrors</div>
+          <div class="text-[15px] font-semibold text-slate-800">临时镜像加速源</div>
           <div class="text-[13px] text-body-muted mt-1">添加仅在此升级器内生效的临时加速源。拉取官方镜像时，会自动在此加速下载，不重启系统 Docker，且不修改宿主机全局配置。</div>
         </div>
 
@@ -130,11 +134,11 @@
         </div>
 
         <div v-else class="text-center py-8 text-body-muted text-[13px] bg-canvas-parchment rounded border border-dashed border-hairline select-none">
-          暂未配置任何临时 Pull Mirrors
+          暂未配置任何临时镜像加速源
         </div>
 
-        <div class="pt-2 flex space-x-2">
-          <n-input v-model:value="newTempMirror" placeholder="例如: https://docker.m.daocloud.io" />
+        <div class="pt-2 flex items-center space-x-2">
+          <n-input v-model:value="newTempMirror" placeholder="例如: https://docker.m.daocloud.io" class="flex-1" />
           <n-button 
             secondary 
             round 
@@ -153,22 +157,22 @@
     <n-modal 
       v-model:show="registryModalVisible" 
       preset="dialog" 
-      :title="editingRegistryId ? '编辑 Registry 凭证' : '添加 Registry 凭证'"
+      :title="editingRegistryId ? '编辑仓库凭据' : '添加仓库凭据'"
       positive-text="保存凭据"
       negative-text="取消"
       @positive-click="submitRegistry"
     >
       <div class="space-y-4 py-4">
         <div>
-          <label class="text-[12px] font-semibold uppercase tracking-wider text-slate-500 block mb-1">Registry 域名</label>
+          <label class="text-[12px] font-semibold uppercase tracking-wider text-slate-500 block mb-1">仓库域名</label>
           <n-input v-model:value="registryForm.registry" placeholder="例如: registry.cn-hangzhou.aliyuncs.com" />
         </div>
         <div>
-          <label class="text-[12px] font-semibold uppercase tracking-wider text-slate-500 block mb-1">Username</label>
+          <label class="text-[12px] font-semibold uppercase tracking-wider text-slate-500 block mb-1">用户名</label>
           <n-input v-model:value="registryForm.username" placeholder="请输入用户名" />
         </div>
         <div>
-          <label class="text-[12px] font-semibold uppercase tracking-wider text-slate-500 block mb-1">Password / Token</label>
+          <label class="text-[12px] font-semibold uppercase tracking-wider text-slate-500 block mb-1">密码 / Token</label>
           <n-input v-model:value="registryForm.password" type="password" show-password-on="click" placeholder="请输入密码或 Token" />
         </div>
       </div>
