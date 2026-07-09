@@ -1,7 +1,7 @@
 <template>
   <div class="view-fade-in flex flex-col h-full overflow-hidden">
     <!-- Page Header -->
-    <div class="shrink-0 px-4 md:px-8 lg:px-10 pt-4 md:pt-8 lg:pt-10 pb-4 md:pb-6 select-none bg-canvas-parchment">
+    <div class="shrink-0 px-4 md:px-8 lg:px-10 pt-3 md:pt-4 lg:pt-5 pb-3 md:pb-4 select-none bg-canvas-parchment">
       <div class="flex items-center justify-between">
         <div>
           <h1 class="text-[28px] font-semibold tracking-tight text-slate-800 apple-headline">升级历史</h1>
@@ -182,15 +182,21 @@ const deleteHistoryItem = (id: number, name: string) => {
     content: `确认删除容器 ${name} 的这次历史升级记录吗？这也会删除本地持久化的日志文件，且不可恢复。`,
     positiveText: '确认删除',
     negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        const res = await axios.delete(`${apiBase}/history/${id}`)
-        if (res.data.ok) {
-          message.success(`已成功删除该条记录`)
+    onPositiveClick: () => {
+      return new Promise<void>(async (resolve, reject) => {
+        try {
+          const res = await axios.delete(`${apiBase}/history/${id}`)
+          if (res.data.ok) {
+            message.success(`已成功删除该条记录`)
+            resolve()
+          } else {
+            reject()
+          }
+        } catch (err) {
+          message.error('删除历史记录失败')
+          reject()
         }
-      } catch (err) {
-        message.error('删除历史记录失败')
-      }
+      })
     }
   })
 }
@@ -201,15 +207,21 @@ const clearAllHistory = () => {
     content: '确认清空全部升级历史记录吗？该操作同时会彻底删除本地产生的全部日志文件，且不可恢复。',
     positiveText: '确认清空',
     negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        const res = await axios.delete(`${apiBase}/history`)
-        if (res.data.ok) {
-          message.success('已成功清空所有历史记录')
+    onPositiveClick: () => {
+      return new Promise<void>(async (resolve, reject) => {
+        try {
+          const res = await axios.delete(`${apiBase}/history`)
+          if (res.data.ok) {
+            message.success('已成功清空所有历史记录')
+            resolve()
+          } else {
+            reject()
+          }
+        } catch (err) {
+          message.error('清空历史记录失败')
+          reject()
         }
-      } catch (err) {
-        message.error('清空历史记录失败')
-      }
+      })
     }
   })
 }

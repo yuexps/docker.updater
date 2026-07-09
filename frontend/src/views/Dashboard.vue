@@ -1,21 +1,11 @@
 <template>
   <div class="view-fade-in flex flex-col h-full overflow-hidden">
     <!-- 页面头部 -->
-    <div class="shrink-0 px-4 md:px-8 lg:px-10 pt-4 md:pt-8 lg:pt-10 pb-4 md:pb-6 select-none bg-canvas-parchment">
+    <div class="shrink-0 px-4 md:px-8 lg:px-10 pt-3 md:pt-4 lg:pt-5 pb-3 md:pb-4 select-none bg-canvas-parchment">
       <div class="flex items-center justify-between">
         <h1 class="text-[28px] font-semibold tracking-tight text-slate-800 apple-headline">概览</h1>
         
         <div class="flex items-center space-x-2 shrink-0">
-          <n-button 
-            v-if="selectedContainers.length > 0"
-            type="primary"
-            round
-            size="small"
-            class="active-scale"
-            @click="actions.startBulkUpdate(selectedContainers, () => selectedContainers = [])"
-          >
-            批量升级 ({{ selectedContainers.length }})
-          </n-button>
           <n-button 
             :loading="checking" 
             round 
@@ -29,13 +19,6 @@
         </div>
       </div>
       
-      <p v-if="lastCheck" class="text-[12px] text-body-muted mt-1.5 flex items-center">
-        <svg class="w-3.5 h-3.5 mr-1.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 6v6l4 2" />
-        </svg>
-        数据已同步于: {{ formatCheckTime(lastCheck) }}
-      </p>
     </div>
 
     <!-- 页面内容 -->
@@ -57,7 +40,51 @@
 
       <!-- 可升级容器列表 -->
       <div>
-        <h2 class="text-[21px] font-semibold tracking-tight mb-6 apple-headline">可升级容器</h2>
+        <div class="flex items-baseline justify-between mb-6 select-none">
+          <h2 class="text-[21px] font-semibold tracking-tight apple-headline">可升级容器</h2>
+          <span v-if="lastCheck" class="text-[12px] text-body-muted font-normal flex items-center">
+            <svg class="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 6v6l4 2" />
+            </svg>
+            上次检测: {{ formatCheckTime(lastCheck) }}
+          </span>
+        </div>
+
+        <div v-if="!loading && updatableContainerNames.length > 0 && selectedContainers.length > 0" class="flex items-center justify-between mb-5 bg-white/40 dark:bg-zinc-900/10 px-4 py-2.5 rounded-xl border border-hairline select-none">
+          <div class="flex items-center space-x-2">
+            <n-checkbox 
+              :checked="isAllSelected" 
+              :indeterminate="isSomeSelected"
+              @update:checked="handleSelectAll"
+            >
+              <span class="text-[13px] font-medium text-slate-700">全选</span>
+            </n-checkbox>
+            <span class="text-[11px] text-body-muted">已选 {{ selectedContainers.length }} 个</span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <n-button 
+              round 
+              secondary
+              size="small"
+              class="active-scale bg-surface-pearl border border-divider-soft text-slate-700 font-medium"
+              @click="selectedContainers = []"
+            >
+              取消
+            </n-button>
+            <n-button 
+              type="primary"
+              round
+              size="small"
+              class="active-scale font-semibold"
+              :disabled="selectedContainers.length === 0"
+              @click="actions.startBulkUpdate(selectedContainers, () => selectedContainers = [])"
+            >
+              批量升级
+            </n-button>
+          </div>
+        </div>
 
         <div v-if="loading" class="flex justify-center py-20">
           <n-spin size="large" />
@@ -71,7 +98,7 @@
               <polyline points="22 4 12 14.01 9 11.01" />
             </svg>
           </div>
-          <h3 class="text-[17px] font-bold text-slate-800 mb-2">本地容器已全部同步至最新版本</h3>
+          <h3 class="text-[17px] font-bold text-slate-800 mb-2">所有本地容器已是最新版本</h3>
           <p class="text-[13px] text-body-muted max-w-sm leading-relaxed mb-6">
             未检测到待升级的本地运行容器。系统将会在后台定时检测镜像版本。您也可以手动触发即时检测。
           </p>
@@ -100,6 +127,7 @@
             @update="actions.updateContainer(c.name)"
             @defer="actions.openDeferModal(c.name)"
             @undefer="actions.undeferContainer(c.name)"
+            @update-to-version="actions.openUpdateVersionModal(c.name, c.image)"
           />
         </div>
       </div>
@@ -119,18 +147,27 @@
       v-model:days="actions.deferDays.value"
       @submit="actions.submitDefer()"
     />
+
+    <!-- 弹窗三：指定版本升级选择框 -->
+    <update-version-modal
+      v-model:show="actions.updateVersionModalVisible.value"
+      v-model:version="actions.updateVersionValue.value"
+      :current-image="actions.updateVersionCurrentImage.value"
+      @submit="actions.submitUpdateVersion()"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { NButton, NSpin, useMessage } from 'naive-ui'
+import { NButton, NSpin, NCheckbox, useMessage } from 'naive-ui'
 import axios from 'axios'
 import wsService from '../utils/websocket'
 import { useContainerActions } from '../composables/useContainerActions'
 import ContainerCard from '../components/ContainerCard.vue'
 import TerminalModal from '../components/TerminalModal.vue'
 import DeferModal from '../components/DeferModal.vue'
+import UpdateVersionModal from '../components/UpdateVersionModal.vue'
 
 const apiBase = '/app/docker-updater/api'
 
@@ -161,6 +198,44 @@ const updateCount = computed(() => {
 const deferredCount = computed(() => {
   return containers.value.filter(c => c.status === 'deferred').length
 })
+
+// 所有可升级容器名列表
+const updatableContainerNames = computed(() => {
+  return pendingContainers.value
+    .filter(c => c.status === 'update')
+    .map(c => c.name)
+})
+
+// 是否为全选状态
+const isAllSelected = computed(() => {
+  const names = updatableContainerNames.value
+  if (names.length === 0) return false
+  return names.every(name => selectedContainers.value.includes(name))
+})
+
+// 是否为半选状态
+const isSomeSelected = computed(() => {
+  const names = updatableContainerNames.value
+  if (names.length === 0) return false
+  const selectedCount = names.filter(name => selectedContainers.value.includes(name)).length
+  return selectedCount > 0 && selectedCount < names.length
+})
+
+// 全选操作逻辑
+const handleSelectAll = (checked: boolean) => {
+  const names = updatableContainerNames.value
+  if (checked) {
+    names.forEach(name => {
+      if (!selectedContainers.value.includes(name)) {
+        selectedContainers.value.push(name)
+      }
+    })
+  } else {
+    selectedContainers.value = selectedContainers.value.filter(
+      name => !names.includes(name)
+    )
+  }
+}
 
 const checkUpdates = async () => {
   checking.value = true

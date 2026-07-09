@@ -1,25 +1,26 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --color-primary: #0066cc;          /* Action Blue */
-  --color-primary-focus: #0071e3;    /* Focus Blue */
-  --color-ink: #1d1d1f;              /* Near-Black Ink */
-  --color-body-muted: #7a7a7a;       /* Ink Muted 48 */
-  --color-canvas-parchment: #f5f5f7;  /* Parchment */
-  --color-surface-pearl: #fafafc;     /* Pearl Button */
-  --color-surface-tile: #272729;      /* Dark Tile */
-  --color-hairline: #e0e0e0;          /* 1px border */
-  --color-divider-soft: #f0f0f0;      /* Soft divider */
+  --color-primary: #0066cc;          /* 主题蓝 */
+  --color-primary-focus: #0071e3;    /* 聚焦蓝 */
+  --color-ink: #1d1d1f;              /* 文字墨色 */
+  --color-body-muted: #7a7a7a;       /* 次要文字色 */
+  --color-canvas-parchment: #f5f5f7;  /* 页面背景 */
+  --color-surface-pearl: #fafafc;     /* 按钮表面色 */
+  --color-surface-tile: #272729;      /* 深色表面色 */
+  --color-hairline: #e0e0e0;          /* 细边框 */
+  --color-divider-soft: #f0f0f0;      /* 分割线 */
   
   --font-sans: "SF Pro Text", "Inter", "system-ui", sans-serif;
   
-  --radius-sm: 8px;                  /* Utility Button */
-  --radius-md: 11px;                 /* Pearl Capsule */
-  --radius-lg: 18px;                 /* Store Utility Card */
-  --radius-pill: 9999px;             /* Primary Blue Pill */
+  --radius-sm: 8px;                  /* 工具按钮圆角 */
+  --radius-md: 11px;                 /* 胶囊圆角 */
+  --radius-lg: 18px;                 /* 卡片圆角 */
+  --radius-pill: 9999px;             /* 全圆角 */
 }
 
-/* 页面基底，采用 Signature Parchment 背景 */
+/* 页面基础样式 */
 html, body {
   font-family: var(--font-sans);
   background-color: var(--color-canvas-parchment);
@@ -30,12 +31,12 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Apple 紧凑字距标题 */
+/* 标题字距 */
 .apple-headline {
   letter-spacing: -0.01em;
 }
 
-/* 扁平无阴影 1px 细线 Apple Card */
+/* 基础卡片样式 */
 .apple-card {
   background-color: #ffffff;
   border: 1px solid var(--color-hairline);
@@ -43,7 +44,7 @@ html, body {
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
 }
 
-/* 极简状态点 (Apple 细腻发光指示) */
+/* 状态指示点 */
 .status-dot-green {
   background-color: #34c759;
   box-shadow: 0 0 4px rgba(52, 199, 89, 0.4);
@@ -60,7 +61,7 @@ html, body {
   border: 1px solid rgba(255, 149, 0, 0.2);
 }
 
-/* 全局按钮缩放微动作 */
+/* 按钮点击缩放 */
 .active-scale:active {
   transform: scale(0.95) !important;
 }
@@ -72,12 +73,12 @@ html, body {
   transform: scale(0.95) !important;
 }
 
-/* 针对 Naive UI Checkbox 的极简微调 */
+/* 复选框圆角微调 */
 .n-checkbox {
   --n-border-radius: 4px !important;
 }
 
-/* SPA 页面淡入微动效 */
+/* 页面载入渐显动画 */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -90,4 +91,155 @@ html, body {
 }
 .view-fade-in {
   animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* 深色模式适配 */
+:root.dark {
+  --color-ink: #f5f5f7;
+  --color-body-muted: #8e8e93;
+  --color-canvas-parchment: #0f0f11;
+  --color-surface-pearl: #1c1c1e;
+  --color-surface-tile: #1c1c1e;
+  --color-hairline: #2c2c2e;
+  --color-divider-soft: #242426;
+  
+  color-scheme: dark;
+}
+
+/* 通用浅色类名重写 */
+:root.dark {
+  & .bg-white {
+    background-color: #1c1c1e !important;
+  }
+  
+  & .bg-white\/90 {
+    background-color: rgba(28, 28, 30, 0.9) !important;
+  }
+
+  & .bg-slate-50, 
+  & .bg-slate-50\/40, 
+  & .bg-slate-50\/20 {
+    background-color: #121214 !important;
+  }
+
+  & .text-slate-800 {
+    color: #e5e5ea !important;
+  }
+
+  & .text-slate-700 {
+    color: #d1d1d6 !important;
+  }
+
+  & .text-slate-600 {
+    color: #aeaeb2 !important;
+  }
+
+  & .text-slate-500 {
+    color: #8e8e93 !important;
+  }
+
+  /* 交互与边框 */
+  & .hover\:bg-slate-100:hover {
+    background-color: #2c2c2e !important;
+  }
+
+  & .border-slate-200 {
+    border-color: #2c2c2e !important;
+  }
+
+  /* 状态徽章与特定组件样式覆盖 */
+  
+  /* 基础灰度样式覆盖 */
+  & .bg-slate-100,
+  & .bg-slate-100\/80 {
+    background-color: #2c2c2e !important;
+  }
+  & .bg-slate-50,
+  & .bg-slate-50\/40,
+  & .bg-slate-50\/30,
+  & .bg-slate-50\/20,
+  & .bg-slate-50\/10 {
+    background-color: #121214 !important;
+  }
+  & .border-slate-100,
+  & .border-slate-100\/50 {
+    border-color: #2c2c2e !important;
+  }
+  & .border-slate-200,
+  & .border-slate-200\/40,
+  & .border-slate-200\/50,
+  & .border-slate-200\/80 {
+    border-color: rgba(44, 44, 46, 0.5) !important;
+  }
+  & .hover\:bg-slate-50:hover,
+  & .hover\:bg-slate-100:hover,
+  & .hover\:bg-slate-100\/30:hover {
+    background-color: #2c2c2e !important;
+  }
+
+  /* 成功状态 */
+  /* 徽章背景与边框 */
+  & .bg-emerald-50 {
+    background-color: rgba(48, 209, 88, 0.15) !important;
+  }
+  & .border-emerald-100 {
+    border-color: rgba(48, 209, 88, 0.25) !important;
+  }
+  /* 二级容器背景与边框 */
+  & .bg-emerald-50\/50,
+  & .bg-emerald-50\/10 {
+    background-color: #121214 !important;
+  }
+  & .border-emerald-100\/80,
+  & .border-emerald-100\/30,
+  & .border-emerald-100\/20 {
+    border-color: #2c2c2e !important;
+  }
+  & .text-emerald-700,
+  & .text-emerald-600 {
+    color: #30d158 !important;
+  }
+
+  /* 警告与暂挂状态 */
+  /* 徽章背景与边框 */
+  & .bg-amber-50 {
+    background-color: rgba(255, 159, 10, 0.15) !important;
+  }
+  & .border-amber-100 {
+    border-color: rgba(255, 159, 10, 0.25) !important;
+  }
+  /* 二级容器背景与边框 */
+  & .bg-amber-50\/40,
+  & .bg-amber-50\/10 {
+    background-color: #121214 !important;
+  }
+  & .border-amber-200,
+  & .border-amber-100\/50,
+  & .border-amber-200\/50,
+  & .border-amber-400\/60 {
+    border-color: #2c2c2e !important;
+  }
+  & .text-amber-700, 
+  & .text-amber-600 {
+    color: #ff9f0a !important;
+  }
+
+  /* 提示与更新状态 */
+  /* 徽章背景与边框 */
+  & .bg-blue-50 {
+    background-color: rgba(10, 132, 255, 0.15) !important;
+  }
+  & .border-blue-100 {
+    border-color: rgba(10, 132, 255, 0.25) !important;
+  }
+  /* 二级容器背景与边框 */
+  & .bg-blue-50\/80,
+  & .bg-blue-50\/60,
+  & .bg-blue-50\/50,
+  & .bg-blue-50\/40 {
+    background-color: #121214 !important;
+  }
+  & .border-blue-100\/50 {
+    border-color: #2c2c2e !important;
+  }
 }

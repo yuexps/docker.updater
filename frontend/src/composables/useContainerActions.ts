@@ -20,6 +20,11 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
   const diagnosticsVisible = ref<boolean>(false)
   const diagnosticsLogs = ref<string>('')
 
+  const updateVersionModalVisible = ref<boolean>(false)
+  const updateVersionTarget = ref<string>('')
+  const updateVersionCurrentImage = ref<string>('')
+  const updateVersionValue = ref<string>('')
+
   let activeUnsubscribeLogs: (() => void) | null = null
 
   // 缩略哈希算法
@@ -55,12 +60,16 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
   }
 
   // 升级单个容器
-  const updateContainer = (name: string) => {
+  const updateContainer = (name: string, targetImage?: string) => {
     logLines.value = []
     logModalVisible.value = true
     logRunning.value = true
 
-    axios.get(`${apiBase}/update/${name}`).catch(() => {
+    const url = targetImage 
+      ? `${apiBase}/update/${name}?target_image=${encodeURIComponent(targetImage)}`
+      : `${apiBase}/update/${name}`
+
+    axios.get(url).catch(() => {
       message?.error('触发升级失败')
       logRunning.value = false
     })
@@ -122,42 +131,51 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
       positiveText: '确认还原',
       negativeText: '取消',
       onPositiveClick: () => {
-        logLines.value = []
-        logModalVisible.value = true
-        logRunning.value = true
+        return new Promise<void>((resolve) => {
+          logLines.value = []
+          logModalVisible.value = true
+          logRunning.value = true
 
-        axios.get(`${apiBase}/rollback/${name}`).catch(() => {
-          message?.error('触发回滚失败')
-          logRunning.value = false
-        })
+          axios.get(`${apiBase}/rollback/${name}`)
+            .then(() => resolve())
+            .catch(() => {
+              message?.error('触发回滚失败')
+              logRunning.value = false
+              resolve()
+            })
 
-        if (activeUnsubscribeLogs) activeUnsubscribeLogs()
-        activeUnsubscribeLogs = wsService.subscribeLogs(name, ({ message: msg }) => {
-          logLines.value.push(msg)
-          scrollTerminal()
-          if (msg.includes('[SUCCESS]') || msg.includes('[ERROR]')) {
-            logRunning.value = false
-          }
+          if (activeUnsubscribeLogs) activeUnsubscribeLogs()
+          activeUnsubscribeLogs = wsService.subscribeLogs(name, ({ message: msg }) => {
+            logLines.value.push(msg)
+            scrollTerminal()
+            if (msg.includes('[SUCCESS]') || msg.includes('[ERROR]')) {
+              logRunning.value = false
+            }
+          })
         })
       }
     })
   }
 
   // 删除备份容器
-  const deleteBackup = async (name: string, onSuccess?: () => void) => {
+  const deleteBackup = (name: string, onSuccess?: () => void) => {
     dialog?.warning({
       title: '清除备份容器',
       content: `清理备份容器 ${name}_old 将释放本地磁盘空间，但这之后您将无法直接一键回滚。确定清除吗？`,
       positiveText: '确认清除',
       negativeText: '取消',
-      onPositiveClick: async () => {
-        try {
-          await axios.delete(`${apiBase}/backup/${name}`)
-          message?.success('备份容器已彻底清除')
-          if (onSuccess) onSuccess()
-        } catch (err) {
-          message?.error('清除备份失败')
-        }
+      onPositiveClick: () => {
+        return new Promise<void>(async (resolve, reject) => {
+          try {
+            await axios.delete(`${apiBase}/backup/${name}`)
+            message?.success('备份容器已彻底清除')
+            if (onSuccess) onSuccess()
+            resolve()
+          } catch (err) {
+            message?.error('清除备份失败')
+            reject()
+          }
+        })
       }
     })
   }
@@ -265,6 +283,24 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     }
   }
 
+  const openUpdateVersionModal = (name: string, currentImage: string) => {
+    updateVersionTarget.value = name
+    updateVersionCurrentImage.value = currentImage
+    updateVersionValue.value = ''
+    updateVersionModalVisible.value = true
+  }
+
+  const submitUpdateVersion = () => {
+    if (!updateVersionValue.value.trim()) {
+      message?.warning('请输入要升级的目标版本或镜像名')
+      return
+    }
+    const target = updateVersionTarget.value
+    const val = updateVersionValue.value.trim()
+    updateVersionModalVisible.value = false
+    updateContainer(target, val)
+  }
+
   return {
     operatingContainers,
     logModalVisible,
@@ -282,6 +318,10 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     ],
     diagnosticsVisible,
     diagnosticsLogs,
+    updateVersionModalVisible,
+    updateVersionTarget,
+    updateVersionCurrentImage,
+    updateVersionValue,
     
     shortDigest,
     copyToClipboard,
@@ -297,6 +337,9 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     stopContainer,
     restartContainer,
     closeLogModal,
-    cleanup
+    scrollTerminal,
+    cleanup,
+    openUpdateVersionModal,
+    submitUpdateVersion
   }
 }

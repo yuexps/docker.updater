@@ -1,7 +1,7 @@
 <template>
   <div class="view-fade-in flex flex-col h-full overflow-hidden">
     <!-- Page Header -->
-    <div class="shrink-0 px-4 md:px-8 lg:px-10 pt-4 md:pt-8 lg:pt-10 pb-4 md:pb-6 select-none bg-canvas-parchment">
+    <div class="shrink-0 px-4 md:px-8 lg:px-10 pt-3 md:pt-4 lg:pt-5 pb-3 md:pb-4 select-none bg-canvas-parchment">
       <div class="flex items-center justify-between">
         <div>
           <h1 class="text-[28px] font-semibold tracking-tight text-slate-800 apple-headline">任务队列</h1>

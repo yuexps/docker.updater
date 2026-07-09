@@ -1,7 +1,7 @@
 <template>
   <div class="view-fade-in flex flex-col h-full overflow-hidden">
     <!-- 页面头部 -->
-    <div class="shrink-0 px-4 md:px-8 lg:px-10 pt-4 md:pt-8 lg:pt-10 pb-4 md:pb-6 select-none bg-canvas-parchment">
+    <div class="shrink-0 px-4 md:px-8 lg:px-10 pt-3 md:pt-4 lg:pt-5 pb-3 md:pb-4 select-none bg-canvas-parchment">
       <div class="flex items-center justify-between">
         <h1 class="text-[28px] font-semibold tracking-tight text-slate-800 apple-headline">容器列表</h1>
       </div>
@@ -34,6 +34,7 @@
             @undefer="actions.undeferContainer(c.name)"
             @delete-backup="actions.deleteBackup(c.name)"
             @show-logs="actions.showLogs(c.name)"
+            @update-to-version="actions.openUpdateVersionModal(c.name, c.image)"
           />
         </div>
       </div>
@@ -60,6 +61,14 @@
       :logs="actions.diagnosticsLogs.value"
       @close="actions.diagnosticsVisible.value = false"
     />
+
+    <!-- 弹窗四：指定版本升级选择框 -->
+    <update-version-modal
+      v-model:show="actions.updateVersionModalVisible.value"
+      v-model:version="actions.updateVersionValue.value"
+      :current-image="actions.updateVersionCurrentImage.value"
+      @submit="actions.submitUpdateVersion()"
+    />
   </div>
 </template>
 
@@ -72,6 +81,7 @@ import ContainerCard from '../components/ContainerCard.vue'
 import TerminalModal from '../components/TerminalModal.vue'
 import DeferModal from '../components/DeferModal.vue'
 import DiagnosticsModal from '../components/DiagnosticsModal.vue'
+import UpdateVersionModal from '../components/UpdateVersionModal.vue'
 
 const containers = ref<any[]>([])
 const loading = ref<boolean>(false)

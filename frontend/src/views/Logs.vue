@@ -1,7 +1,7 @@
 <template>
   <div class="view-fade-in flex flex-col h-full overflow-hidden">
     <!-- Page Header -->
-    <div class="shrink-0 px-4 md:px-8 lg:px-10 pt-4 md:pt-8 lg:pt-10 pb-4 md:pb-6 select-none bg-canvas-parchment">
+    <div class="shrink-0 px-4 md:px-8 lg:px-10 pt-3 md:pt-4 lg:pt-5 pb-3 md:pb-4 select-none bg-canvas-parchment">
       <div class="flex items-center justify-between">
         <div>
           <h1 class="text-[28px] font-semibold tracking-tight text-slate-800 apple-headline">运行日志</h1>
@@ -13,6 +13,7 @@
             size="small" 
             ghost
             class="active-scale text-[12px] font-medium"
+            :loading="clearing"
             @click="clearSystemLogs"
           >
             清空日志
@@ -137,6 +138,7 @@ const message = useMessage()
 
 const logLines = ref<string[]>([])
 const loading = ref<boolean>(false)
+const clearing = ref<boolean>(false)
 const logContainer = ref<HTMLDivElement | null>(null)
 
 let unsubscribeSysLog: (() => void) | null = null
@@ -148,6 +150,7 @@ const showScrollBtn = ref(false)
 const levels = [
   { label: 'ALL', value: 'ALL' },
   { label: 'INFO', value: 'INFO' },
+  { label: 'SUCCESS', value: 'SUCCESS' },
   { label: 'WARN', value: 'WARN' },
   { label: 'ERROR', value: 'ERROR' },
   { label: 'DEBUG', value: 'DEBUG' }
@@ -180,7 +183,7 @@ interface ParsedLine {
 }
 
 const parseLine = (line: string): ParsedLine | null => {
-  const targetLevels = ['ERROR', 'INFO', 'WARN', 'WARNING', 'DEBUG'] as const
+  const targetLevels = ['ERROR', 'INFO', 'WARN', 'WARNING', 'DEBUG', 'SUCCESS'] as const
   for (const lvl of targetLevels) {
     const tag = `[${lvl}]`
     if (line.includes(tag)) {
@@ -202,6 +205,9 @@ const parseLine = (line: string): ParsedLine | null => {
       } else if (lvl === 'DEBUG') {
         badgeClass = 'bg-purple-50 border border-purple-100 text-purple-600'
         textClass = 'text-slate-500 font-mono'
+      } else if (lvl === 'SUCCESS') {
+        badgeClass = 'bg-emerald-50 border border-emerald-100 text-emerald-600'
+        textClass = 'text-emerald-700 font-medium'
       }
       
       return {
@@ -249,6 +255,7 @@ const fetchSystemLogs = async () => {
 }
 
 const clearSystemLogs = async () => {
+  clearing.value = true
   try {
     const res = await axios.delete(`${apiBase}/system/logs`)
     if (res.data.ok) {
@@ -258,6 +265,8 @@ const clearSystemLogs = async () => {
     }
   } catch {
     message.error('清空日志文件失败')
+  } finally {
+    clearing.value = false
   }
 }
 

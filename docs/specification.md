@@ -37,7 +37,24 @@
 用于存储备份保留时间等全局选项：
 - `key` (TEXT, PRIMARY KEY)：配置键。
 - `value` (TEXT)：配置值。
-- **常用键**：`backup_enabled` (是否开启更新前备份), `backup_hours` (备份保留时长，整数默认 24), `restart_stack` (升级后是否重启 Compose 栈内其他容器), `temp_mirrors` (临时镜像源加速列表，序列化 JSON 字符串存储)。
+- **常用键**：
+  - `backup_enabled` (是否开启更新前备份，"true"/"false")
+  - `backup_hours` (备份保留时长，整数默认 24)
+  - `restart_stack` (升级后是否重启 Compose 栈内其他容器，"true"/"false")
+  - `auto_update_enabled` (是否开启定时自动升级，"true"/"false")
+  - `temp_mirrors` (临时镜像源加速列表，序列化 JSON 字符串存储)
+  - `check_type` (定时检测更新周期类型，值可选 `hour`/`day`/`week`/`month`，默认 "day")
+  - `check_value` (定时检测周期数值，配合 `check_type` 运算，默认 1)
+  - `smtp_enabled` (是否启用邮件通知，"true"/"false")
+  - `smtp_host` (SMTP 发信服务器主机名)
+  - `smtp_port` (SMTP 服务端口，默认 465)
+  - `smtp_username` (SMTP 用户名)
+  - `smtp_password` (SMTP 密码或授权码)
+  - `smtp_ssl` (是否使用 SSL 加密信道，"true"/"false"，默认 "true")
+  - `smtp_to` (接收报告的收件人邮箱)
+  - `smtp_subject_template` (邮件主题模板)
+  - `smtp_body_template` (邮件正文模板)
+  - `last_check_time` (上一次检查镜像版本的时间，UTC ISO8601 格式)
 
 ### 2.2 available_updates (可用更新表)
 记录检测到有新版本的本地容器：
@@ -110,9 +127,12 @@
 - **端点**：`POST /app/docker-updater/api/check`
 - **说明**：后台异步启动镜像 Digest 校验，完成后写入 `available_updates`。
 
-### 3.3 升级容器
+### 3.3 升级/修改容器版本
 - **端点**：`GET /app/docker-updater/api/update/:name`
-- **交互机制**：API 用于向后台任务队列中异步发起升级注册。一旦任务进入排队与调度流程，其 Pull 进度、物理重建进度、防抖重启和结果日志将一律通过全局 **WebSocket 信道 (`logs:<name>`)** 实时广播至订阅的各前端客户端，同时向本地 `${TRIM_PKGVAR}/logs/${name}.log` 写入完整运行日志且不用任何 emoji。
+- **查询参数**：
+  - `target_image` (string, 可选): 指定的目标版本或镜像。例如 `8.0`（自动拼装原镜像前缀）或 `mysql:8.0`（使用完整新镜像名）。若省略，则默认为直接拉取升级当前容器对应的原镜像最新版。
+- **交互机制**：API 用于向后台任务队列中异步发起升级或版本修改注册。一旦任务进入排队与调度流程，其 Pull 进度、物理重建进度、防抖重启和结果日志将一律通过全局 **WebSocket 信道 (`logs:<name>`)** 实时广播至订阅的各前端客户端，同时向本地 `${TRIM_PKGVAR}/logs/${name}.log` 写入完整运行日志且不用任何 emoji。
+- **Compose 降级机制**：若检测到该容器属于 Compose 项目，且指定了 `target_image`，系统将跳过 Compose 联动，降级为单容器克隆重建逻辑，以防止被 Compose 本地文件中的原镜像版本覆盖。
 - **重启回滚**：启动新容器后休眠 2 秒，检查状态。若状态不为 `running`，则自动执行回退：克隆恢复原备份容器 `{name}_old` 并重启，通过 WS 向日志订阅者分发 `[ROLLBACK SUCCESS] Restore original container`。
 
 ### 3.4 回滚容器
@@ -155,12 +175,32 @@
 
 ### 3.13 获取系统全局配置
 - **端点**：`GET /app/docker-updater/api/settings`
-- **返回**：`{"backup_enabled": bool, "backup_hours": int, "restart_stack": bool}`
+- **返回**：
+  ```json
+  {
+    "backup_enabled": bool,
+    "backup_hours": int,
+    "restart_stack": bool,
+    "auto_update_enabled": bool,
+    "temp_mirrors": ["https://mirror1.com", ...],
+    "check_type": "hour|day|week|month",
+    "check_value": int,
+    "smtp_enabled": bool,
+    "smtp_host": string,
+    "smtp_port": string,
+    "smtp_username": string,
+    "smtp_password": string,
+    "smtp_ssl": bool,
+    "smtp_to": string,
+    "smtp_subject_template": string,
+    "smtp_body_template": string
+  }
+  ```
 
 ### 3.14 保存系统全局配置
 - **端点**：`POST /app/docker-updater/api/settings`
-- **参数**：`{"backup_enabled": bool, "backup_hours": int, "restart_stack": bool}`
-- **说明**：更新并存入 SQLite 数据库，彻底精简移去了 notify_url 推送配置。
+- **参数**：与 `GET` 接口返回的配置 JSON 结构相同。
+- **说明**：更新并存入 SQLite 数据库。保存配置成功后，后端会自动触发 `scheduler.ReloadScheduler()` 热重载定时任务调度器，使得新的检测周期参数即时生效。
 
 ### 3.15 获取后台任务队列状态
 - **端点**：`GET /app/docker-updater/api/tasks`
@@ -225,9 +265,55 @@
       }
     }
     ```
+  - **下行系统运行日志广播**：
+    ```json
+    {
+      "type": "syslog",
+      "payload": {
+        "line": "[INFO] 启动定时镜像更新检查..."
+      }
+    }
+    ```
 
 ### 3.24 只读获取宿主机全局镜像加速源
 - **端点**：`GET /app/docker-updater/api/settings/system-mirrors`
 - **说明**：只读尝试解析宿主机 `/etc/docker/daemon.json` 中的 `"registry-mirrors"` 数组。如果宿主机未配置、文件不存在或读取无权限，则静默返回空数组 `[]`。不提供改写接口，对宿主机配置无破坏。
+
+### 3.25 测试发送邮件
+- **端点**：`POST /app/docker-updater/api/settings/test-email`
+- **参数**：
+  ```json
+  {
+    "smtp_host": string,
+    "smtp_port": string,
+    "smtp_username": string,
+    "smtp_password": string,
+    "smtp_ssl": bool,
+    "smtp_to": string,
+    "smtp_subject_template": string,
+    "smtp_body_template": string
+  }
+  ```
+- **说明**：使用传入的 SMTP 凭证信息及测试数据替换模板占位符，立即发送一封联通性测试邮件。
+
+### 3.26 容器生命周期控制 - 启动容器
+- **端点**：`POST /app/docker-updater/api/container/:name/start`
+- **说明**：手动拉起处于停止状态的指定容器。操作成功后将触发全局 WebSocket 状态广播以刷新前端界面。
+
+### 3.27 容器生命周期控制 - 停止容器
+- **端点**：`POST /app/docker-updater/api/container/:name/stop`
+- **说明**：手动停止运行中的指定容器。操作成功后将触发全局 WebSocket 状态广播以刷新前端界面。
+
+### 3.28 容器生命周期控制 - 重启容器
+- **端点**：`POST /app/docker-updater/api/container/:name/restart`
+- **说明**：手动重新启动指定的容器。操作成功后将触发全局 WebSocket 状态广播以刷新前端界面。
+
+### 3.29 清空所有升级历史记录
+- **端点**：`DELETE /app/docker-updater/api/history`
+- **说明**：清空数据库 `update_histories` 历史表，并物理删除宿主机 `logs/` 目录下所有持久化的 `.log` 日志文件，然后通过 WebSocket 广播更新通知。
+
+### 3.30 删除单条升级历史记录
+- **端点**：`DELETE /app/docker-updater/api/history/:id`
+- **说明**：根据主键 ID 从数据库中物理删除指定的容器升级历史记录，并删除对应的本地物理 `${name}.log` 文件。
 
 ---

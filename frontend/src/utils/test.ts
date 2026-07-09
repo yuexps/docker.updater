@@ -167,7 +167,9 @@ let mockSettings = {
   backup_enabled: true,
   backup_hours: 24,
   restart_stack: false,
-  temp_mirrors: ['https://docker.m.daocloud.io', 'https://mirror.baidubce.com']
+  temp_mirrors: ['https://docker.m.daocloud.io', 'https://mirror.baidubce.com'],
+  check_type: 'day',
+  check_value: 1
 }
 
 // 模拟私有仓库数据库
@@ -656,6 +658,17 @@ axios.defaults.adapter = async function (config) {
     }
   }
 
+  // 12.5 获取系统源加速镜像
+  if (url.includes('/api/settings/system-mirrors')) {
+    return {
+      data: ['https://registry.docker-cn.com', 'https://docker.mirrors.ustc.edu.cn'],
+      status: 200,
+      statusText: 'OK',
+      headers: config.headers || {},
+      config
+    }
+  }
+
   // 13. 获取/保存系统配置
   if (url.includes('/api/settings')) {
     if (method === 'get') {
@@ -673,6 +686,8 @@ axios.defaults.adapter = async function (config) {
         mockSettings.backup_hours = body.backup_hours ?? mockSettings.backup_hours
         mockSettings.restart_stack = body.restart_stack ?? mockSettings.restart_stack
         mockSettings.temp_mirrors = body.temp_mirrors ?? mockSettings.temp_mirrors
+        mockSettings.check_type = body.check_type ?? mockSettings.check_type
+        mockSettings.check_value = body.check_value ?? mockSettings.check_value
         console.log('[Mock DB] 配置已保存:', mockSettings)
       } catch (e) {}
       return {

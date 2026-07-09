@@ -1,5 +1,5 @@
 <template>
-  <n-config-provider :theme-overrides="themeOverrides">
+  <n-config-provider :theme="isDark ? darkTheme : null" :theme-overrides="isDark ? darkThemeOverrides : themeOverrides" :locale="zhCN" :date-locale="dateZhCN">
     <n-dialog-provider>
       <n-message-provider>
         <div class="flex min-h-screen bg-canvas-parchment font-sans text-ink">
@@ -172,12 +172,39 @@
 </template>
 
 <script setup>
-import { NConfigProvider, NMessageProvider, NDialogProvider } from 'naive-ui'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { NConfigProvider, NMessageProvider, NDialogProvider, zhCN, dateZhCN, darkTheme } from 'naive-ui'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
 
-// 映射 Apple 设计规范的系统级别主题覆盖
+// 深色模式状态与系统监听
+const isDark = ref(false)
+let mediaQuery = null
+
+const handleThemeChange = (e) => {
+  isDark.value = e.matches
+  if (isDark.value) {
+    document.documentElement.classList.add('dark')
+  } else {
+    document.documentElement.classList.remove('dark')
+  }
+}
+
+onMounted(() => {
+  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  handleThemeChange(mediaQuery)
+  // 现代浏览器支持 addEventListener，部分旧版本支持 addListener，此处使用标准方法
+  mediaQuery.addEventListener('change', handleThemeChange)
+})
+
+onUnmounted(() => {
+  if (mediaQuery) {
+    mediaQuery.removeEventListener('change', handleThemeChange)
+  }
+})
+
+// 映射 Apple 设计规范的系统级别主题覆盖 (浅色模式)
 const themeOverrides = {
   common: {
     primaryColor: '#0066cc',         // Action Blue
@@ -196,6 +223,34 @@ const themeOverrides = {
   Card: {
     borderRadius: '18px',
     borderColor: '#e0e0e0'
+  },
+  Switch: {
+    railColorActive: '#0066cc'
+  },
+  Modal: {
+    borderRadius: '18px'
+  }
+}
+
+// 映射 Apple 设计规范的系统级别主题覆盖 (深色模式)
+const darkThemeOverrides = {
+  common: {
+    primaryColor: '#0066cc',         // Action Blue
+    primaryColorHover: '#0071e3',
+    primaryColorPressed: '#0052a3',
+    primaryColorSuppl: '#0066cc',
+    borderRadius: '18px',            // 统一的大圆角
+    textColorBase: '#f5f5f7'         // 浅灰色字体色
+  },
+  Button: {
+    borderRadiusMedium: '9999px',
+    borderRadiusSmall: '8px',
+    borderRadiusTiny: '8px',
+    textColorPrimary: '#ffffff'
+  },
+  Card: {
+    borderRadius: '18px',
+    borderColor: '#2c2c2e'
   },
   Switch: {
     railColorActive: '#0066cc'

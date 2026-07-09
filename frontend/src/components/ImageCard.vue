@@ -167,7 +167,28 @@
 
       <!-- 操作按钮 -->
       <div class="flex items-center space-x-2 shrink-0">
+        <n-tooltip v-if="isInUse" trigger="hover" placement="top">
+          <template #trigger>
+            <span>
+              <n-button 
+                type="error"
+                size="small"
+                round
+                ghost
+                disabled
+                class="text-[12px] font-medium opacity-50 cursor-not-allowed"
+              >
+                删除
+              </n-button>
+            </span>
+          </template>
+          <div class="text-[11px] p-1 max-w-[240px] leading-relaxed">
+            该镜像正被以下容器使用，无法删除：
+            <div class="font-semibold text-amber-400 mt-1 font-mono break-all">{{ image.containers?.join(', ') }}</div>
+          </div>
+        </n-tooltip>
         <n-button 
+          v-else
           type="error"
           size="small"
           round

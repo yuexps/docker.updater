@@ -407,5 +407,10 @@ func ScanLocalHostForUpdates(ctx context.Context) error {
 	}
 
 	log.Printf("[INFO] 容器扫描比对检查结束。当前共发现 %d 个待升级服务。\n", updateCount)
+
+	// 扫描完成后通知 WebSocket Hub 广播最新状态给所有前端客户端
+	if GlobalObserver != nil {
+		GlobalObserver.OnStatusChange()
+	}
 	return nil
 }

@@ -120,7 +120,7 @@
             <span class="text-[10px] font-normal text-amber-500/80" v-if="container.checked_at">检测于: {{ container.checked_at }}</span>
           </div>
           
-          <div class="text-[11px] text-amber-700 bg-amber-50 border border-amber-100/30 p-2.5 rounded-lg flex items-center mt-1">
+          <div class="text-[11px] text-amber-700 flex items-center py-1 mt-1">
             <svg class="w-3.5 h-3.5 mr-1.5 text-amber-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"/>
               <path d="M12 6v6l4 2"/>
@@ -136,7 +136,7 @@
             <span class="text-[10px] font-normal text-slate-400" v-if="container.checked_at">检测于: {{ container.checked_at }}</span>
           </div>
           
-          <div class="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-100/20 p-2.5 rounded-lg flex items-center mt-1">
+          <div class="text-[11px] text-emerald-700 flex items-center py-1 mt-1">
             <svg class="w-3.5 h-3.5 mr-1.5 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
               <path d="M22 4L12 14.01l-3-3"/>
@@ -267,6 +267,18 @@
         >
           清除备份
         </n-button>
+
+        <!-- 指定版本升级 -->
+        <n-button 
+          v-else-if="act.key === 'update-to-version'"
+          size="small"
+          round
+          secondary
+          class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale font-medium animate-none shrink-0"
+          @click="emit('update-to-version')"
+        >
+          修改版本
+        </n-button>
       </template>
 
       <!-- 更多操作下拉菜单 (固定渲染在末尾) -->
@@ -325,6 +337,7 @@ const emit = defineEmits<{
   (e: 'undefer'): void
   (e: 'delete-backup'): void
   (e: 'show-logs'): void
+  (e: 'update-to-version'): void
   (e: 'lifecycle', action: 'start' | 'stop' | 'restart'): void
 }>()
 
@@ -395,6 +408,11 @@ const allAvailableActions = computed(() => {
     list.push({ key: 'delete-backup', label: '清除备份', width: realWidths.value.char4, priority: 7 })
   }
 
+  // 8. 指定版本升级 (优先级 8)
+  if (props.mode === 'full') {
+    list.push({ key: 'update-to-version', label: '修改版本', width: realWidths.value.char4, priority: 8 })
+  }
+
   return list.sort((a, b) => a.priority - b.priority)
 })
 
@@ -458,6 +476,8 @@ const handleMoreSelect = (key: string) => {
     emit('rollback')
   } else if (key === 'delete-backup') {
     emit('delete-backup')
+  } else if (key === 'update-to-version') {
+    emit('update-to-version')
   }
 }
 

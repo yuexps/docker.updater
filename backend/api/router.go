@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 
 	"docker-updater/db"
 	"docker-updater/dockerclient"
+	"docker-updater/scheduler"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -93,6 +95,7 @@ func InitRoutes(r *gin.Engine) {
 
 		// 镜像加速源只读 API
 		api.GET("/settings/system-mirrors", apiSettingsSystemMirrorsGet)
+		api.POST("/settings/test-email", apiSettingsTestEmail)
 	}
 
 	// 其他路径返回 404
@@ -254,6 +257,7 @@ func GetStatusData(ctx context.Context) (gin.H, error) {
 
 // apiCheck 触发手动更新比对
 func apiCheck(c *gin.Context) {
+	log.Printf("[INFO] 手动镜像更新比对比对检查已被用户触发...\n")
 	go func() {
 		ctx := context.Background()
 		_ = dockerclient.ScanLocalHostForUpdates(ctx)
@@ -265,13 +269,14 @@ func apiCheck(c *gin.Context) {
 // apiUpdate 升级容器，加入任务队列并输出流式日志进度
 func apiUpdate(c *gin.Context) {
 	name := c.Param("name")
+	targetImage := c.Query("target_image")
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 	c.Header("Transfer-Encoding", "chunked")
 
 	// 1. 加入队列中（如果已在队列则直接返回已有 Task）
-	task := dockerclient.GlobalQueue.AddTask(name, dockerclient.TaskUpdate)
+	task := dockerclient.GlobalQueue.AddTask(name, dockerclient.TaskUpdate, targetImage, false)
 
 	// 2. 建立监听者
 	logChan := make(chan string, 50)
@@ -315,7 +320,7 @@ func apiRollback(c *gin.Context) {
 	c.Header("Transfer-Encoding", "chunked")
 
 	// 1. 加入队列中
-	task := dockerclient.GlobalQueue.AddTask(name, dockerclient.TaskRollback)
+	task := dockerclient.GlobalQueue.AddTask(name, dockerclient.TaskRollback, "", false)
 
 	// 2. 建立监听者
 	logChan := make(chan string, 50)
@@ -362,11 +367,13 @@ func apiBackupDelete(c *gin.Context) {
 	backupName := name + "_old"
 	err = cli.ContainerRemove(c, backupName, types.ContainerRemoveOptions{Force: true})
 	if err != nil {
+		log.Printf("[ERROR] 手动删除备份容器 %s 失败: %s\n", backupName, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	db.DB.Delete(&db.RollbackMetadata{ContainerName: name})
+	log.Printf("[SUCCESS] 手动删除备份容器 %s 成功\n", backupName)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -375,6 +382,13 @@ func apiSettingsGet(c *gin.Context) {
 	backupEnabled := db.GetSetting("backup_enabled", "false") == "true"
 	backupHours, _ := strconv.Atoi(db.GetSetting("backup_hours", "24"))
 	restartStack := db.GetSetting("restart_stack", "false") == "true"
+	autoUpdateEnabled := db.GetSetting("auto_update_enabled", "false") == "true"
+	checkType := db.GetSetting("check_type", "day")
+	checkValueStr := db.GetSetting("check_value", "1")
+	checkValue, _ := strconv.Atoi(checkValueStr)
+	if checkValue <= 0 {
+		checkValue = 1
+	}
 
 	tempMirrorsStr := db.GetSetting("temp_mirrors", "[]")
 	var tempMirrors []string
@@ -383,23 +397,58 @@ func apiSettingsGet(c *gin.Context) {
 		tempMirrors = []string{}
 	}
 
+	smtpEnabled := db.GetSetting("smtp_enabled", "false") == "true"
+	smtpHost := db.GetSetting("smtp_host", "")
+	smtpPort := db.GetSetting("smtp_port", "465")
+	smtpUsername := db.GetSetting("smtp_username", "")
+	smtpPassword := db.GetSetting("smtp_password", "")
+	smtpSSL := db.GetSetting("smtp_ssl", "true") == "true"
+	smtpTo := db.GetSetting("smtp_to", "")
+	smtpSubjectTemplate := db.GetSetting("smtp_subject_template", dockerclient.DefaultSMTPSubject)
+	smtpBodyTemplate := db.GetSetting("smtp_body_template", dockerclient.DefaultSMTPBody)
+
 	c.JSON(http.StatusOK, gin.H{
-		"backup_enabled": backupEnabled,
-		"backup_hours":   backupHours,
-		"restart_stack":  restartStack,
-		"temp_mirrors":   tempMirrors,
+		"backup_enabled":         backupEnabled,
+		"backup_hours":           backupHours,
+		"restart_stack":          restartStack,
+		"auto_update_enabled":    autoUpdateEnabled,
+		"temp_mirrors":           tempMirrors,
+		"check_type":             checkType,
+		"check_value":            checkValue,
+		"smtp_enabled":           smtpEnabled,
+		"smtp_host":              smtpHost,
+		"smtp_port":              smtpPort,
+		"smtp_username":          smtpUsername,
+		"smtp_password":          smtpPassword,
+		"smtp_ssl":               smtpSSL,
+		"smtp_to":                smtpTo,
+		"smtp_subject_template":  smtpSubjectTemplate,
+		"smtp_body_template":     smtpBodyTemplate,
 	})
 }
 
 // apiSettingsPost 更新全局配置
 func apiSettingsPost(c *gin.Context) {
 	var body struct {
-		BackupEnabled bool     `json:"backup_enabled"`
-		BackupHours   int      `json:"backup_hours"`
-		RestartStack  bool     `json:"restart_stack"`
-		TempMirrors   []string `json:"temp_mirrors"`
+		BackupEnabled       bool     `json:"backup_enabled"`
+		BackupHours         int      `json:"backup_hours"`
+		RestartStack        bool     `json:"restart_stack"`
+		AutoUpdateEnabled   bool     `json:"auto_update_enabled"`
+		TempMirrors         []string `json:"temp_mirrors"`
+		CheckType           string   `json:"check_type"`
+		CheckValue          int      `json:"check_value"`
+		SMTPEnabled         bool     `json:"smtp_enabled"`
+		SMTPHost            string   `json:"smtp_host"`
+		SMTPPort            string   `json:"smtp_port"`
+		SMTPUsername        string   `json:"smtp_username"`
+		SMTPPassword        string   `json:"smtp_password"`
+		SMTPSSL             bool     `json:"smtp_ssl"`
+		SMTPTo              string   `json:"smtp_to"`
+		SMTPSubjectTemplate string   `json:"smtp_subject_template"`
+		SMTPBodyTemplate    string   `json:"smtp_body_template"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
+		log.Printf("[ERROR] 保存全局配置参数解析失败: %s\n", err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -407,12 +456,90 @@ func apiSettingsPost(c *gin.Context) {
 	_ = db.SetSetting("backup_enabled", strconv.FormatBool(body.BackupEnabled))
 	_ = db.SetSetting("backup_hours", strconv.Itoa(body.BackupHours))
 	_ = db.SetSetting("restart_stack", strconv.FormatBool(body.RestartStack))
+	_ = db.SetSetting("auto_update_enabled", strconv.FormatBool(body.AutoUpdateEnabled))
+	_ = db.SetSetting("smtp_enabled", strconv.FormatBool(body.SMTPEnabled))
+	_ = db.SetSetting("smtp_host", body.SMTPHost)
+	_ = db.SetSetting("smtp_port", body.SMTPPort)
+	_ = db.SetSetting("smtp_username", body.SMTPUsername)
+	_ = db.SetSetting("smtp_password", body.SMTPPassword)
+	_ = db.SetSetting("smtp_ssl", strconv.FormatBool(body.SMTPSSL))
+	_ = db.SetSetting("smtp_to", body.SMTPTo)
+	_ = db.SetSetting("smtp_subject_template", body.SMTPSubjectTemplate)
+	_ = db.SetSetting("smtp_body_template", body.SMTPBodyTemplate)
+
+	if body.CheckType != "" {
+		_ = db.SetSetting("check_type", body.CheckType)
+	}
+	if body.CheckValue > 0 {
+		_ = db.SetSetting("check_value", strconv.Itoa(body.CheckValue))
+	}
 
 	if body.TempMirrors == nil {
 		body.TempMirrors = []string{}
 	}
 	mirrorsBytes, _ := json.Marshal(body.TempMirrors)
 	_ = db.SetSetting("temp_mirrors", string(mirrorsBytes))
+
+	log.Printf("[SUCCESS] 保存全局配置成功 (备份使能: %t, 备份保留: %d小时, 重启Stack: %t, 邮件配置: %t)\n",
+		body.BackupEnabled, body.BackupHours, body.RestartStack, body.SMTPEnabled)
+
+	// 配置变更后重新加载定时任务调度器
+	scheduler.ReloadScheduler()
+
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// apiSettingsTestEmail 测试发送邮件通知
+func apiSettingsTestEmail(c *gin.Context) {
+	var body struct {
+		SMTPHost            string `json:"smtp_host"`
+		SMTPPort            string `json:"smtp_port"`
+		SMTPUsername        string `json:"smtp_username"`
+		SMTPPassword        string `json:"smtp_password"`
+		SMTPSSL             bool   `json:"smtp_ssl"`
+		SMTPTo              string `json:"smtp_to"`
+		SMTPSubjectTemplate string `json:"smtp_subject_template"`
+		SMTPBodyTemplate    string `json:"smtp_body_template"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	subjectTpl := body.SMTPSubjectTemplate
+	if subjectTpl == "" {
+		subjectTpl = dockerclient.DefaultSMTPSubject
+	}
+	bodyTpl := body.SMTPBodyTemplate
+	if bodyTpl == "" {
+		bodyTpl = dockerclient.DefaultSMTPBody
+	}
+
+	r := strings.NewReplacer(
+		"{container_name}", "test-mysql",
+		"{action_type}", "版本修改",
+		"{status}", "测试成功",
+		"{time}", time.Now().Local().Format("2006-01-02 15:04:05"),
+		"{logs}", "[PULL] Pulling image mysql:8.0\n[INFO] Stopping old container\n[INFO] Starting new container\n[SUCCESS] Container updated successfully",
+	)
+
+	subject := r.Replace(subjectTpl)
+	bodyText := r.Replace(bodyTpl)
+
+	err := dockerclient.SendEmailRaw(
+		body.SMTPHost,
+		body.SMTPPort,
+		body.SMTPUsername,
+		body.SMTPPassword,
+		body.SMTPTo,
+		body.SMTPSSL,
+		subject,
+		bodyText,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
@@ -464,16 +591,23 @@ func apiDefer(c *gin.Context) {
 		Until:         untilDate,
 	}
 	if err := db.DB.Save(&d).Error; err != nil {
+		log.Printf("[ERROR] 延迟更新容器 %s 失败: %s\n", name, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	log.Printf("[SUCCESS] 手动延迟更新容器 %s 成功 (延迟至: %s)\n", name, untilDate)
 	c.JSON(http.StatusOK, gin.H{"ok": true, "until": untilDate})
 }
 
 // apiUndefer 撤销延期设置
 func apiUndefer(c *gin.Context) {
 	name := c.Param("name")
-	db.DB.Delete(&db.DeferredUpdate{ContainerName: name})
+	if err := db.DB.Delete(&db.DeferredUpdate{ContainerName: name}).Error; err != nil {
+		log.Printf("[ERROR] 撤销容器 %s 延迟更新设置失败: %s\n", name, err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	log.Printf("[SUCCESS] 撤销容器 %s 延迟更新设置成功\n", name)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -539,7 +673,13 @@ func apiUpdateLogDelete(c *gin.Context) {
 		pkgVar = "./data"
 	}
 	logFilePath := filepath.Join(pkgVar, "logs", fmt.Sprintf("%s.log", name))
-	_ = os.Remove(logFilePath)
+	err := os.Remove(logFilePath)
+	if err != nil && !os.IsNotExist(err) {
+		log.Printf("[ERROR] 删除容器 %s 升级日志文件失败: %s\n", name, err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	log.Printf("[SUCCESS] 删除容器 %s 升级日志文件成功\n", name)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -643,10 +783,12 @@ func apiImageDelete(c *gin.Context) {
 
 	_, err = cli.ImageRemove(c, id, types.ImageRemoveOptions{Force: true, PruneChildren: true})
 	if err != nil {
+		log.Printf("[ERROR] 手动物理删除镜像 %s 失败: %s\n", id, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	log.Printf("[SUCCESS] 手动物理删除镜像 %s 成功\n", id)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -664,10 +806,12 @@ func apiImagesPrune(c *gin.Context) {
 
 	report, err := cli.ImagesPrune(c, pruneFilters)
 	if err != nil {
+		log.Printf("[ERROR] 清理无用虚悬镜像失败: %s\n", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	log.Printf("[SUCCESS] 清理无用虚悬镜像成功，共释放空间: %d 字节, 清除镜像数: %d\n", report.SpaceReclaimed, len(report.ImagesDeleted))
 	c.JSON(http.StatusOK, gin.H{
 		"ok":              true,
 		"space_reclaimed": report.SpaceReclaimed,
@@ -688,6 +832,11 @@ func apiTasksGet(c *gin.Context) {
 func apiTaskCancel(c *gin.Context) {
 	name := c.Param("name")
 	success := dockerclient.GlobalQueue.CancelTask(name)
+	if success {
+		log.Printf("[SUCCESS] 手动取消容器 %s 的排队升级任务成功\n", name)
+	} else {
+		log.Printf("[WARNING] 手动取消容器 %s 的排队升级任务失败 (任务不存在或已在执行)\n", name)
+	}
 	c.JSON(http.StatusOK, gin.H{"success": success})
 }
 
@@ -737,7 +886,13 @@ func apiSystemLogsDelete(c *gin.Context) {
 	}
 	logFilePath := filepath.Join(pkgVar, "info.log")
 	// 使用 O_TRUNC 打开以截断清空内容，防止文件写句柄失效
-	_ = os.WriteFile(logFilePath, []byte(""), 0644)
+	err := os.WriteFile(logFilePath, []byte(""), 0644)
+	if err != nil {
+		log.Printf("[ERROR] 物理清空系统日志失败: %s\n", err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	log.Printf("[SUCCESS] 物理清空系统日志成功\n")
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -791,9 +946,11 @@ func apiRegistriesPost(c *gin.Context) {
 	cred.UpdatedAt = time.Now().Format(time.RFC3339)
 
 	if err := db.DB.Save(&cred).Error; err != nil {
+		log.Printf("[ERROR] 保存私有仓凭证 %s 失败: %s\n", reg, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	log.Printf("[SUCCESS] 保存私有仓凭证 %s 成功 (用户名: %s)\n", reg, body.Username)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -806,9 +963,11 @@ func apiRegistriesDelete(c *gin.Context) {
 		return
 	}
 	if err := db.DB.Delete(&db.RegistryCredential{}, id).Error; err != nil {
+		log.Printf("[ERROR] 删除私有仓凭证 ID %d 失败: %s\n", id, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	log.Printf("[SUCCESS] 删除私有仓凭证 ID %d 成功\n", id)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -823,9 +982,11 @@ func apiContainerStart(c *gin.Context) {
 	defer cli.Close()
 
 	if err := cli.ContainerStart(c, name, types.ContainerStartOptions{}); err != nil {
+		log.Printf("[ERROR] 手动启动容器 %s 失败: %s\n", name, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	log.Printf("[SUCCESS] 手动启动容器 %s 成功\n", name)
 	go GlobalHub.BroadcastStatus()
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
@@ -841,9 +1002,11 @@ func apiContainerStop(c *gin.Context) {
 	defer cli.Close()
 
 	if err := cli.ContainerStop(c, name, container.StopOptions{}); err != nil {
+		log.Printf("[ERROR] 手动停止容器 %s 失败: %s\n", name, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	log.Printf("[SUCCESS] 手动停止容器 %s 成功\n", name)
 	go GlobalHub.BroadcastStatus()
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
@@ -859,9 +1022,11 @@ func apiContainerRestart(c *gin.Context) {
 	defer cli.Close()
 
 	if err := cli.ContainerRestart(c, name, container.StopOptions{}); err != nil {
+		log.Printf("[ERROR] 手动重启容器 %s 失败: %s\n", name, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	log.Printf("[SUCCESS] 手动重启容器 %s 成功\n", name)
 	go GlobalHub.BroadcastStatus()
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
@@ -870,6 +1035,7 @@ func apiContainerRestart(c *gin.Context) {
 func apiHistoryClear(c *gin.Context) {
 	// 1. 清空 update_histories 数据库表
 	if err := db.DB.Exec("DELETE FROM update_histories").Error; err != nil {
+		log.Printf("[ERROR] 清空升级历史记录失败: %s\n", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -887,6 +1053,7 @@ func apiHistoryClear(c *gin.Context) {
 		return nil
 	})
 
+	log.Printf("[SUCCESS] 清空所有升级历史记录成功\n")
 	// 3. 广播给所有的前端客户端更新状态
 	go GlobalHub.BroadcastStatus()
 
@@ -911,6 +1078,7 @@ func apiHistoryDelete(c *gin.Context) {
 
 	// 2. 从数据库删除
 	if err := db.DB.Delete(&db.UpdateHistory{}, id).Error; err != nil {
+		log.Printf("[ERROR] 手动删除容器 %s 的升级历史记录失败: %s\n", hist.ContainerName, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -923,6 +1091,7 @@ func apiHistoryDelete(c *gin.Context) {
 	logFilePath := filepath.Join(pkgVar, "logs", fmt.Sprintf("%s.log", hist.ContainerName))
 	_ = os.Remove(logFilePath)
 
+	log.Printf("[SUCCESS] 手动删除容器 %s 的升级历史记录成功\n", hist.ContainerName)
 	// 4. 广播给所有的前端客户端更新状态
 	go GlobalHub.BroadcastStatus()
 

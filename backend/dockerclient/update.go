@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,8 +29,8 @@ var (
 )
 
 // ApplyUpdate 拉取新镜像并重新创建本地容器，如果闪退则秒级回滚
-func ApplyUpdate(ctx context.Context, name string, logChan chan<- string) error {
-	logChan <- fmt.Sprintf("[INFO] 开始升级容器: %s", name)
+func ApplyUpdate(ctx context.Context, name string, targetImage string, logChan chan<- string) error {
+	logChan <- fmt.Sprintf("[INFO] 开始修改容器版本: %s", name)
 
 	cli, err := NewLocalClient()
 	if err != nil {
@@ -46,6 +47,20 @@ func ApplyUpdate(ctx context.Context, name string, logChan chan<- string) error 
 	}
 	oldID := inspect.ID
 	imageName := inspect.Config.Image
+
+	if targetImage != "" {
+		if strings.Contains(targetImage, ":") {
+			imageName = targetImage
+		} else {
+			parts := strings.Split(inspect.Config.Image, ":")
+			baseImage := parts[0]
+			if strings.Contains(baseImage, "@") {
+				baseImage = strings.Split(baseImage, "@")[0]
+			}
+			imageName = baseImage + ":" + targetImage
+		}
+		logChan <- fmt.Sprintf("[INFO] 指定目标修改版本/镜像: %s", imageName)
+	}
 
 	logChan <- fmt.Sprintf("[INFO] 容器名: %s", name)
 	logChan <- fmt.Sprintf("[INFO] 镜像源: %s", imageName)
@@ -82,38 +97,56 @@ func ApplyUpdate(ctx context.Context, name string, logChan chan<- string) error 
 	}
 
 	if composeFile != "" {
-		logChan <- fmt.Sprintf("[INFO] 自动探测到 Compose 项目: %s", project)
-		logChan <- fmt.Sprintf("[INFO] 配置文件路径: %s", composeFile)
-		logChan <- "[INFO] 启动 Docker Compose 命令行联动升级..."
+		if targetImage != "" {
+			logChan <- fmt.Sprintf("[WARNING] 检测到 Compose 项目，但由于指定了目标镜像 %s，将跳过 Compose 联动，降级为常规单容器版本修改...", targetImage)
+		} else {
+			logChan <- fmt.Sprintf("[INFO] 自动探测到 Compose 项目: %s", project)
+			logChan <- fmt.Sprintf("[INFO] 配置文件路径: %s", composeFile)
+			logChan <- "[INFO] 启动 Docker Compose 命令行联动升级..."
 
-		// 提前通过加速源拉取并打标当前镜像，防止 Compose 命令行拉取时卡网
-		if tempReader, tempErr := pullImageWithMirrors(ctx, cli, imageName, logChan); tempErr == nil {
-			_ = tempReader.Close()
-		}
-
-		logChan <- "[INFO] 正在拉取最新的 Compose 镜像..."
-		pullErr := runComposeCommand(ctx, logChan, composeFile, "pull")
-		if pullErr != nil {
-			logChan <- fmt.Sprintf("[WARNING] docker compose pull 失败: %s，尝试直接执行 up 部署...", pullErr.Error())
-		}
-
-		logChan <- "[INFO] 正在重建并部署 Compose 服务..."
-		upErr := runComposeCommand(ctx, logChan, composeFile, "up", "-d", "--remove-orphans")
-		if upErr == nil {
-			logChan <- "[SUCCESS] Compose 联动部署成功！"
-			db.DB.Delete(&db.AvailableUpdate{ContainerName: name})
-			history := db.UpdateHistory{
-				ContainerName: name,
-				Image:         imageName,
-				UpdatedAt:     time.Now().UTC().Format(time.RFC3339),
-				Status:        "success",
+			// 提前通过加速源拉取并打标当前镜像，防止 Compose 命令行拉取时卡网
+			if tempReader, tempErr := pullImageWithMirrors(ctx, cli, imageName, logChan); tempErr == nil {
+				_ = tempReader.Close()
 			}
-			db.DB.Create(&history)
-			logChan <- "[SUCCESS] 容器升级任务全部完成"
-			return nil
-		}
 
-		logChan <- fmt.Sprintf("[WARNING] docker compose up 部署失败: %s. 降级为常规单容器克隆逻辑升级...", upErr.Error())
+			logChan <- "[INFO] 正在拉取最新的 Compose 镜像..."
+			pullErr := runComposeCommand(ctx, logChan, composeFile, "pull")
+			if pullErr != nil {
+				logChan <- fmt.Sprintf("[WARNING] docker compose pull 失败: %s，尝试直接执行 up 部署...", pullErr.Error())
+			}
+
+			logChan <- "[INFO] 正在重建并部署 Compose 服务..."
+			upErr := runComposeCommand(ctx, logChan, composeFile, "up", "-d", "--remove-orphans")
+
+			// 校验 Compose 部署的实际结果 (双重保险防止由于警告或非致命退出码导致的假报错)
+			composeSuccess := false
+			if checkInspect, checkErr := cli.ContainerInspect(ctx, name); checkErr == nil {
+				if latestImg, _, imgErr := cli.ImageInspectWithRaw(ctx, imageName); imgErr == nil {
+					if checkInspect.State.Running && checkInspect.Image == latestImg.ID {
+						composeSuccess = true
+					}
+				}
+			}
+
+			if upErr == nil || composeSuccess {
+				if upErr != nil {
+					logChan <- "[INFO] Docker Compose 命令行已退出并附带警告或异常，但检测到目标服务已使用新镜像成功运行。"
+				}
+				logChan <- "[SUCCESS] Compose 联动部署成功！"
+				db.DB.Delete(&db.AvailableUpdate{ContainerName: name})
+				history := db.UpdateHistory{
+					ContainerName: name,
+					Image:         imageName,
+					UpdatedAt:     time.Now().UTC().Format(time.RFC3339),
+					Status:        "success",
+				}
+				db.DB.Create(&history)
+				logChan <- "[SUCCESS] 容器版本修改任务全部完成"
+				return nil
+			}
+
+			logChan <- fmt.Sprintf("[WARNING] docker compose up 部署失败: %s. 降级为常规单容器克隆逻辑升级...", upErr.Error())
+		}
 	}
 
 	// 2. 拉取镜像
@@ -195,6 +228,7 @@ func ApplyUpdate(ctx context.Context, name string, logChan chan<- string) error 
 	}
 
 	// 创建新容器
+	inspect.Config.Image = imageName
 	newContainer, err := cli.ContainerCreate(
 		ctx,
 		inspect.Config,
@@ -256,7 +290,7 @@ func ApplyUpdate(ctx context.Context, name string, logChan chan<- string) error 
 	}
 
 	// 6. 更新成功处理
-	logChan <- "[SUCCESS] 容器更新成功并运行中"
+	logChan <- "[SUCCESS] 容器版本修改成功并运行中"
 	db.DB.Delete(&db.AvailableUpdate{ContainerName: name})
 
 	// 记录成功历史
@@ -296,7 +330,7 @@ func ApplyUpdate(ctx context.Context, name string, logChan chan<- string) error 
 		scheduleStackRestart(ctx, cli, project, name, logChan)
 	}
 
-	logChan <- "[SUCCESS] 容器升级任务全部完成"
+	logChan <- "[SUCCESS] 容器版本修改任务全部完成"
 	return nil
 }
 
@@ -423,20 +457,29 @@ func scheduleStackRestart(ctx context.Context, cli *client.Client, project strin
 func CleanExpiredBackups(ctx context.Context) {
 	cli, err := NewLocalClient()
 	if err != nil {
+		log.Printf("[ERROR] 定时自动清理过期备份容器失败 (无法连接 Docker 引擎): %s\n", err.Error())
 		return
 	}
 	defer cli.Close()
 
 	var expired []db.RollbackMetadata
 	nowStr := time.Now().UTC().Format(time.RFC3339)
-	if err := db.DB.Find(&expired, "expires_at <= ?", nowStr).Error; err != nil || len(expired) == 0 {
+	if err := db.DB.Find(&expired, "expires_at <= ?", nowStr).Error; err != nil {
+		log.Printf("[ERROR] 查询过期备份元数据失败: %s\n", err.Error())
+		return
+	}
+	if len(expired) == 0 {
 		return
 	}
 
 	for _, meta := range expired {
 		backupName := meta.ContainerName + "_old"
-		fmt.Printf("[INFO] 正在清理已过期备份: %s\n", backupName)
-		_ = cli.ContainerRemove(ctx, backupName, types.ContainerRemoveOptions{Force: true})
+		err := cli.ContainerRemove(ctx, backupName, types.ContainerRemoveOptions{Force: true})
+		if err != nil {
+			log.Printf("[ERROR] 定时自动清理已过期备份容器 %s 失败: %s\n", backupName, err.Error())
+		} else {
+			log.Printf("[SUCCESS] 定时自动清理已过期备份容器 %s 成功\n", backupName)
+		}
 		db.DB.Delete(&meta)
 	}
 }

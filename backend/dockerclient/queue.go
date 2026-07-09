@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"docker-updater/db"
 )
 
 type TaskType string
@@ -31,6 +33,8 @@ type Task struct {
 	mu            sync.Mutex
 	ContainerName string    `json:"container_name"`
 	Type          TaskType  `json:"type"`
+	TargetImage   string    `json:"target_image"`
+	IsAuto        bool      `json:"is_auto"`
 	Status        string    `json:"status"` // "waiting", "running", "success", "failed", "cancelled"
 	AddedAt       string    `json:"added_at"`
 	Logs          []string  `json:"-"`
@@ -91,7 +95,7 @@ func InitQueueManager() {
 	go GlobalQueue.worker()
 }
 
-func (q *QueueManager) AddTask(name string, tType TaskType) *Task {
+func (q *QueueManager) AddTask(name string, tType TaskType, targetImage string, isAuto bool) *Task {
 	q.mu.Lock()
 	needBroadcast := false
 	defer func() {
@@ -117,6 +121,8 @@ func (q *QueueManager) AddTask(name string, tType TaskType) *Task {
 	t := &Task{
 		ContainerName: name,
 		Type:          tType,
+		TargetImage:   targetImage,
+		IsAuto:        isAuto,
 		Status:        "waiting",
 		AddedAt:       time.Now().UTC().Format(time.RFC3339),
 		Logs:          make([]string, 0),
@@ -212,7 +218,7 @@ func (q *QueueManager) worker() {
 
 		var err error
 		if task.Type == TaskUpdate {
-			err = ApplyUpdate(ctx, task.ContainerName, streamChan)
+			err = ApplyUpdate(ctx, task.ContainerName, task.TargetImage, streamChan)
 		} else {
 			err = ApplyRollback(ctx, task.ContainerName, streamChan)
 		}
@@ -233,7 +239,50 @@ func (q *QueueManager) worker() {
 			GlobalObserver.OnStatusChange()
 		}
 
-		// 5. 持久化日志到本地文件
+		// 5. 触发邮件通知 (仅针对后台自动检测的静默升级任务发送邮件通知，手动操作不发送以防冗余骚扰)
+		if db.GetSetting("smtp_enabled", "false") == "true" && task.IsAuto {
+			go func(taskName string, tType TaskType, status string, logs []string) {
+				typeName := "版本修改"
+				if tType == TaskRollback {
+					typeName = "回滚恢复"
+				}
+				
+				statusName := "执行成功"
+				switch status {
+				case "failed":
+					statusName = "执行失败"
+				case "cancelled":
+					statusName = "已取消"
+				}
+
+				// 提取最近的 20 行日志以展示在邮件中
+				logLen := len(logs)
+				startIdx := logLen - 20
+				if startIdx < 0 {
+					startIdx = 0
+				}
+				recentLogs := logs[startIdx:]
+				logContent := strings.Join(recentLogs, "\n")
+
+				subjectTpl := db.GetSetting("smtp_subject_template", DefaultSMTPSubject)
+				bodyTpl := db.GetSetting("smtp_body_template", DefaultSMTPBody)
+
+				r := strings.NewReplacer(
+					"{container_name}", taskName,
+					"{action_type}", typeName,
+					"{status}", statusName,
+					"{time}", time.Now().Local().Format("2006-01-02 15:04:05"),
+					"{logs}", logContent,
+				)
+
+				subject := r.Replace(subjectTpl)
+				body := r.Replace(bodyTpl)
+				
+				_ = SendNotificationEmail(subject, body)
+			}(task.ContainerName, task.Type, task.Status, task.GetLogs())
+		}
+
+		// 6. 持久化日志到本地文件
 		pkgVar := os.Getenv("TRIM_PKGVAR")
 		if pkgVar == "" {
 			pkgVar = "./data"
