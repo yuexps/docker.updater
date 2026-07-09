@@ -1,7 +1,7 @@
 <template>
   <div class="view-fade-in flex flex-col h-full overflow-hidden">
     <!-- 页面头部 -->
-    <div class="shrink-0 px-4 md:px-8 lg:px-10 pt-3 md:pt-4 lg:pt-5 pb-3 md:pb-4 select-none bg-canvas-parchment">
+    <div class="shrink-0 px-3 md:px-5 lg:px-6 pt-3 md:pt-4 lg:pt-5 pb-3 md:pb-4 select-none bg-canvas-parchment">
       <div class="flex items-center justify-between">
         <h1 class="text-[28px] font-semibold tracking-tight text-slate-800 apple-headline">概览</h1>
         
@@ -22,7 +22,7 @@
     </div>
 
     <!-- 页面内容 -->
-    <div class="flex-1 min-w-0 overflow-y-auto px-4 md:px-8 lg:px-10 pb-24">
+    <div class="flex-1 min-w-0 overflow-y-auto px-3 md:px-5 lg:px-6 pb-24">
       <!-- 统计卡片区 -->
       <div class="grid grid-cols-2 gap-4 md:gap-6 mb-10 select-none">
         <!-- 待升级卡片 -->
@@ -99,19 +99,9 @@
             </svg>
           </div>
           <h3 class="text-[17px] font-bold text-slate-800 mb-2">所有本地容器已是最新版本</h3>
-          <p class="text-[13px] text-body-muted max-w-sm leading-relaxed mb-6">
+          <p class="text-[13px] text-body-muted max-w-sm leading-relaxed mb-0">
             未检测到待升级的本地运行容器。系统将会在后台定时检测镜像版本。您也可以手动触发即时检测。
           </p>
-          <n-button 
-            :loading="checking" 
-            type="primary" 
-            round 
-            size="medium"
-            class="active-scale px-6"
-            @click="checkUpdates"
-          >
-            {{ checking ? '正在检测最新镜像...' : '立即检测新版本' }}
-          </n-button>
         </div>
 
         <!-- 待升级/已暂挂列表 -->

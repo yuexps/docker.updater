@@ -1,14 +1,14 @@
 <template>
   <div class="view-fade-in flex flex-col h-full overflow-hidden">
     <!-- 页面头部 -->
-    <div class="shrink-0 px-4 md:px-8 lg:px-10 pt-3 md:pt-4 lg:pt-5 pb-3 md:pb-4 select-none bg-canvas-parchment">
+    <div class="shrink-0 px-3 md:px-5 lg:px-6 pt-3 md:pt-4 lg:pt-5 pb-3 md:pb-4 select-none bg-canvas-parchment">
       <div class="flex items-center justify-between">
         <h1 class="text-[28px] font-semibold tracking-tight text-slate-800 apple-headline">容器列表</h1>
       </div>
     </div>
 
     <!-- 页面内容 -->
-    <div class="flex-1 min-w-0 overflow-y-auto px-4 md:px-8 lg:px-10 pb-24">
+    <div class="flex-1 min-w-0 overflow-y-auto px-3 md:px-5 lg:px-6 pb-24">
       <!-- 容器网格 -->
       <div>
         <div v-if="loading" class="flex justify-center py-20">

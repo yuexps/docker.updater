@@ -1,7 +1,7 @@
 <template>
   <div class="view-fade-in flex flex-col h-full overflow-hidden">
     <!-- Page Header -->
-    <div class="shrink-0 px-4 md:px-8 lg:px-10 pt-3 md:pt-4 lg:pt-5 pb-3 md:pb-4 select-none bg-canvas-parchment">
+    <div class="shrink-0 px-3 md:px-5 lg:px-6 pt-3 md:pt-4 lg:pt-5 pb-3 md:pb-4 select-none bg-canvas-parchment">
       <div class="flex items-center justify-between">
         <div>
           <h1 class="text-[28px] font-semibold tracking-tight text-slate-800 apple-headline">运行日志</h1>
@@ -23,12 +23,12 @@
     </div>
 
     <!-- 页面内容 -->
-    <div class="flex-1 min-w-0 flex flex-col min-h-0 px-4 md:px-8 lg:px-10 pb-20 md:pb-6 lg:pb-8">
+    <div class="flex-1 min-w-0 flex flex-col min-h-0 px-1.5 md:px-2 lg:px-2.5 pb-2 md:pb-1.5 lg:pb-2">
       <!-- Logs Content Card (Flex fill) -->
-      <div class="apple-card p-4 sm:p-6 rounded-lg flex-1 flex flex-col min-h-0 bg-white">
+      <div class="apple-card p-2 sm:p-3.5 rounded-lg flex-1 flex flex-col min-h-0 bg-white">
         
         <!-- Logs Control Toolbar -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-divider-soft">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 pb-3 border-b border-divider-soft">
           <!-- Level Filter Segment Control -->
           <div class="flex items-center p-0.5 bg-slate-100/80 rounded-full border border-slate-200/40 shrink-0 select-none overflow-x-auto scrollbar-none w-full sm:w-auto max-w-full">
             <button 
@@ -74,7 +74,7 @@
           <div 
             ref="logContainer"
             @scroll="handleScroll"
-            class="font-mono text-[12px] sm:text-[13px] leading-relaxed text-slate-600 bg-slate-50/30 py-3 px-1.5 sm:px-2 rounded-lg border border-hairline flex-1 overflow-y-auto scrollbar-thin select-text"
+            class="font-mono text-[12px] sm:text-[12.5px] leading-relaxed text-slate-600 bg-slate-50/20 py-2 px-1 sm:px-1.5 rounded-lg border border-hairline flex-1 overflow-y-auto scrollbar-thin select-text"
           >
             <div v-if="filteredLines.length === 0" class="text-body-muted text-center py-10 text-[13px] select-none">
               未检索到匹配的日志行
@@ -83,28 +83,28 @@
               <div 
                 v-for="(line, idx) in filteredLines" 
                 :key="idx" 
-                class="py-1.5 px-3 sm:px-4 flex items-start border-b border-slate-100/50 last:border-b-0 hover:bg-slate-100/30 transition-colors rounded-sm"
+                class="py-0.5 px-1.5 sm:px-2 flex items-start border-b border-slate-100/50 last:border-b-0 hover:bg-slate-100/30 transition-colors rounded-sm"
               >
                 <!-- 日志内容 -->
-                <div class="flex-1 break-all whitespace-pre-wrap block sm:grid sm:grid-cols-[125px_60px_1fr] sm:gap-x-3 sm:items-baseline">
+                <div class="flex-1 break-all whitespace-pre-wrap flex flex-wrap gap-x-2 items-baseline lg:grid lg:grid-cols-[115px_50px_1fr] lg:gap-x-2">
                   <template v-for="parsed in [parseLine(line)]">
                     <template v-if="parsed">
                       <!-- 时间戳 -->
-                      <span v-if="parsed.time" class="inline-block text-slate-400 text-[11px] font-mono mr-1.5 sm:mr-0 select-none w-auto">
+                      <span v-if="parsed.time" class="inline-block text-slate-400 text-[11px] font-mono select-none shrink-0">
                         {{ parsed.time }}
                       </span>
                       <!-- 级别气泡徽章 -->
                       <span 
                         :class="parsed.badgeClass" 
-                        class="inline-block px-1.5 py-0.25 rounded text-[10px] font-bold mr-1.5 sm:mr-0 uppercase tracking-wide select-none text-center sm:w-full shrink-0"
+                        class="inline-block px-1 py-0.25 rounded text-[9.5px] font-bold uppercase tracking-wide select-none text-center lg:w-full shrink-0"
                       >
                         {{ parsed.level }}
                       </span>
                       <!-- 文本内容 -->
-                      <span :class="parsed.textClass" class="inline sm:block">{{ parsed.content }}</span>
+                      <span :class="parsed.textClass" class="inline break-all">{{ parsed.content }}</span>
                     </template>
                     <template v-else>
-                      <span class="text-slate-600 inline sm:col-span-3">{{ line }}</span>
+                      <span class="text-slate-600 inline lg:col-span-3">{{ line }}</span>
                     </template>
                   </template>
                 </div>
@@ -128,6 +128,8 @@
         </div>
       </div>
     </div>
+    <!-- 移动端底部导航栏占位 -->
+    <div class="h-16 md:hidden shrink-0"></div>
   </div>
 </template>
 

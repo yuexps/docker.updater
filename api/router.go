@@ -66,8 +66,10 @@ func InitRoutes(r *gin.Engine) {
 	group := r.Group("/app/docker-updater")
 
 	// 1. 前端静态资源托管
-	assetsFS, err := fs.Sub(WebFS, "dist/assets")
-	if err == nil {
+	assetsFS, err := fs.Sub(WebFS, "frontend/dist/assets")
+	if err != nil {
+		utils.LogWarning("加载前端静态资源子目录失败: %s", err.Error())
+	} else {
 		// 挂载资源文件
 		group.StaticFS("/assets", http.FS(assetsFS))
 	}
