@@ -327,6 +327,9 @@ func apiSettingsGet(c *gin.Context) {
 	smtpPort := db.GetSetting("smtp_port", "465")
 	smtpUsername := db.GetSetting("smtp_username", "")
 	smtpPassword := db.GetSetting("smtp_password", "")
+	if smtpPassword != "" {
+		smtpPassword = "******"
+	}
 	smtpSSL := db.GetSetting("smtp_ssl", "true") == "true"
 	smtpTo := db.GetSetting("smtp_to", "")
 	smtpSubjectTemplate := db.GetSetting("smtp_subject_template", utils.DefaultSMTPSubject)
@@ -799,6 +802,9 @@ func apiRegistriesGet(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	for i := range list {
+		list[i].Password = "******"
+	}
 	c.JSON(http.StatusOK, list)
 }
 
@@ -828,7 +834,9 @@ func apiRegistriesPost(c *gin.Context) {
 		}
 		cred.Registry = reg
 		cred.Username = body.Username
-		cred.Password = body.Password
+		if body.Password != "******" {
+			cred.Password = body.Password
+		}
 	} else {
 		cred.Registry = reg
 		cred.Username = body.Username
