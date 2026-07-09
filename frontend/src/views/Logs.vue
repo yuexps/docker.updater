@@ -30,12 +30,12 @@
         <!-- Logs Control Toolbar -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-divider-soft">
           <!-- Level Filter Segment Control -->
-          <div class="flex items-center p-0.5 bg-slate-100/80 rounded-full border border-slate-200/40 shrink-0 select-none">
+          <div class="flex items-center p-0.5 bg-slate-100/80 rounded-full border border-slate-200/40 shrink-0 select-none overflow-x-auto scrollbar-none w-full sm:w-auto max-w-full">
             <button 
               v-for="lvl in levels" 
               :key="lvl.value"
               @click="selectedLevel = lvl.value"
-              class="px-3.5 py-1.5 rounded-full text-[12px] font-medium transition-all duration-200 cursor-pointer text-center flex-1 sm:flex-initial"
+              class="px-3.5 py-1.5 rounded-full text-[12px] font-medium transition-all duration-200 cursor-pointer text-center shrink-0"
               :class="selectedLevel === lvl.value ? 'bg-primary text-white shadow-xs font-semibold' : 'text-slate-500 hover:text-slate-800'"
             >
               {{ lvl.label }}
@@ -74,7 +74,7 @@
           <div 
             ref="logContainer"
             @scroll="handleScroll"
-            class="font-mono text-[12px] sm:text-[13px] leading-relaxed text-slate-600 bg-slate-50/30 p-4 sm:p-5 rounded-lg border border-hairline flex-1 overflow-y-auto scrollbar-thin select-text"
+            class="font-mono text-[12px] sm:text-[13px] leading-relaxed text-slate-600 bg-slate-50/30 py-3 px-1.5 sm:px-2 rounded-lg border border-hairline flex-1 overflow-y-auto scrollbar-thin select-text"
           >
             <div v-if="filteredLines.length === 0" class="text-body-muted text-center py-10 text-[13px] select-none">
               未检索到匹配的日志行
@@ -83,24 +83,28 @@
               <div 
                 v-for="(line, idx) in filteredLines" 
                 :key="idx" 
-                class="py-1 flex items-start border-b border-slate-100/50 last:border-b-0 hover:bg-slate-100/30 transition-colors"
+                class="py-1.5 px-3 sm:px-4 flex items-start border-b border-slate-100/50 last:border-b-0 hover:bg-slate-100/30 transition-colors rounded-sm"
               >
                 <!-- 日志内容 -->
-                <div class="flex-1 break-all whitespace-pre-wrap">
+                <div class="flex-1 break-all whitespace-pre-wrap block sm:grid sm:grid-cols-[125px_60px_1fr] sm:gap-x-3 sm:items-baseline">
                   <template v-for="parsed in [parseLine(line)]">
                     <template v-if="parsed">
+                      <!-- 时间戳 -->
+                      <span v-if="parsed.time" class="inline-block text-slate-400 text-[11px] font-mono mr-1.5 sm:mr-0 select-none w-auto">
+                        {{ parsed.time }}
+                      </span>
                       <!-- 级别气泡徽章 -->
                       <span 
                         :class="parsed.badgeClass" 
-                        class="inline-block px-1.5 py-0.25 rounded text-[10px] font-bold mr-2 uppercase tracking-wide select-none"
+                        class="inline-block px-1.5 py-0.25 rounded text-[10px] font-bold mr-1.5 sm:mr-0 uppercase tracking-wide select-none text-center sm:w-full shrink-0"
                       >
                         {{ parsed.level }}
                       </span>
                       <!-- 文本内容 -->
-                      <span :class="parsed.textClass">{{ parsed.content }}</span>
+                      <span :class="parsed.textClass" class="inline sm:block">{{ parsed.content }}</span>
                     </template>
                     <template v-else>
-                      <span class="text-slate-600">{{ line }}</span>
+                      <span class="text-slate-600 inline sm:col-span-3">{{ line }}</span>
                     </template>
                   </template>
                 </div>
@@ -152,8 +156,7 @@ const levels = [
   { label: 'INFO', value: 'INFO' },
   { label: 'SUCCESS', value: 'SUCCESS' },
   { label: 'WARN', value: 'WARN' },
-  { label: 'ERROR', value: 'ERROR' },
-  { label: 'DEBUG', value: 'DEBUG' }
+  { label: 'ERROR', value: 'ERROR' }
 ]
 
 const filteredLines = computed(() => {
@@ -176,6 +179,7 @@ const filteredLines = computed(() => {
 })
 
 interface ParsedLine {
+  time: string
   level: string
   content: string
   badgeClass: string
@@ -183,12 +187,14 @@ interface ParsedLine {
 }
 
 const parseLine = (line: string): ParsedLine | null => {
-  const targetLevels = ['ERROR', 'INFO', 'WARN', 'WARNING', 'DEBUG', 'SUCCESS'] as const
+  const targetLevels = ['ERROR', 'INFO', 'WARN', 'WARNING', 'SUCCESS'] as const
   for (const lvl of targetLevels) {
     const tag = `[${lvl}]`
     if (line.includes(tag)) {
-      const parts = line.split(tag)
-      const content = parts.slice(1).join(tag).trim()
+      const idx = line.indexOf(tag)
+      const timePart = line.substring(0, idx).trim()
+      const content = line.substring(idx + tag.length).trim()
+      
       let badgeClass = ''
       let textClass = 'text-slate-600'
       const displayLevel = (lvl === 'WARNING' || lvl === 'WARN') ? 'WARN' : lvl
@@ -202,15 +208,13 @@ const parseLine = (line: string): ParsedLine | null => {
       } else if (lvl === 'WARN' || lvl === 'WARNING') {
         badgeClass = 'bg-amber-50 border border-amber-200 text-amber-600'
         textClass = 'text-amber-700 font-medium'
-      } else if (lvl === 'DEBUG') {
-        badgeClass = 'bg-purple-50 border border-purple-100 text-purple-600'
-        textClass = 'text-slate-500 font-mono'
       } else if (lvl === 'SUCCESS') {
         badgeClass = 'bg-emerald-50 border border-emerald-100 text-emerald-600'
         textClass = 'text-emerald-700 font-medium'
       }
       
       return {
+        time: timePart,
         level: displayLevel,
         content: content || line,
         badgeClass,
@@ -302,6 +306,15 @@ onUnmounted(() => {
 }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: #cbd5e1;
+}
+
+/* 隐藏滚动条 */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
 }
 
 /* 悬浮按钮淡入淡出与滑入动效 */

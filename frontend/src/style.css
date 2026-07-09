@@ -28,7 +28,11 @@ html, body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
+  max-width: 100vw;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent; /* 消除移动端点击时的蓝色高亮阴影，防止视觉闪烁抖动 */
+  scrollbar-gutter: stable;                 /* 保持滚动条占位稳定，防止路由切换滚动条显隐引起视口宽度抖动 */
 }
 
 /* 标题字距 */
@@ -61,16 +65,30 @@ html, body {
   border: 1px solid rgba(255, 149, 0, 0.2);
 }
 
-/* 按钮点击缩放 */
+/* 按钮点击缩放，引入 3D 硬件加速和背面可见性隐藏以规避移动端字体像素颤抖 */
+.active-scale {
+  transition: transform 0.12s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+  touch-action: manipulation; /* 消除移动端双击判定造成的 300ms 点击延迟 */
+}
 .active-scale:active {
-  transform: scale(0.95) !important;
+  transform: scale(0.96) translate3d(0, 0, 0) !important;
+  -webkit-transform: scale(0.96) translate3d(0, 0, 0) !important;
 }
 
 .n-button {
   transition: transform 0.1s ease !important;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
 }
 .n-button:active {
-  transform: scale(0.95) !important;
+  transform: scale(0.96) translate3d(0, 0, 0) !important;
+  -webkit-transform: scale(0.96) translate3d(0, 0, 0) !important;
 }
 
 /* 复选框圆角微调 */

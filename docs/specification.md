@@ -1,319 +1,176 @@
-# 飞牛系统本地 Docker 容器升级管理器技术规格文档
+# 飞牛 FNOS Docker 容器升级管理器技术规格书 (Agent 面向)
 
-本文档定义了重构后的本机 Docker 容器手动升级管理器的技术规范。重构采用 Go 作为后端语言，Vue 3 + Naive UI + Tailwind CSS v4 作为前端技术栈，专门适配飞牛系统 (FNOS) 环境与 Apple 极简设计美学，且在全站、后台、日志中不使用任何 emoji 表情。
+## 1. 技术栈与部署约束
+* **后端技术**: Go (无 CGO) + Gin + GORM + glebarez/sqlite。
+* **Unix 套接字监听**: 
+  - 核心依赖: 必须存在环境变量 `TRIM_APPDEST`。若缺失，程序直接终止退出。
+  - 执行动作: 监听 `${TRIM_APPDEST}/web.sock`。设置套接字文件读写权限为 `0666`。启动时自动清理历史残留套接字文件。
+* **路由根路径**: 所有请求及静态资源统一路由在 `/app/docker-updater/` 路径下。不匹配此路径的请求直接返回 HTTP 404。
+* **日志系统**:
+  - 全局日志文件: `${TRIM_PKGVAR}/info.log`（只写追加，支持 O_TRUNC 清空）。
+  - 任务日志文件: `${TRIM_PKGVAR}/logs/${container_name}.log`（动态按需创建）。
+  - 日志前缀: 统一使用 `[INFO]`、`[WARNING]`、`[ERROR]`、`[SUCCESS]`。禁止包含任何 emoji 表情。
 
----
+## 2. 数据库结构定义 (SQLite)
 
-## 1. 飞牛系统 (FNOS) 环境适配规范
+### db.Setting (系统配置表)
+```go
+type Setting struct {
+    Key   string `gorm:"primaryKey"`
+    Value string
+}
+// 键映射:
+// - backup_enabled: 是否开启更新前备份 ("true"/"false")
+// - backup_hours: 备份保留时长 (整型，默认 "24")
+// - restart_stack: 升级后是否重启同一 Compose 栈的其他容器 ("true"/"false")
+// - auto_update_enabled: 是否开启定时自动升级 ("true"/"false")
+// - temp_mirrors: 临时镜像加速源列表 (JSON 数组，如 ["https://mirror.com"])
+// - check_type: 定时检测周期类型 ("hour"/"day"/"week"/"month", 默认 "day")
+// - check_value: 定时检测周期数值 (整型，默认 1)
+// - smtp_enabled: 是否启用邮件通知 ("true"/"false")
+// - smtp_host, smtp_port, smtp_username, smtp_password (AES-256 加密), smtp_ssl, smtp_to
+// - smtp_subject_template, smtp_body_template
+// - last_check_time: 上次检测更新时间 (UTC ISO8601 格式)
+```
 
-程序在启动时从飞牛系统容器或宿主机环境中读取以下环境变量，并以此配置服务行为：
+### db.AvailableUpdate (待更新容器表)
+```go
+type AvailableUpdate struct {
+    ContainerName  string `gorm:"primaryKey"`
+    Image          string
+    LocalDigest    string
+    RemoteDigest   string
+    CheckedAt      string
+    ComposeProject string
+}
+```
 
-### 1.1 Unix Domain Socket 监听
-- **环境变量**：`TRIM_APPDEST`
-- **监听文件**：`${TRIM_APPDEST}/web.sock`
-- **服务机制**：程序启动时，必须检查并删除可能残留的套接字文件，然后在此路径上创建 Unix Domain Socket 监听。监听到连接后，赋予 `0666` 读写权限，允许飞牛系统的统一反向代理网关访问。不开放任何 TCP 监听端口。
+### db.DeferredUpdate (延迟更新约束表)
+```go
+type DeferredUpdate struct {
+    ContainerName string `gorm:"primaryKey"`
+    Until         string // 截止日期 YYYY-MM-DD
+}
+```
 
-### 1.2 路径前缀过滤 (BaseURL)
-- **前缀路径**：`/app/docker-updater`
-- **前端配置**：Vite 编译时的 `base` 参数设置为 `/app/docker-updater/`，Vue Router 的基础 history 路径设置为 `/app/docker-updater/`。
-- **后端配置**：所有的 Web 资源请求和 RESTful API 路由统一通过 Gin 路由组 `/app/docker-updater` 进行拦截和路由转发。其中对于 `/containers`、`/history`、`/images` 和 `/settings` 等 SPA 路由，后端负责拦截并直接返回前端静态包的 `index.html`，以防用户刷新页面时发生 404 错误。对于未匹配到该前缀的请求，一律返回 404。
+### db.UpdateHistory (更新历史记录表)
+```go
+type UpdateHistory struct {
+    ID            uint `gorm:"primaryKey;autoIncrement"`
+    ContainerName string
+    Image         string
+    UpdatedAt     string
+    Status        string // "success" 或 "error: [错误信息]"
+}
+```
 
-### 1.3 日志管理
-- **环境变量**：`TRIM_PKGVAR`
-- **日志文件**：`${TRIM_PKGVAR}/info.log`
-- **服务机制**：初始化时重定向 Go 的标准日志流、Gin 的访问日志和错误输出流至该文件中。系统在输出更新状态或拉取状态时，以文本格式（如 `[INFO]`、`[WARNING]`、`[ERROR]`、`[SUCCESS]`）作为行前缀，坚决不用任何 emoji 图标。
+### db.RollbackMetadata (备份元数据表)
+```go
+type RollbackMetadata struct {
+    ContainerName string `gorm:"primaryKey"`
+    BackedUpAt    string
+    ExpiresAt     string
+    RestartPolicy string // 容器原始重启策略的 JSON 序列化字符串
+}
+```
 
-### 1.4 数据持久化 (SQLite 数据库)
-- **数据库路径**：`${TRIM_PKGVAR}/data.db`
-- **驱动选择**：使用纯 Go (CGO-free) 的 SQLite 驱动（如 `github.com/glebarez/sqlite`），使得程序可以交叉编译并在没有动态依赖的 Debian 12 系统上稳定运行。
+### db.RegistryCredential (镜像仓库凭证表)
+```go
+type RegistryCredential struct {
+    ID        uint   `gorm:"primaryKey;autoIncrement" json:"id"`
+    Registry  string `gorm:"uniqueIndex" json:"registry"`
+    Username  string `json:"username"`
+    Password  string `json:"password"` // AES-256 加密密文
+    UpdatedAt string `json:"updated_at"`
+}
+```
 
----
+## 3. 加密与安全策略
+* **对称加密**: 使用 AES-256-GCM 算法。
+* **密钥文件**: 存放于 `${TRIM_PKGVAR}/secret.key`（文件权限 `0600`）。
+* **解密异常控制**: Base64 解码失败、密文长度不足、校验失败均直接向上层传播并返回 error，彻底禁止明文自动降级兼容逻辑。
 
-## 2. 数据库设计 (SQLite Schemas)
+## 4. API 路由规范
+所有路径均挂载于 `/app/docker-updater/api` 前缀下。
 
-数据库包含 5 张表，分别负责配置、待更新状态、延期计划、历史日志和回滚数据记录：
+| 请求方法 | 路由路径 | 请求体 | 响应载荷 | 安全校验/约束条件 |
+|---|---|---|---|---|
+| GET | `/status` | 无 | `{"containers": [...], "last_check": "...", "history": [...], "active": {...}, "queued": [...]}` | 无 |
+| POST | `/check` | 无 | `{"ok": true}` | 异步触发本地活动容器版本扫描比对并更新数据库 |
+| GET | `/update/:name` | 无 | SSE 日志流 (分块传输) | 异步将容器升级任务注册至全局队列。SSE 从日志缓冲区推流 |
+| GET | `/rollback/:name` | 无 | SSE 日志流 (分块传输) | 异步将容器回滚任务注册至全局队列 |
+| DELETE| `/backup/:name` | 无 | `{"ok": true}` | 物理删除指定的 `{name}_old` 备份容器，清除相关数据库元数据 |
+| POST | `/defer/:name` | `{"days": int}` | `{"ok": true, "until": "YYYY-MM-DD"}` | 写入延迟截止日期约束 |
+| POST | `/undefer/:name`| 无 | `{"ok": true}` | 移除延迟更新约束 |
+| GET | `/container/:name/logs`| 无 | `{"logs": string}` | 从 Docker 引擎获取容器的末尾 200 行标准输出与标准错误日志 |
+| GET | `/update-log/:name`| 无 | `{"found": bool, "logs": []string}` | `name` 参数必须符合正则 `^[a-zA-Z0-9][a-zA-Z0-9_.-]*$` 路径穿越过滤 |
+| DELETE| `/update-log/:name`| 无 | `{"ok": true}` | `name` 参数必须符合正则 `^[a-zA-Z0-9][a-zA-Z0-9_.-]*$` 路径穿越过滤。删除任务日志 |
+| GET | `/images` | 无 | `[{"id": string, "tags": []string, "size": int64, "created": int64, "containers": []string, "architecture": string}]` | 获取本地已下载镜像列表 |
+| DELETE| `/image` | 无 | `{"ok": true}` | Query 参数: `id` (镜像ID), `force` (是否强制删除)。校验运行状态与容器绑定关系 |
+| POST | `/images/prune` | 无 | `{"ok": true, "space_reclaimed": uint64, "deleted_count": int}` | 物理清理满足 `dangling=true` 且 `until=24h` 的虚悬无用镜像 |
+| GET | `/settings` | 无 | 系统配置 JSON | 动态对敏感 SMTP 凭据进行解密返回 |
+| POST | `/settings` | 系统配置 JSON | `{"ok": true}` | 对敏感 SMTP 密码加密存储；保存后自动触发热重载定时任务调度器 |
+| POST | `/settings/test-email`| 测试邮件配置 | `{"ok": true}` | 建立临时协议信道发送联通性测试邮件 |
+| GET | `/settings/system-mirrors`| 无 | `[]string` | 只读解析宿主机 `/etc/docker/daemon.json` 中的 `registry-mirrors` |
+| GET | `/tasks` | 无 | `{"queued": [], "active": {}}` | 获取排队队列的当前待执行及活动任务详情 |
+| POST | `/tasks/cancel/:name`| 无 | `{"success": bool}` | 将尚处于 `waiting` 状态的升级任务移出队列 |
+| GET | `/system/logs` | 无 | `{"logs": []string}` | 获取全局日志文件 `info.log` 的末尾 400 行记录 |
+| DELETE| `/system/logs` | 无 | `{"ok": true}` | 以截断清空模式置空 `info.log` 物理大小 |
+| DELETE| `/history` | 无 | `{"ok": true}` | 清空数据库所有更新历史，并遍历物理删除本地 logs 目录下的日志 |
+| DELETE| `/history/:id` | 无 | `{"ok": true}` | 物理删除指定的历史记录 ID 及对应日志 |
+| POST | `/container/:name/start`| 无 | `{"ok": true}` | 控制容器状态：启动，成功后触发全局 WebSocket 广播更新状态 |
+| POST | `/container/:name/stop`| 无 | `{"ok": true}` | 控制容器状态：停止，成功后触发全局 WebSocket 广播更新状态 |
+| POST | `/container/:name/restart`| 无 | `{"ok": true}` | 控制容器状态：重启，成功后触发全局 WebSocket 广播更新状态 |
+| GET | `/registries` | 无 | 凭证列表 JSON | 密码字段已被强制屏蔽为 `******` 的仓库凭据展示 |
+| POST | `/registries` | 凭证编辑负载 | `{"ok": true}` | 加密私有仓密码并存库，保存前将域名首尾多余协议前缀清除 |
+| DELETE| `/registries/:id`| 无 | `{"ok": true}` | 删除对应的私有仓账户密码凭证 |
+| GET | `/ws` | 无 | 协议升级载荷 | 升级为 WebSocket 长连接 |
 
-### 2.1 settings (系统配置表)
-用于存储备份保留时间等全局选项：
-- `key` (TEXT, PRIMARY KEY)：配置键。
-- `value` (TEXT)：配置值。
-- **常用键**：
-  - `backup_enabled` (是否开启更新前备份，"true"/"false")
-  - `backup_hours` (备份保留时长，整数默认 24)
-  - `restart_stack` (升级后是否重启 Compose 栈内其他容器，"true"/"false")
-  - `auto_update_enabled` (是否开启定时自动升级，"true"/"false")
-  - `temp_mirrors` (临时镜像源加速列表，序列化 JSON 字符串存储)
-  - `check_type` (定时检测更新周期类型，值可选 `hour`/`day`/`week`/`month`，默认 "day")
-  - `check_value` (定时检测周期数值，配合 `check_type` 运算，默认 1)
-  - `smtp_enabled` (是否启用邮件通知，"true"/"false")
-  - `smtp_host` (SMTP 发信服务器主机名)
-  - `smtp_port` (SMTP 服务端口，默认 465)
-  - `smtp_username` (SMTP 用户名)
-  - `smtp_password` (SMTP 密码或授权码)
-  - `smtp_ssl` (是否使用 SSL 加密信道，"true"/"false"，默认 "true")
-  - `smtp_to` (接收报告的收件人邮箱)
-  - `smtp_subject_template` (邮件主题模板)
-  - `smtp_body_template` (邮件正文模板)
-  - `last_check_time` (上一次检查镜像版本的时间，UTC ISO8601 格式)
+## 5. 事件循环与排队机制
+* **串行任务调度**: 任务处理器为单工循环。所有的升级任务和回滚任务排队推送至 `GlobalQueue` 执行。
+* **状态实时推送**: 任务队列修改、容器启停及更新流式日志均触发 WS 事件广播订阅的前端。
+* **WebSocket 保活控制**:
+  - `readPump`: 接收到 `{"type": "ping"}` 消息时，在写入 `c.send` 时必须使用 `select-default` 分支防范阻塞。协程头部采用 `defer recover()` 防止在 unregister 关闭 channel 时引起 `send on closed channel` 致命写 panic。
+  - `writePump`: 每隔 30 秒向客户端通道推送 Ping 帧。
+* **竞态防护**:
+  - 嵌套锁规避: 统一日志的多路输出刷新函数中剥离锁操作，防范在 `RegisterExtraWriter` 独占锁时的重入死锁。
+  - 运行排他锁: 容器启动/停止/重启 API 操作在下发 Docker 指令前，必须校验目标容器是否与当前 `GlobalQueue.active.ContainerName` 冲突，若冲突则予以拒绝。
 
-### 2.2 available_updates (可用更新表)
-记录检测到有新版本的本地容器：
-- `container_name` (TEXT, PRIMARY KEY)：容器名称。
-- `image` (TEXT)：镜像名称。
-- `local_digest` (TEXT)：本地镜像的 Digest。
-- `remote_digest` (TEXT)：仓库的最新 Digest。
-- `checked_at` (TEXT)：比对检查时间 (UTC ISO8601)。
-- `compose_project` (TEXT, 可空)：Docker Compose 项目标签。
+## 6. 更新与自动回滚生命周期
 
-### 2.3 deferred_updates (延期升级表)
-记录被用户手动设置为暂不更新的容器：
-- `container_name` (TEXT, PRIMARY KEY)：容器名称。
-- `until` (TEXT)：延迟截止日期 (格式为 YYYY-MM-DD)。
+```mermaid
+graph TD
+    A[启动升级任务] --> B[Docker 探测容器原始 Config 与 HostConfig]
+    B --> C[使用镜像加速源拉取目标镜像]
+    C --> D[优雅停止旧容器 - 超时30s]
+    D --> E[将旧容器重命名备份为 name_old]
+    E --> F[将 name_old 重启策略修改为 no]
+    F --> G[使用继承的 Config 创建新容器并绑定网络]
+    G -->|创建成功| H[启动新容器]
+    G -->|创建失败| R[回滚还原分支]
+    H -->|启动成功| I[等待 2 秒探测容器运行状态]
+    H -->|启动失败| R
+    I -->|探测成功| J[容器升级成功]
+    I -->|探测失败| R
+    J --> K{开启了备份保留?}
+    K -->|是| L[保留 name_old, 并在数据库写入 RollbackMetadata]
+    K -->|否| M[物理删除 name_old 容器并释放空间]
+    
+    R[回滚还原分支] --> S[物理移除已创建的损坏新容器]
+    S --> T[将 name_old 重命名还原为原容器名 name]
+    T --> U[恢复原容器重启策略]
+    U --> V[使用绝对不变的旧 ID 启动原容器]
+    V --> W[向日志分发失败错误并结束任务]
+```
 
-### 2.4 update_history (升级与回滚历史表)
-记录最近的升级与回退历史：
-- `id` (INTEGER, PRIMARY KEY AUTOINCREMENT)：主键。
-- `container_name` (TEXT)：容器名称。
-- `image` (TEXT)：升级/回滚时对应的镜像。
-- `updated_at` (TEXT)：发生时间 (UTC ISO8601)。
-- `status` (TEXT)：状态，例如 `success` (升级成功), `error: [错误描述]` (升级报错)。
-
-### 2.5 rollbacks (备份回滚表)
-记录已被重命名为 `{name}_old` 且处于保留期内的旧容器信息：
-- `container_name` (TEXT, PRIMARY KEY)：容器原名称.
-- `backed_up_at` (TEXT)：备份建立时间。
-- `expires_at` (TEXT)：备份过期截止时间。
-- `restart_policy` (TEXT)：原容器的重启策略 (序列化为 JSON 字符串存储)。
-
-### 2.6 registry_credentials (私有仓库凭据配置表)
-记录用于登录并拉取私有镜像仓库的域名与身份认证信息：
-- `id` (INTEGER, PRIMARY KEY AUTOINCREMENT)：主键。
-- `registry` (TEXT)：私有仓库域名或宿主机 IP 端口。
-- `username` (TEXT)：用户名。
-- `password` (TEXT)：明文存储的密码（依赖本地 SQLite 物理文件权限安全防护）。
-- `created_at` (DATETIME)：创建时间。
-- `updated_at` (DATETIME)：更新时间。
-
----
-
-## 3. 后端 API 接口设计
-
-所有请求均在前缀 `/app/docker-updater` 下进行：
-
-### 3.1 获取整体状态
-- **端点**：`GET /app/docker-updater/api/status`
-- **返回**：
-  ```json
-  {
-    "containers": [
-      {
-        "name": "nginx-web",
-        "image": "nginx:latest",
-        "status": "update", // 可选: update, deferred, ok
-        "defer_until": null,
-        "checked_at": "2026-07-08T10:00:00Z",
-        "has_rollback": true,
-        "rollback_expires": "2026-07-09T10:00:00Z",
-        "compose_project": "my-stack",
-        "running": true
-      }
-    ],
-    "last_check": "2026-07-08T10:00:00Z",
-    "history": []
-  }
-  ```
-
-### 3.2 触发本地更新比对
-- **端点**：`POST /app/docker-updater/api/check`
-- **说明**：后台异步启动镜像 Digest 校验，完成后写入 `available_updates`。
-
-### 3.3 升级/修改容器版本
-- **端点**：`GET /app/docker-updater/api/update/:name`
-- **查询参数**：
-  - `target_image` (string, 可选): 指定的目标版本或镜像。例如 `8.0`（自动拼装原镜像前缀）或 `mysql:8.0`（使用完整新镜像名）。若省略，则默认为直接拉取升级当前容器对应的原镜像最新版。
-- **交互机制**：API 用于向后台任务队列中异步发起升级或版本修改注册。一旦任务进入排队与调度流程，其 Pull 进度、物理重建进度、防抖重启和结果日志将一律通过全局 **WebSocket 信道 (`logs:<name>`)** 实时广播至订阅的各前端客户端，同时向本地 `${TRIM_PKGVAR}/logs/${name}.log` 写入完整运行日志且不用任何 emoji。
-- **Compose 降级机制**：若检测到该容器属于 Compose 项目，且指定了 `target_image`，系统将跳过 Compose 联动，降级为单容器克隆重建逻辑，以防止被 Compose 本地文件中的原镜像版本覆盖。
-- **重启回滚**：启动新容器后休眠 2 秒，检查状态。若状态不为 `running`，则自动执行回退：克隆恢复原备份容器 `{name}_old` 并重启，通过 WS 向日志订阅者分发 `[ROLLBACK SUCCESS] Restore original container`。
-
-### 3.4 回滚容器
-- **端点**：`GET /app/docker-updater/api/rollback/:name`
-- **交互机制**：API 用于异步注册容器回滚任务。后台将备份的 `{name}_old` 物理恢复为原名并重新拉起。相关的回退流式执行日志同样通过全局 **WebSocket 信道 (`logs:<name>`)** 实时向前端订阅客户端进行流式推送。
-
-### 3.5 清除备份
-- **端点**：`DELETE /app/docker-updater/api/backup/:name`
-- **说明**：直接删除宿主机上的 `{name}_old` 容器，释放存储。
-
-### 3.6 设置延迟更新
-- **端点**：`POST /app/docker-updater/api/defer/:name`
-- **参数**：`{"days": 7}`
-- **说明**：向 `deferred_updates` 表中写入对应的截止日期。
-
-### 3.7 恢复延迟更新对比
-- **端点**：`POST /app/docker-updater/api/undefer/:name`
-- **说明**：删除 `deferred_updates` 表中该容器的记录，恢复正常的版本比对。
-
-### 3.8 获取容器最新日志 (调试诊断)
-- **端点**：`GET /app/docker-updater/api/container/:name/logs`
-- **说明**：从 Docker 引擎中拉取指定容器最近的 stdout/stderr 最新控制台日志。
-
-### 3.9 获取历史持久化日志
-- **端点**：`GET /app/docker-updater/api/update-log/:name`
-- **说明**：从本地磁盘中直接读取上一次升级或回退产生的 `${name}.log` 文本文件内容。
-
-### 3.10 获取本地镜像列表
-- **端点**：`GET /app/docker-updater/api/images`
-- **说明**：获取宿主机上已下载的全部 Docker 镜像，包含体积大小、RepoTags（无 Tag 时标为 `<none>:<none>`）及创建时间。
-
-### 3.11 删除本地镜像
-- **端点**：`DELETE /app/docker-updater/api/image`
-- **参数**：`?id=sha256:...` (query 参数)
-- **说明**：通过 Docker 镜像 ID 执行物理强制删除。
-
-### 3.12 一键清理虚悬镜像 (Prune)
-- **端点**：`POST /app/docker-updater/api/images/prune`
-- **说明**：修剪宿主机上所有未被运行或停止容器关联的悬空 (dangling=true) 镜像垃圾，返回释放的磁盘体积及删除数量。
-
-### 3.13 获取系统全局配置
-- **端点**：`GET /app/docker-updater/api/settings`
-- **返回**：
-  ```json
-  {
-    "backup_enabled": bool,
-    "backup_hours": int,
-    "restart_stack": bool,
-    "auto_update_enabled": bool,
-    "temp_mirrors": ["https://mirror1.com", ...],
-    "check_type": "hour|day|week|month",
-    "check_value": int,
-    "smtp_enabled": bool,
-    "smtp_host": string,
-    "smtp_port": string,
-    "smtp_username": string,
-    "smtp_password": string,
-    "smtp_ssl": bool,
-    "smtp_to": string,
-    "smtp_subject_template": string,
-    "smtp_body_template": string
-  }
-  ```
-
-### 3.14 保存系统全局配置
-- **端点**：`POST /app/docker-updater/api/settings`
-- **参数**：与 `GET` 接口返回的配置 JSON 结构相同。
-- **说明**：更新并存入 SQLite 数据库。保存配置成功后，后端会自动触发 `scheduler.ReloadScheduler()` 热重载定时任务调度器，使得新的检测周期参数即时生效。
-
-### 3.15 获取后台任务队列状态
-- **端点**：`GET /app/docker-updater/api/tasks`
-- **说明**：获取全局排队系统的当前状态。返回正在执行的活跃任务 (`active`) 以及在等待队列中的任务列表 (`queued`)。
-
-### 3.16 取消排队中的任务
-- **端点**：`POST /app/docker-updater/api/tasks/cancel/:name`
-- **说明**：将指定容器的、尚处于等待排队（`waiting`）状态的任务从队列中安全移出，取消其升级。如果任务已经开始运行（`running`），则返回失败。
-
-### 3.17 获取系统全局运行日志 (程序主日志)
-- **端点**：`GET /app/docker-updater/api/system/logs`
-- **说明**：从本地读取本程序守护进程自身的 `info.log` 全局运行日志文件，截取返回最新的最末尾 400 行用于前端的高效渲染。
-
-### 3.18 清空系统全局运行日志
-- **端点**：`DELETE /app/docker-updater/api/system/logs`
-- **说明**：以截断写空（O_TRUNC）模式清除 `info.log` 日志文件的物理大小，防止由于后台写占用导致锁死或句柄失效。
-
-### 3.19 清除容器操作日志
-- **端点**：`DELETE /app/docker-updater/api/update-log/:name`
-- **说明**：物理删除存储上针对指定容器升级/回滚产生的那一份 `${name}.log` 持久化操作日志文件，释放空间。
-
-### 3.20 获取私有仓库凭证列表
-- **端点**：`GET /app/docker-updater/api/registries`
-- **说明**：获取当前数据库中已注册的私有镜像仓库凭据（密码已被脱敏遮蔽为 `******`）。
-
-### 3.21 保存/修改私有仓库凭证
-- **端点**：`POST /app/docker-updater/api/registries`
-- **参数**：`{"id": 0, "registry": "registry.com", "username": "user", "password": "pwd"}`
-- **说明**：新增或覆写保存私有仓的账户密码凭证信息。
-
-### 3.22 删除私有仓库凭证
-- **端点**：`DELETE /app/docker-updater/api/registries/:id`
-- **说明**：根据物理主键 ID 删除对应的镜像仓库凭证。
-
-### 3.23 WebSocket 实时长连接通信管道
-- **端点**：`GET /app/docker-updater/api/ws`
-- **说明**：提供持久化的双向长连接以替换轮询，客户端通过特定事件主题保持前端组件状态高同步：
-  - **上行心跳消息**：`{"type": "ping"}`
-  - **上行订阅日志主题**：`{"type": "subscribe", "target": "logs:<container_name>"}`
-  - **上行注销日志主题**：`{"type": "unsubscribe", "target": "logs:<container_name>"}`
-  - **下行全局状态广播**：
-    ```json
-    {
-      "type": "status",
-      "payload": {
-        "containers": [...],
-        "last_check": "...",
-        "history": [...],
-        "active": {},
-        "queued": []
-      }
-    }
-    ```
-  - **下行实时流式日志单播**：
-    ```json
-    {
-      "type": "log",
-      "payload": {
-        "container": "nginx",
-        "task": "update",
-        "message": "[PULL] Extracting fs layer"
-      }
-    }
-    ```
-  - **下行系统运行日志广播**：
-    ```json
-    {
-      "type": "syslog",
-      "payload": {
-        "line": "[INFO] 启动定时镜像更新检查..."
-      }
-    }
-    ```
-
-### 3.24 只读获取宿主机全局镜像加速源
-- **端点**：`GET /app/docker-updater/api/settings/system-mirrors`
-- **说明**：只读尝试解析宿主机 `/etc/docker/daemon.json` 中的 `"registry-mirrors"` 数组。如果宿主机未配置、文件不存在或读取无权限，则静默返回空数组 `[]`。不提供改写接口，对宿主机配置无破坏。
-
-### 3.25 测试发送邮件
-- **端点**：`POST /app/docker-updater/api/settings/test-email`
-- **参数**：
-  ```json
-  {
-    "smtp_host": string,
-    "smtp_port": string,
-    "smtp_username": string,
-    "smtp_password": string,
-    "smtp_ssl": bool,
-    "smtp_to": string,
-    "smtp_subject_template": string,
-    "smtp_body_template": string
-  }
-  ```
-- **说明**：使用传入的 SMTP 凭证信息及测试数据替换模板占位符，立即发送一封联通性测试邮件。
-
-### 3.26 容器生命周期控制 - 启动容器
-- **端点**：`POST /app/docker-updater/api/container/:name/start`
-- **说明**：手动拉起处于停止状态的指定容器。操作成功后将触发全局 WebSocket 状态广播以刷新前端界面。
-
-### 3.27 容器生命周期控制 - 停止容器
-- **端点**：`POST /app/docker-updater/api/container/:name/stop`
-- **说明**：手动停止运行中的指定容器。操作成功后将触发全局 WebSocket 状态广播以刷新前端界面。
-
-### 3.28 容器生命周期控制 - 重启容器
-- **端点**：`POST /app/docker-updater/api/container/:name/restart`
-- **说明**：手动重新启动指定的容器。操作成功后将触发全局 WebSocket 状态广播以刷新前端界面。
-
-### 3.29 清空所有升级历史记录
-- **端点**：`DELETE /app/docker-updater/api/history`
-- **说明**：清空数据库 `update_histories` 历史表，并物理删除宿主机 `logs/` 目录下所有持久化的 `.log` 日志文件，然后通过 WebSocket 广播更新通知。
-
-### 3.30 删除单条升级历史记录
-- **端点**：`DELETE /app/docker-updater/api/history/:id`
-- **说明**：根据主键 ID 从数据库中物理删除指定的容器升级历史记录，并删除对应的本地物理 `${name}.log` 文件。
-
----
+## 7. 定时任务热重载工作流
+```mermaid
+graph TD
+    A[前端修改定时检测设置并保存] --> B[配置持久化写入 SQLite]
+    B --> C[触发回调函数 OnSettingsReload]
+    C --> D[中止当前运行的 CronScheduler 调度器]
+    D --> E[从数据库读取参数执行 StartScheduler]
+    E --> F[生成最新的 Cron 表达式]
+    F --> G[重新注册周期扫描和备份清理任务]
+    G --> H[启动 CronScheduler]
+```

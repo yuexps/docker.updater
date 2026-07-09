@@ -1,71 +1,54 @@
 # AGENTS.md
 
 ## 项目概述
-
-**Docker Updater** 是飞牛系统 (FNOS) 的 Docker 容器升级管理器，以 `.fpk` 格式打包为第三方应用。提供 Web GUI 管理宿主机上所有 Docker 容器的版本检测、一键升级、回滚、备份和镜像管理。
+**Docker Updater** 是飞牛系统 (FNOS) 的 Docker 容器升级管理器（`.fpk` 格式第三方应用）。提供 Web GUI 实现宿主机容器版本检测、一键升级、回滚、备份和镜像管理。
 
 ## 技术栈
+* **后端**: Go 1.26 + [Gin](https://github.com/gin-gonic/gin) + [GORM](https://gorm.io)
+* **数据库**: SQLite (纯 Go 驱动 [glebarez/sqlite](https://github.com/glebarez/sqlite)，CGO-free)
+* **Docker SDK**: [docker/docker/client](https://github.com/moby/moby/tree/master/client) (不使用 CLI)
+* **通信**: WebSocket + SSE 实时流
+* **定时任务**: [robfig/cron/v3](https://github.com/robfig/cron)
+* **前端**: Vue 3 (Composition API, `<script setup>`) + [Naive UI](https://www.naiveui.com/) + Tailwind CSS v4
+* **构建/打包**: Vite 8 + TS 5.7 + Vue Router 5 | fnpack (`.fpk`)
 
-| 层级 | 技术 |
-|------|------|
-| 后端 | Go 1.26 + Gin + GORM |
-| 数据库 | SQLite (glebarez/sqlite, CGO-free) |
-| Docker SDK | docker/docker client |
-| 实时通信 | WebSocket (gorilla/websocket) + SSE |
-| 定时任务 | robfig/cron |
-| 前端 | Vue 3 (Composition API, `<script setup>`) + Naive UI + Tailwind CSS v4 |
-| 构建 | Vite 8 + TypeScript 5.7 + Vue Router 5 |
-| 打包 | fnpack (.fpk) |
+## 项目结构
+* **[api/](api)**: Gin 路由与 WebSocket Hub。
+* **[db/](db)**: 数据库连接初始化与 6 个模型定义 ([models.go](db/models.go))。
+* **[dockerclient/](dockerclient)**: Docker API 交互（拉取、启动、检测、Tag 提取）。
+* **[scheduler/](scheduler)**: 定时任务调度器。
+* **[service/](service)**: 队列调度 ([queue.go](service/queue.go))、断电自愈 ([selfheal.go](service/selfheal.go))、仓库凭证 ([credentials.go](service/credentials.go)) 等业务逻辑。
+* **[utils/](utils)**: 统一日志与网络辅助方法。
+* **[frontend/](frontend)**: Vue 前端 SPA 源码。
+* **[fnpack/](fnpack)**: `.fpk` 打包配置及应用静态资产。
+* **[main.go](main.go)**: 入口程序，嵌有前端静态资产，监听 Unix Domain Socket。
+* **[build.cmd](build.cmd)**: Windows 构建与 `.fpk` 打包脚本。
+* **[build.sh](build.sh)**: Linux 构建与 `.fpk` 打包脚本。
+* **[.github/workflows/release.yml](.github/workflows/release.yml)**: GitHub Actions 自动构建与 Pre-release 发布工作流。
 
-## 架构
+## 关键架构与设计决策
+1. **单二进制嵌入**: 后端通过 `go:embed` 挂载 `frontend/dist/*` 资产。
+2. **UDS 监听**: 生产环境强依赖 `TRIM_APPDEST` 环境变量，监听 Unix Domain Socket 进行网关代理。
+3. **路由统一**: 所有 API 及静态服务统归 `/app/docker-updater/` 组。
+4. **单工排队**: 容器升级、回滚加入单工任务队列，规避并发争抢。
+5. **探活与自愈**: 容器更新后休眠探活，失败则回退至 `{name}_old` 旧容器并重启。
+6. **无 Emoji**: 系统日志、推送和前端 UI 禁止使用 emoji，统一采用文本前缀。
+7. **CGO-free**: 禁止引入 CGO，采用纯 Go SQLite 驱动，支持交叉编译。
+8. **无 CLI 依赖**: 所有 Docker 操作均通过 Docker SDK 交互，禁止调用命令行 `docker` 进程。
+9. **文档优先**: 变更代码前，优先同步更新 [AGENTS.md](AGENTS.md) 及 [specification.md](docs/specification.md)。
+10. **禁止自动构建**: AI 代理禁止自行运行构建或打包脚本（如 `build.cmd` 或 `build.sh`），如有构建需求应引导并交由用户手动执行。
 
-```
-backend/          # Go 后端
-  main.go         # 入口，Unix Socket
-  api/            # Gin 路由 + WebSocket Hub
-  db/             # SQLite 数据模型 (6 表)
-  dockerclient/   # Docker 引擎交互、版本检测、升级/回滚、任务队列
-  scheduler/      # 定时检查 + 过期备份清理
-frontend/         # Vue 3 前端
-  src/
-    router/       # 7 个 SPA 路由
-    views/        # Dashboard, Containers, Images, History, Tasks, Logs, Settings
-    utils/        # WebSocket 客户端
-fnpack/           # fnpack 打包配置 (manifest, cmd, config)
-docs/             # 技术规格文档
-build.cmd         # 一键构建脚本
-```
+## 构建命令
+* **Windows 平台**:
+  ```cmd
+  build.cmd
+  ```
+* **Linux 平台**:
+  ```bash
+  chmod +x build.sh && ./build.sh
+  ```
 
-### 关键架构决策
-
-- **单二进制部署**: Go 后端通过 `//go:embed` 嵌入前端 dist 产物
-- **生产环境**: Unix Domain Socket (`${TRIM_APPDEST}/web.sock`)，由飞牛统一网关代理
-- **路径前缀**: 所有请求统一在 `/app/docker-updater/` 下
-- **全站无 emoji**: 日志标签使用 `[INFO]`, `[WARNING]`, `[ERROR]`, `[SUCCESS]`
-
-## 构建
-
-```cmd
-build.cmd
-```
-
-流程：
-1. `cd frontend && npm run build`
-2. 同步 `frontend/dist/` → `backend/dist/`
-3. 交叉编译 Go → Linux x86_64 (`GOOS=linux GOARCH=amd64`)
-4. 输出到 `fnpack/app/bin/docker-updater`
-5. `fnpack build` 打包 `.fpk`
-
-## 设计规范
-
-- UI 遵循 Apple 极简风格：主题色 `#0066cc`，大圆角 (18px)，胶囊按钮 (9999px)，白色卡片 + 浅米色背景
-- 侧边栏导航布局
-- 不使用 emoji
-- Naive UI + Tailwind CSS Skill技能(.agents\skills)
-
-## 开发约定
-
-- 代码风格遵循各自语言的社区惯例 (Go: gofmt, Vue: ESLint + Prettier)
-- 所有 Docker 操作通过 docker/docker client SDK，不调用 CLI
-- API 响应统一 JSON 格式，升级/回滚操作通过 SSE 流式输出日志
-- WebSocket 用于全局状态广播和实时日志推送
+## 自动化构建与发布
+项目配置了 GitHub Actions 自动化工作流：
+* 当有代码推送（push）至 `main` 分支时，将自动执行构建与打包。
+* 自动发布并覆盖名为 `pre-release` 的预发布版本，始终只保留最新的那一版构建产物（`docker.updater.fpk`）。

@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 echo ==================================================
-echo [INFO] 开始打包构建 Docker 更新器 (fnpack 模式)
+echo [INFO] 开始打包构建 Docker Updater
 echo ==================================================
 
 echo [INFO] 正在构建 Vue 3 前端静态资产...
@@ -14,36 +14,22 @@ if %ERRORLEVEL% neq 0 (
 )
 cd ..
 
-echo [INFO] 正在同步静态资产到 Go 编译嵌入目录...
-if exist backend\dist (
-    rd /s /q backend\dist
-)
-xcopy /e /i /y frontend\dist backend\dist
-if %ERRORLEVEL% neq 0 (
-    echo [ERROR] 静态资产同步失败！
-    pause
-    exit /b %ERRORLEVEL%
-)
-
 echo [INFO] 正在交叉编译 Linux x86_64 二进制文件...
 if not exist fnpack\app\bin (
     mkdir fnpack\app\bin
 )
-cd backend
 set GOOS=linux
 set GOARCH=amd64
-go build -trimpath -ldflags="-s -w" -o ..\fnpack\app\bin\docker-updater
+go build -trimpath -ldflags="-s -w" -o fnpack\app\bin\docker-updater
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] 后端编译失败！
-    cd ..
     pause
     exit /b %ERRORLEVEL%
 )
-cd ..
 
 echo [INFO] 正在调用 fnpack 构建 fpk 安装包...
 cd fnpack
-call fnpack build
+call fnpack-1.2.3-windows-amd64 build
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] fpk 包构建失败！
     cd ..
@@ -53,6 +39,6 @@ if %ERRORLEVEL% neq 0 (
 cd ..
 
 echo ==================================================
-echo [SUCCESS] 核心构建与 .fpk 打包已全部圆满成功！
+echo [SUCCESS] 核心构建与 .fpk 打包已完成！
 echo ==================================================
 pause

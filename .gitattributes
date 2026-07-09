@@ -1,0 +1,5 @@
+# Force build.cmd to use CRLF line endings
+build.cmd text eol=crlf
+
+# Force all files inside the fnpack directory to use LF line endings
+fnpack/** text eol=lf

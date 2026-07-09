@@ -18,81 +18,81 @@
       <!-- Configuration Cards stack -->
       <div class="space-y-6">
 
-        <!-- Card 1: Backup Toggle -->
+        <!-- Card 1: Backup Toggle & Expiry Hours -->
         <div
-          class="apple-card rounded-lg p-5 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white">
-          <div class="min-w-0 flex-1">
-            <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">保留旧版容器备份</div>
-            <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">升级成功后在保留期内保存旧容器实例。若新版本运行出现问题，支持随时手动一键回滚。
+          class="apple-card rounded-lg p-5 sm:p-6 flex flex-col gap-4 hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white">
+          <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0 flex-1">
+              <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">保留旧版容器备份</div>
+              <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">升级成功后在保留期内保存旧容器实例。若新版本运行出现问题，支持随时手动一键回滚。</div>
+            </div>
+            <div class="shrink-0 pt-0.5">
+              <n-switch v-model:value="settings.backup_enabled" @update:value="autoSaveSettings" />
             </div>
           </div>
-          <div class="shrink-0 self-end sm:self-center mt-2 sm:mt-0">
-            <n-switch v-model:value="settings.backup_enabled" @update:value="autoSaveSettings" />
-          </div>
-        </div>
 
-        <!-- Card 2: Expiry Hours -->
-        <div
-          class="apple-card rounded-lg p-5 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white"
-          :class="settings.backup_enabled ? 'opacity-100' : 'opacity-40 scale-[0.99] pointer-events-none select-none'">
-          <div class="min-w-0 flex-1">
-            <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">备份自动清除周期</div>
-            <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">超出保留期后，系统后台会自动物理清除旧容器备份以释放磁盘空间。</div>
-          </div>
-          <div class="w-full sm:w-[180px] shrink-0 mt-3 sm:mt-0">
-            <n-select v-model:value="settings.backup_hours" :options="hoursOptions" :disabled="!settings.backup_enabled"
-              @update:value="autoSaveSettings" />
+          <!-- Expiry hours sub-config row inside same card -->
+          <div v-if="settings.backup_enabled"
+            class="border-t border-hairline pt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between transition-all duration-300">
+            <div class="min-w-0 flex-1">
+              <div class="text-[14px] font-bold text-slate-700 leading-snug">备份自动清除周期</div>
+              <div class="text-[12px] text-body-muted mt-1 leading-relaxed">超出保留期后，系统会自动物理清除旧容器备份以释放磁盘空间。</div>
+            </div>
+            <div class="w-full sm:w-[180px] shrink-0">
+              <n-select v-model:value="settings.backup_hours" :options="hoursOptions"
+                @update:value="autoSaveSettings" />
+            </div>
           </div>
         </div>
 
         <!-- Card 3: Sibling Restart Toggle -->
         <div
-          class="apple-card rounded-lg p-5 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white">
+          class="apple-card rounded-lg p-5 sm:p-6 flex items-start justify-between gap-4 hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white">
           <div class="min-w-0 flex-1">
             <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">自动重启同 Compose 项目服务</div>
             <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">当服务更新重建后，自动重启同 Compose 项目下的其它关联服务。</div>
           </div>
-          <div class="shrink-0 self-end sm:self-center mt-2 sm:mt-0">
+          <div class="shrink-0 pt-0.5">
             <n-switch v-model:value="settings.restart_stack" @update:value="autoSaveSettings" />
           </div>
         </div>
 
-        <!-- Card 3.5: Auto Check Frequency -->
+        <!-- Card 2: Auto Check & Update Config -->
         <div
-          class="apple-card rounded-lg p-5 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white">
-          <div class="min-w-0 flex-1">
-            <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">镜像更新检测频率</div>
-            <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">自定义后台自动检测容器镜像新版本的执行间隔频率。</div>
+          class="apple-card rounded-lg p-5 sm:p-6 flex flex-col gap-4 hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white">
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div class="min-w-0 flex-1">
+              <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">镜像更新检测频率</div>
+              <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">自定义后台自动检测容器镜像新版本的执行间隔频率。</div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0 mt-3 sm:mt-0">
+              <n-input-number v-model:value="settings.check_value" :min="1" @update:value="autoSaveSettings" />
+              <n-select v-model:value="settings.check_type" :options="checkTypeOptions"
+                style="width: 82px; min-width: 82px" @update:value="autoSaveSettings" />
+            </div>
           </div>
-          <div class="flex items-center gap-2 shrink-0 mt-3 sm:mt-0">
-            <n-input-number v-model:value="settings.check_value" :min="1" @update:value="autoSaveSettings" />
-            <n-select v-model:value="settings.check_type" :options="checkTypeOptions"
-              style="width: 82px; min-width: 82px" @update:value="autoSaveSettings" />
-          </div>
-        </div>
 
-        <!-- Card 3.6: Auto Update Toggle -->
-        <div
-          class="apple-card rounded-lg p-5 sm:p-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white">
-          <div class="min-w-0 flex-1">
-            <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">自动更新容器</div>
-            <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">开启后，每次定时镜像检测发现新版本时，将自动为非暂挂的容器执行克隆升级。</div>
-          </div>
-          <div class="shrink-0 self-end sm:self-center mt-2 sm:mt-0">
-            <n-switch v-model:value="settings.auto_update_enabled" @update:value="autoSaveSettings" />
+          <div
+            class="border-t border-hairline pt-4 flex items-start justify-between gap-4">
+            <div class="min-w-0 flex-1">
+              <div class="text-[14px] font-bold text-slate-700 leading-snug">自动更新容器</div>
+              <div class="text-[12px] text-body-muted mt-1 leading-relaxed">每次定时检测发现新版本时，将自动为容器执行克隆升级。</div>
+            </div>
+            <div class="shrink-0 pt-0.5">
+              <n-switch v-model:value="settings.auto_update_enabled" @update:value="autoSaveSettings" />
+            </div>
           </div>
         </div>
 
         <!-- Card 3.7: Email Notification Settings -->
         <div
           class="apple-card rounded-lg p-5 sm:p-6 hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white flex flex-col gap-4">
-          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex items-start justify-between gap-4">
             <div class="min-w-0 flex-1">
               <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">邮件通知服务</div>
-              <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">在后台静默检测到更新或自动更新容器操作完成时发送邮件通知。
-              </div>
+              <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">在后台静默检测到更新或自动更新容器操作完成时发送邮件通知。</div>
             </div>
-            <div class="shrink-0 self-end sm:self-center mt-2 sm:mt-0">
+            <div class="shrink-0 pt-0.5">
               <n-switch v-model:value="settings.smtp_enabled" @update:value="autoSaveSettings" />
             </div>
           </div>
@@ -100,15 +100,19 @@
           <!-- Email Config Form -->
           <div v-if="settings.smtp_enabled"
             class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-hairline pt-4">
+            <div class="sm:col-span-2">
+              <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">邮件服务商</label>
+              <n-select v-model:value="smtpProvider" :options="providerOptions" @update:value="onProviderChange" />
+            </div>
             <div>
               <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">SMTP 服务器</label>
               <n-input v-model:value="settings.smtp_host" placeholder="例如: smtp.qq.com" class="rounded-lg"
-                @blur="autoSaveSettings" />
+                :disabled="smtpProvider !== 'custom'" @blur="autoSaveSettings" />
             </div>
             <div>
               <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">SMTP 端口</label>
               <n-input v-model:value="settings.smtp_port" placeholder="例如: 465 或 587" class="rounded-lg"
-                @blur="autoSaveSettings" />
+                :disabled="smtpProvider !== 'custom'" @blur="autoSaveSettings" />
             </div>
             <div>
               <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">发件人账号 / 邮箱</label>
@@ -154,7 +158,8 @@
             <div class="flex items-center justify-between sm:justify-start gap-6 mt-5 sm:col-span-2">
               <div class="flex items-center gap-2">
                 <span class="text-[13px] text-slate-600 font-medium">启用 SSL 加密</span>
-                <n-switch v-model:value="settings.smtp_ssl" @update:value="autoSaveSettings" />
+                <n-switch v-model:value="settings.smtp_ssl" :disabled="smtpProvider !== 'custom'"
+                  @update:value="autoSaveSettings" />
               </div>
               <n-button secondary round size="small"
                 class="active-scale bg-surface-pearl border border-divider-soft text-slate-700 font-semibold"
@@ -219,19 +224,22 @@
           </div>
         </div>
 
-        <!-- Card 5: System Registry Mirrors (Read-Only) -->
+        <!-- Card 4: Registry Mirrors (System & Temporary) -->
         <div
           class="apple-card rounded-lg p-5 sm:p-6 hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white flex flex-col gap-5">
-          <div class="min-w-0 flex-1">
-            <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">系统镜像加速源</div>
-            <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">只读获取宿主机本地全局生效的 Docker 镜像加速源。</div>
+          <!-- Title Section -->
+          <div>
+            <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">镜像加速源</div>
+            <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">查看系统全局镜像加速源，或配置仅在当前升级器中生效的临时加速源（不修改宿主机全局配置）。</div>
           </div>
 
-          <div>
+          <!-- Part 1: System Mirrors -->
+          <div class="flex flex-col gap-2">
+            <div class="text-[12px] font-bold text-slate-500 tracking-wider">系统全局加速源（只读）</div>
             <div v-if="systemMirrors.length > 0"
-              class="border border-hairline rounded-xl overflow-hidden divide-y divide-hairline">
+              class="border border-hairline rounded-xl overflow-hidden divide-y divide-hairline bg-slate-50/5">
               <div v-for="m in systemMirrors" :key="m"
-                class="p-3.5 text-[13px] font-mono text-slate-700 bg-slate-50/10 break-all select-all flex items-center justify-between">
+                class="p-3.5 text-[13px] font-mono text-slate-700 break-all select-all flex items-center justify-between">
                 <span class="truncate mr-2">{{ m }}</span>
                 <button
                   class="text-slate-400 hover:text-primary transition-colors p-1 rounded hover:bg-white cursor-pointer shrink-0"
@@ -245,27 +253,20 @@
               </div>
             </div>
             <div v-else
-              class="text-center py-8 text-body-muted text-[13px] bg-slate-50/20 rounded-xl border border-dashed border-hairline select-none flex flex-col items-center justify-center">
+              class="text-center py-6 text-body-muted text-[12px] bg-slate-50/20 rounded-xl border border-dashed border-hairline select-none flex flex-col items-center justify-center">
               当前宿主机系统未配置任何全局镜像加速源
             </div>
           </div>
-        </div>
 
-        <!-- Card 6: Temporary Registry Mirrors (Read & Write) -->
-        <div
-          class="apple-card rounded-lg p-5 sm:p-6 hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white flex flex-col gap-5">
-          <div class="min-w-0 flex-1">
-            <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">临时镜像加速源</div>
-            <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">添加仅在此升级器内生效的临时加速源。拉取官方镜像时，会自动在此加速下载，不重启系统
-              Docker，且不修改宿主机全局配置。</div>
-          </div>
+          <!-- Part 2: Temporary Mirrors -->
+          <div class="border-t border-hairline pt-4 flex flex-col gap-3">
+            <div class="text-[12px] font-bold text-slate-500 tracking-wider">临时镜像加速源（可编辑）</div>
 
-          <div class="flex flex-col gap-4">
             <!-- Temporary Mirrors List -->
             <div v-if="settings.temp_mirrors && settings.temp_mirrors.length > 0"
-              class="border border-hairline rounded-xl overflow-hidden divide-y divide-hairline">
+              class="border border-hairline rounded-xl overflow-hidden divide-y divide-hairline bg-slate-50/5">
               <div v-for="(m, idx) in settings.temp_mirrors" :key="idx"
-                class="flex items-center justify-between p-3.5 bg-slate-50/10">
+                class="flex items-center justify-between p-3.5">
                 <span class="text-[13px] font-mono text-slate-700 break-all pr-4">{{ m }}</span>
                 <n-button size="tiny" type="error" ghost round class="active-scale shrink-0"
                   @click="removeTempMirror(idx)">
@@ -273,12 +274,12 @@
                 </n-button>
               </div>
             </div>
-
             <div v-else
-              class="text-center py-8 text-body-muted text-[13px] bg-slate-50/20 rounded-xl border border-dashed border-hairline select-none flex flex-col items-center justify-center">
+              class="text-center py-6 text-body-muted text-[12px] bg-slate-50/20 rounded-xl border border-dashed border-hairline select-none flex flex-col items-center justify-center">
               暂未配置任何临时镜像加速源
             </div>
 
+            <!-- Input bar for adding mirror -->
             <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
               <n-input v-model:value="newTempMirror" placeholder="例如: https://docker.m.daocloud.io"
                 class="flex-1 rounded-xl" @keyup.enter="addTempMirror" />
@@ -421,6 +422,49 @@ const checkTypeOptions = [
 
 const testingEmail = ref<boolean>(false)
 
+const smtpProvider = ref<string>('custom')
+
+const providerOptions = [
+  { label: '自定义', value: 'custom' },
+  { label: 'QQ 邮箱', value: 'qq' },
+  { label: '163 网易邮箱', value: '163' },
+  { label: 'Gmail', value: 'gmail' },
+  { label: 'Outlook', value: 'outlook' }
+]
+
+const providerPresets: Record<string, { host: string; port: string; ssl: boolean }> = {
+  qq: { host: 'smtp.qq.com', port: '465', ssl: true },
+  '163': { host: 'smtp.163.com', port: '465', ssl: true },
+  gmail: { host: 'smtp.gmail.com', port: '465', ssl: true },
+  outlook: { host: 'smtp.office365.com', port: '587', ssl: false }
+}
+
+const onProviderChange = (val: string) => {
+  if (val !== 'custom') {
+    const preset = providerPresets[val]
+    if (preset) {
+      settings.value.smtp_host = preset.host
+      settings.value.smtp_port = preset.port
+      settings.value.smtp_ssl = preset.ssl
+      autoSaveSettings()
+    }
+  }
+}
+
+const detectProvider = () => {
+  const host = settings.value.smtp_host
+  const port = settings.value.smtp_port
+  const ssl = settings.value.smtp_ssl
+
+  for (const [key, preset] of Object.entries(providerPresets)) {
+    if (preset.host === host && preset.port === port && preset.ssl === ssl) {
+      smtpProvider.value = key
+      return
+    }
+  }
+  smtpProvider.value = 'custom'
+}
+
 const sendTestEmail = async () => {
   if (!settings.value.smtp_host || !settings.value.smtp_username || !settings.value.smtp_password || !settings.value.smtp_to) {
     message.warning('请先填写完整的邮件通知配置（SMTP 服务器、账号、授权码和收件人）')
@@ -454,6 +498,7 @@ const loadSettings = async () => {
     if (!settings.value.temp_mirrors) {
       settings.value.temp_mirrors = []
     }
+    detectProvider()
   } catch (err) {
     message.error('载入配置失败')
   }
