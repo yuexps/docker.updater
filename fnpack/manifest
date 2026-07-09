@@ -1,5 +1,5 @@
 appname               = docker.updater
-version               = 1.0.2
+version               = 1.0.3
 display_name          = Docker Updater
 desc                  = Docker 容器 更新
 arch                  = x86_64
