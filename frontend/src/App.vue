@@ -26,16 +26,24 @@
                 <router-link to="/containers"
                   class="flex items-center px-4 py-2.5 rounded-lg text-[14px] transition-all active-scale"
                   :class="[route.path === '/containers' ? 'bg-primary text-white font-semibold shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800']">
-                  <svg class="w-5 h-5 mr-3 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+                  <svg class="w-5 h-5 mr-3 shrink-0" viewBox="0 0 32 32">
+                    <path d="M17 13V6H8v16h16v-9zm-7-5h5v5h-5zm0 7h5v5h-5zm12 5h-5v-5h5z" fill="currentColor"></path>
+                    <path d="M28 11h-9V2h9zm-7-2h5V4h-5z" fill="currentColor"></path>
+                    <path d="M28 20h-2v2h2v6H4v-6h2v-2H4a2.002 2.002 0 0 0-2 2v6a2.002 2.002 0 0 0 2 2h24a2.002 2.002 0 0 0 2-2v-6a2.002 2.002 0 0 0-2-2z" fill="currentColor"></path>
+                    <circle cx="7" cy="25" r="1" fill="currentColor"></circle>
                   </svg>
                   <span>容器</span>
                 </router-link>
                 <router-link to="/images"
                   class="flex items-center px-4 py-2.5 rounded-lg text-[14px] transition-all active-scale"
                   :class="[route.path === '/images' ? 'bg-primary text-white font-semibold shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800']">
-                  <svg class="w-5 h-5 mr-3 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-4.757a1.125 1.125 0 0 1 1.092 0L21.75 12M2.25 12l8.954 4.757a1.125 1.125 0 0 0 1.092 0L21.75 12M2.25 12v3.75a1.125 1.125 0 0 0 .553.97l8.954 4.757a1.125 1.125 0 0 0 1.092 0l8.954-4.757a1.125 1.125 0 0 0 .553-.97V12" />
+                  <svg class="w-5 h-5 mr-3 shrink-0" viewBox="0 0 24 24">
+                    <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3"></path>
+                      <path d="M12 12l8-4.5"></path>
+                      <path d="M12 12v9"></path>
+                      <path d="M12 12L4 7.5"></path>
+                    </g>
                   </svg>
                   <span>镜像</span>
                 </router-link>
@@ -91,8 +99,11 @@
             <router-link to="/containers"
               class="flex flex-col items-center justify-center flex-1 min-w-0 transition-all active-scale"
               :class="[route.path === '/containers' ? 'text-primary font-semibold' : 'text-slate-500']">
-              <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+              <svg class="w-5 h-5 mb-0.5" viewBox="0 0 32 32">
+                <path d="M17 13V6H8v16h16v-9zm-7-5h5v5h-5zm0 7h5v5h-5zm12 5h-5v-5h5z" fill="currentColor"></path>
+                <path d="M28 11h-9V2h9zm-7-2h5V4h-5z" fill="currentColor"></path>
+                <path d="M28 20h-2v2h2v6H4v-6h2v-2H4a2.002 2.002 0 0 0-2 2v6a2.002 2.002 0 0 0 2 2h24a2.002 2.002 0 0 0 2-2v-6a2.002 2.002 0 0 0-2-2z" fill="currentColor"></path>
+                <circle cx="7" cy="25" r="1" fill="currentColor"></circle>
               </svg>
               <span class="text-[10px] tracking-tight">容器</span>
             </router-link>
@@ -100,8 +111,13 @@
             <router-link to="/images"
               class="flex flex-col items-center justify-center flex-1 min-w-0 transition-all active-scale"
               :class="[route.path === '/images' ? 'text-primary font-semibold' : 'text-slate-500']">
-              <svg class="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-4.757a1.125 1.125 0 0 1 1.092 0L21.75 12M2.25 12l8.954 4.757a1.125 1.125 0 0 0 1.092 0L21.75 12M2.25 12v3.75a1.125 1.125 0 0 0 .553.97l8.954 4.757a1.125 1.125 0 0 0 1.092 0l8.954-4.757a1.125 1.125 0 0 0 .553-.97V12" />
+              <svg class="w-5 h-5 mb-0.5" viewBox="0 0 24 24">
+                <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3"></path>
+                  <path d="M12 12l8-4.5"></path>
+                  <path d="M12 12v9"></path>
+                  <path d="M12 12L4 7.5"></path>
+                </g>
               </svg>
               <span class="text-[10px] tracking-tight">镜像</span>
             </router-link>
@@ -145,7 +161,7 @@
           </div>
 
           <!-- Right Content Container -->
-          <div class="flex-1 min-w-0 h-screen overflow-y-auto bg-canvas-parchment p-4 pb-24 md:p-8 lg:p-10">
+          <div class="flex-1 min-w-0 h-screen flex flex-col bg-canvas-parchment overflow-hidden">
             <router-view />
           </div>
 

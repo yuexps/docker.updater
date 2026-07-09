@@ -1,18 +1,18 @@
 <template>
-  <div class="view-fade-in">
-      <!-- Page Header -->
-      <div class="flex items-center justify-between mb-8 select-none">
-        <div>
-          <h1 class="text-[28px] font-semibold tracking-tight text-slate-800 apple-headline">概览</h1>
-        </div>
-        <div class="flex items-center space-x-3">
+  <div class="view-fade-in flex flex-col h-full overflow-hidden">
+    <!-- 页面头部 -->
+    <div class="shrink-0 px-4 md:px-8 lg:px-10 pt-4 md:pt-8 lg:pt-10 pb-4 md:pb-6 select-none bg-canvas-parchment">
+      <div class="flex items-center justify-between">
+        <h1 class="text-[28px] font-semibold tracking-tight text-slate-800 apple-headline">概览</h1>
+        
+        <div class="flex items-center space-x-2 shrink-0">
           <n-button 
             v-if="selectedContainers.length > 0"
             type="primary"
             round
             size="small"
             class="active-scale"
-            @click="startBulkUpdate"
+            @click="actions.startBulkUpdate(selectedContainers, () => selectedContainers = [])"
           >
             批量升级 ({{ selectedContainers.length }})
           </n-button>
@@ -24,31 +24,38 @@
             class="active-scale"
             @click="checkUpdates"
           >
-            {{ checking ? '正在检测...' : '检测新版本' }}
+            {{ checking ? '检测中...' : '检测更新' }}
           </n-button>
         </div>
       </div>
+      
+      <p v-if="lastCheck" class="text-[12px] text-body-muted mt-1.5 flex items-center">
+        <svg class="w-3.5 h-3.5 mr-1.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 6v6l4 2" />
+        </svg>
+        数据已同步于: {{ formatCheckTime(lastCheck) }}
+      </p>
+    </div>
 
-      <!-- Stats Grid -->
-      <div class="grid grid-cols-3 gap-3 md:gap-6 mb-10 select-none">
-        <!-- Card 1 -->
-        <div class="apple-card p-3 sm:p-6 rounded-lg">
-          <span class="text-[12px] font-normal text-body-muted uppercase tracking-wider">待升级</span>
-          <span class="text-[34px] font-semibold tracking-tight block mt-2 text-primary">{{ updateCount }}</span>
+    <!-- 页面内容 -->
+    <div class="flex-1 min-w-0 overflow-y-auto px-4 md:px-8 lg:px-10 pb-24">
+      <!-- 统计卡片区 -->
+      <div class="grid grid-cols-2 gap-4 md:gap-6 mb-10 select-none">
+        <!-- 待升级卡片 -->
+        <div class="apple-card p-5 sm:p-6 rounded-lg hover:shadow-[0_12px_30px_rgba(0,102,204,0.03)] hover:border-primary/30 transition-all duration-300 bg-white">
+          <span class="text-[12px] font-semibold text-body-muted uppercase tracking-wider block">待升级容器</span>
+          <span class="text-[36px] font-bold tracking-tight block mt-2 text-primary leading-none">{{ updateCount }}</span>
         </div>
-        <!-- Card 2 -->
-        <div class="apple-card p-3 sm:p-6 rounded-lg">
-          <span class="text-[12px] font-normal text-body-muted uppercase tracking-wider">已暂挂</span>
-          <span class="text-[34px] font-semibold tracking-tight block mt-2 text-amber-600">{{ deferredCount }}</span>
-        </div>
-        <!-- Card 3 -->
-        <div class="apple-card p-3 sm:p-6 rounded-lg">
-          <span class="text-[12px] font-normal text-body-muted uppercase tracking-wider">最后检测</span>
-          <span class="text-[11px] sm:text-[14px] font-semibold block mt-4 text-slate-700 break-all">{{ formatCheckTime(lastCheck) }}</span>
+
+        <!-- 已暂挂卡片 -->
+        <div class="apple-card p-5 sm:p-6 rounded-lg hover:shadow-[0_12px_30px_rgba(245,158,11,0.03)] hover:border-amber-500/30 transition-all duration-300 bg-white">
+          <span class="text-[12px] font-semibold text-body-muted uppercase tracking-wider block">已暂挂检测</span>
+          <span class="text-[36px] font-bold tracking-tight block mt-2 text-amber-600 leading-none">{{ deferredCount }}</span>
         </div>
       </div>
 
-      <!-- Section: Pending Updates Grid -->
+      <!-- 可升级容器列表 -->
       <div>
         <h2 class="text-[21px] font-semibold tracking-tight mb-6 apple-headline">可升级容器</h2>
 
@@ -56,203 +63,74 @@
           <n-spin size="large" />
         </div>
 
-        <div v-else-if="pendingContainers.length === 0" class="apple-card p-12 text-center text-body-muted rounded-lg select-none">
-          本地运行容器均已是最新
+        <!-- 均已是最新空状态 -->
+        <div v-else-if="pendingContainers.length === 0" class="apple-card rounded-lg p-8 sm:p-16 flex flex-col items-center justify-center text-center select-none bg-white">
+          <div class="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-500 mb-6 shadow-xs">
+            <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+          </div>
+          <h3 class="text-[17px] font-bold text-slate-800 mb-2">本地容器已全部同步至最新版本</h3>
+          <p class="text-[13px] text-body-muted max-w-sm leading-relaxed mb-6">
+            未检测到待升级的本地运行容器。系统将会在后台定时检测镜像版本。您也可以手动触发即时检测。
+          </p>
+          <n-button 
+            :loading="checking" 
+            type="primary" 
+            round 
+            size="medium"
+            class="active-scale px-6"
+            @click="checkUpdates"
+          >
+            {{ checking ? '正在检测最新镜像...' : '立即检测新版本' }}
+          </n-button>
         </div>
 
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div 
+        <!-- 待升级/已暂挂列表 -->
+        <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
+          <container-card
             v-for="c in pendingContainers" 
             :key="c.name"
-            class="apple-card rounded-lg p-4 sm:p-6 flex flex-col justify-between min-h-[220px] hover:border-primary transition-all duration-200"
-          >
-            <!-- Top Header -->
-            <div>
-              <div class="flex items-start justify-between">
-                <div class="flex items-center space-x-3">
-                  <n-checkbox 
-                    v-if="c.status === 'update'"
-                    :checked="selectedContainers.includes(c.name)"
-                    @update:checked="(val) => toggleSelect(c.name, val)"
-                  />
-                  <span class="text-[17px] font-semibold text-ink tracking-tight break-all">
-                    {{ c.name }}
-                  </span>
-                </div>
-
-                <div class="flex items-center space-x-2">
-                  <span class="text-[12px] font-normal text-body-muted">
-                    {{ c.status === 'update' ? '待升级' : '已暂挂' }}
-                  </span>
-                  <div 
-                    class="w-2 h-2 rounded-full"
-                    :class="c.status === 'update' ? 'status-dot-red' : 'status-dot-amber'"
-                  ></div>
-                </div>
-              </div>
-
-              <!-- Image details -->
-              <div class="mt-4 space-y-2">
-                <div class="bg-canvas-parchment p-2 rounded border border-hairline font-mono text-[12px] text-slate-600 break-all select-all">
-                  {{ c.image }}
-                </div>
-                <div class="flex flex-wrap gap-x-4 gap-y-1 text-[12px] font-normal text-body-muted">
-                  <span v-if="c.compose_project">
-                    <span class="font-semibold text-slate-600">Compose:</span> {{ c.compose_project }}
-                  </span>
-                  <span>
-                    <span class="font-semibold text-slate-600">状态:</span> {{ c.running ? '运行中' : '已停止' }}
-                  </span>
-                  <span v-if="c.defer_until">
-                    <span class="font-semibold text-slate-600">挂起至:</span> {{ c.defer_until }}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Action buttons -->
-            <div class="mt-6 pt-4 border-t border-hairline flex flex-wrap gap-2">
-              <n-button 
-                v-if="c.status === 'update'"
-                type="primary"
-                size="small"
-                round
-                class="active-scale"
-                @click="updateContainer(c.name)"
-              >
-                升级
-              </n-button>
-              
-              <n-button 
-                v-if="c.has_rollback"
-                size="small"
-                round
-                secondary
-                class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale"
-                @click="rollbackContainer(c.name)"
-              >
-                回滚
-              </n-button>
-
-              <n-button 
-                v-if="c.status === 'update'"
-                size="small"
-                round
-                secondary
-                class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale"
-                @click="openDeferModal(c.name)"
-              >
-                暂挂
-              </n-button>
-
-              <n-button 
-                v-if="c.status === 'deferred'"
-                size="small"
-                round
-                secondary
-                class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale"
-                @click="undeferContainer(c.name)"
-              >
-                恢复检测
-              </n-button>
-
-              <n-button 
-                v-if="c.has_rollback"
-                size="small"
-                round
-                secondary
-                class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale"
-                @click="deleteBackup(c.name)"
-              >
-                清除备份
-              </n-button>
-
-              <n-button 
-                size="small"
-                round
-                secondary
-                class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale ml-auto"
-                @click="showLogs(c.name)"
-              >
-                日志
-              </n-button>
-            </div>
-          </div>
+            :container="c"
+            mode="dashboard"
+            :show-checkbox="c.status === 'update'"
+            :checked="selectedContainers.includes(c.name)"
+            @update:checked="(val) => toggleSelect(c.name, val)"
+            @update="actions.updateContainer(c.name)"
+            @defer="actions.openDeferModal(c.name)"
+            @undefer="actions.undeferContainer(c.name)"
+          />
         </div>
       </div>
+    </div>
 
-    <!-- Modal 1: Pure Flat Dark Terminal -->
-    <n-modal 
-      v-model:show="logModalVisible" 
-      :mask-closable="false" 
-      preset="card" 
-      class="max-w-3xl bg-slate-900 text-white rounded-lg"
-      title="升级部署进度"
-    >
-      <div class="bg-black p-4 rounded font-mono text-[12px] h-[400px] overflow-y-auto border border-slate-800" ref="terminalLog">
-        <div v-for="(line, idx) in logLines" :key="idx" class="py-0.5 break-all">
-          <span v-if="line.includes('[SUCCESS]')" class="text-green-400 font-semibold">{{ line }}</span>
-          <span v-else-if="line.includes('[ERROR]')" class="text-red-400 font-semibold">{{ line }}</span>
-          <span v-else-if="line.includes('[WARNING]')" class="text-amber-400 font-semibold">{{ line }}</span>
-          <span v-else-if="line.includes('[PULL]')" class="text-sky-400">{{ line }}</span>
-          <span v-else class="text-slate-300">{{ line }}</span>
-        </div>
-        <div v-if="logRunning" class="text-white animate-pulse mt-2">[JOB RUNNING] 正在监听日志输出流...</div>
-      </div>
-      <template #action>
-        <div class="flex justify-end space-x-2">
-          <n-button v-if="logRunning" secondary round size="medium" @click="logModalVisible = false">
-            后台运行
-          </n-button>
-          <n-button v-else type="primary" round size="medium" @click="closeLogModal">
-            关闭窗口
-          </n-button>
-        </div>
-      </template>
-    </n-modal>
+    <!-- 弹窗一：公共 Mac 日志终端 -->
+    <terminal-modal
+      :show="actions.logModalVisible.value"
+      :log-lines="actions.logLines.value"
+      :log-running="actions.logRunning.value"
+      @close="actions.closeLogModal"
+    />
 
-    <!-- Modal 2: Defer Select -->
-    <n-modal 
-      v-model:show="deferModalVisible" 
-      preset="dialog" 
-      title="暂挂升级检测"
-      positive-text="确认暂挂"
-      negative-text="取消"
-      @positive-click="submitDefer"
-    >
-      <div class="py-4">
-        <label class="text-[12px] font-semibold uppercase tracking-wider text-body-muted block mb-2">搁置升级比对时长</label>
-        <n-select v-model:value="deferDays" :options="deferOptions" />
-      </div>
-    </n-modal>
-
-    <!-- Modal 3: Diagnostics Log -->
-    <n-modal 
-      v-model:show="diagnosticsVisible" 
-      preset="card" 
-      class="max-w-3xl"
-      title="容器运行日志 (stdout/stderr)"
-    >
-      <div class="bg-black text-slate-300 p-4 rounded font-mono text-[12px] h-[400px] overflow-y-auto border border-slate-900">
-        <pre class="whitespace-pre-wrap font-sans text-[12px] leading-relaxed">{{ diagnosticsLogs }}</pre>
-      </div>
-      <template #action>
-        <div class="flex justify-end">
-          <n-button round size="medium" @click="diagnosticsVisible = false">关闭窗口</n-button>
-        </div>
-      </template>
-    </n-modal>
+    <!-- 弹窗二：公共暂挂选择框 -->
+    <defer-modal
+      v-model:show="actions.deferModalVisible.value"
+      v-model:days="actions.deferDays.value"
+      @submit="actions.submitDefer()"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
-import { 
-  NButton, NSpin, NCheckbox, NModal, NSelect, 
-  useMessage, useDialog 
-} from 'naive-ui'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { NButton, NSpin, useMessage } from 'naive-ui'
 import axios from 'axios'
 import wsService from '../utils/websocket'
+import { useContainerActions } from '../composables/useContainerActions'
+import ContainerCard from '../components/ContainerCard.vue'
+import TerminalModal from '../components/TerminalModal.vue'
+import DeferModal from '../components/DeferModal.vue'
 
 const apiBase = '/app/docker-updater/api'
 
@@ -262,34 +140,19 @@ const loading = ref<boolean>(false)
 const checking = ref<boolean>(false)
 
 const selectedContainers = ref<string[]>([])
-
-const logModalVisible = ref<boolean>(false)
-const logLines = ref<string[]>([])
-const logRunning = ref<boolean>(false)
-const terminalLog = ref<HTMLDivElement | null>(null)
-
-const deferModalVisible = ref<boolean>(false)
-const deferTarget = ref<string>('')
-const deferDays = ref<number>(7)
-const deferOptions = [
-  { label: '暂挂 7 天', value: 7 },
-  { label: '暂挂 14 天', value: 14 },
-  { label: '暂挂 30 天', value: 30 },
-  { label: '暂挂 90 天', value: 90 }
-]
-
-const diagnosticsVisible = ref<boolean>(false)
-const diagnosticsLogs = ref<string>('')
-
 const message = useMessage()
-const dialog = useDialog()
+
+// 初始化共享 Composable 业务方法
+const actions = useContainerActions()
 
 let unsubscribeStatus: (() => void) | null = null
-let activeUnsubscribeLogs: (() => void) | null = null
 
 // 待更新或已挂起列表
 const pendingContainers = computed(() => {
-  return containers.value.filter(c => c.status === 'update' || c.status === 'deferred')
+  return containers.value
+    .filter(c => c.status === 'update' || c.status === 'deferred')
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
 })
 
 const updateCount = computed(() => {
@@ -321,160 +184,6 @@ const toggleSelect = (name: string, checked: boolean) => {
   }
 }
 
-const updateContainer = (name: string) => {
-  logLines.value = []
-  logModalVisible.value = true
-  logRunning.value = true
-
-  axios.get(`${apiBase}/update/${name}`).catch(err => {
-    message.error('触发升级失败')
-    logRunning.value = false
-  })
-
-  activeUnsubscribeLogs = wsService.subscribeLogs(name, ({ message: msg }) => {
-    logLines.value.push(msg)
-    scrollTerminal()
-    if (msg.includes('[SUCCESS]') || msg.includes('[ERROR]')) {
-      logRunning.value = false
-    }
-  })
-}
-
-const startBulkUpdate = async () => {
-  const targets = [...selectedContainers.value]
-  selectedContainers.value = []
-  
-  if (targets.length === 0) return
-
-  logLines.value = []
-  logModalVisible.value = true
-  logRunning.value = true
-
-  logLines.value.push(`[INFO] 批量升级开始，队列总数: ${targets.length}`)
-
-  for (let i = 0; i < targets.length; i++) {
-    const name = targets[i]
-    logLines.value.push(`========================================`)
-    logLines.value.push(`[INFO] 正在升级当前服务 (${i + 1}/${targets.length}): ${name}`)
-    scrollTerminal()
-    
-    await new Promise<void>((resolve) => {
-      axios.get(`${apiBase}/update/${name}`).catch(() => {
-        logLines.value.push(`[ERROR] 触发容器 ${name} 升级失败`)
-        resolve()
-      })
-
-      const unsub = wsService.subscribeLogs(name, ({ message: msg }) => {
-        logLines.value.push(msg)
-        scrollTerminal()
-        if (msg.includes('[SUCCESS]') || msg.includes('[ERROR]')) {
-          unsub()
-          resolve()
-        }
-      })
-    })
-  }
-
-  logLines.value.push(`========================================`)
-  logLines.value.push(`[SUCCESS] 批量升级队列全部作业运行完毕`)
-  logRunning.value = false
-}
-
-const rollbackContainer = (name: string) => {
-  dialog.warning({
-    title: '确认回滚容器',
-    content: `你是否确定要将 ${name} 重建还原为上一次升级前的备份镜像？该过程会造成容器短暂中断重启。`,
-    positiveText: '确认还原',
-    negativeText: '取消',
-    onPositiveClick: () => {
-      logLines.value = []
-      logModalVisible.value = true
-      logRunning.value = true
-
-      axios.get(`${apiBase}/rollback/${name}`).catch(err => {
-        message.error('触发回滚失败')
-        logRunning.value = false
-      })
-
-      activeUnsubscribeLogs = wsService.subscribeLogs(name, ({ message: msg }) => {
-        logLines.value.push(msg)
-        scrollTerminal()
-        if (msg.includes('[SUCCESS]') || msg.includes('[ERROR]')) {
-          logRunning.value = false
-        }
-      })
-    }
-  })
-}
-
-const deleteBackup = async (name: string) => {
-  dialog.warning({
-    title: '清除备份容器',
-    content: `清理备份容器 ${name}_old 将释放本地磁盘空间，但这之后您将无法直接一键回滚。确定清除吗？`,
-    positiveText: '确认清除',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      try {
-        await axios.delete(`${apiBase}/backup/${name}`)
-        message.success('备份容器已彻底清除')
-      } catch (err) {
-        message.error('清除备份失败')
-      }
-    }
-  })
-}
-
-const showLogs = async (name: string) => {
-  try {
-    const res = await axios.get(`${apiBase}/container/${name}/logs`)
-    diagnosticsLogs.value = res.data.logs || '未检索到输出日志'
-    diagnosticsVisible.value = true
-  } catch (err) {
-    message.error('获取容器日志失败')
-  }
-}
-
-const openDeferModal = (name: string) => {
-  deferTarget.value = name
-  deferDays.value = 7
-  deferModalVisible.value = true
-}
-
-const submitDefer = async () => {
-  try {
-    await axios.post(`${apiBase}/defer/${deferTarget.value}`, { days: deferDays.value })
-    message.success(`已暂挂服务 ${deferTarget.value} 的版本检测`)
-  } catch (err) {
-    message.error('暂挂失败')
-  }
-}
-
-const undeferContainer = async (name: string) => {
-  try {
-    await axios.post(`${apiBase}/undefer/${name}`)
-    message.success('已恢复版本正常检测')
-  } catch (err) {
-    message.error('恢复检测失败')
-  }
-}
-
-const closeLogModal = () => {
-  if (activeUnsubscribeLogs) {
-    activeUnsubscribeLogs()
-    activeUnsubscribeLogs = null
-  }
-  logModalVisible.value = false
-  logLines.value = []
-}
-
-const scrollTerminal = () => {
-  nextTick(() => {
-    if (terminalLog.value) {
-      terminalLog.value.scrollTop = terminalLog.value.scrollHeight
-    }
-  })
-}
-
 const formatCheckTime = (isoStr: string) => {
   if (!isoStr) return '无'
   const date = new Date(isoStr)
@@ -492,6 +201,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (unsubscribeStatus) unsubscribeStatus()
-  if (activeUnsubscribeLogs) activeUnsubscribeLogs()
+  actions.cleanup()
 })
 </script>

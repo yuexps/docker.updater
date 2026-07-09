@@ -78,6 +78,8 @@ func InitRoutes(r *gin.Engine) {
 		api.POST("/tasks/cancel/:name", apiTaskCancel)
 		api.GET("/system/logs", apiSystemLogsGet)
 		api.DELETE("/system/logs", apiSystemLogsDelete)
+		api.DELETE("/history", apiHistoryClear)
+		api.DELETE("/history/:id", apiHistoryDelete)
 
 		// 容器生命周期控制
 		api.POST("/container/:name/start", apiContainerStart)
@@ -213,6 +215,13 @@ func GetStatusData(ctx context.Context) (gin.H, error) {
 			}
 		}
 
+		localDigest := ""
+		remoteDigest := ""
+		if hasUpdate {
+			localDigest = info.LocalDigest
+			remoteDigest = info.RemoteDigest
+		}
+
 		result = append(result, gin.H{
 			"name":             name,
 			"image":            imageName,
@@ -223,12 +232,14 @@ func GetStatusData(ctx context.Context) (gin.H, error) {
 			"rollback_expires": rollbackExpires,
 			"compose_project":  containerItem.Labels["com.docker.compose.project"],
 			"running":          containerItem.State == "running",
+			"local_digest":     localDigest,
+			"remote_digest":    remoteDigest,
 		})
 	}
 
 	// 获取最近历史
 	var history []db.UpdateHistory
-	db.DB.Order("updated_at desc").Limit(20).Find(&history)
+	db.DB.Order("updated_at desc").Limit(100).Find(&history)
 
 	lastCheck := db.GetSetting("last_check_time", "")
 	queued, active := dockerclient.GlobalQueue.GetQueueState()
@@ -593,12 +604,22 @@ func apiImagesGet(c *gin.Context) {
 			associated = []string{}
 		}
 
+		arch := ""
+		inspect, _, err := cli.ImageInspectWithRaw(c, item.ID)
+		if err == nil {
+			arch = inspect.Architecture
+			if inspect.Variant != "" {
+				arch = arch + "/" + inspect.Variant
+			}
+		}
+
 		result = append(result, gin.H{
-			"id":         item.ID,
-			"tags":       tags,
-			"size":       item.Size,
-			"created":    item.Created,
-			"containers": associated,
+			"id":           item.ID,
+			"tags":         tags,
+			"size":         item.Size,
+			"created":      item.Created,
+			"containers":   associated,
+			"architecture": arch,
 		})
 	}
 
@@ -844,3 +865,68 @@ func apiContainerRestart(c *gin.Context) {
 	go GlobalHub.BroadcastStatus()
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
+
+// apiHistoryClear 清空所有容器升级历史记录及相关的本地部署日志文件
+func apiHistoryClear(c *gin.Context) {
+	// 1. 清空 update_histories 数据库表
+	if err := db.DB.Exec("DELETE FROM update_histories").Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 2. 遍历删除 logs 目录下的所有本地升级日志文件
+	pkgVar := os.Getenv("TRIM_PKGVAR")
+	if pkgVar == "" {
+		pkgVar = "./data"
+	}
+	logsDir := filepath.Join(pkgVar, "logs")
+	_ = filepath.Walk(logsDir, func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() && strings.HasSuffix(info.Name(), ".log") {
+			_ = os.Remove(path)
+		}
+		return nil
+	})
+
+	// 3. 广播给所有的前端客户端更新状态
+	go GlobalHub.BroadcastStatus()
+
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// apiHistoryDelete 删除单条升级历史记录及相关的日志文件
+func apiHistoryDelete(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	// 1. 获取对应的历史记录以获知容器名称
+	var hist db.UpdateHistory
+	if err := db.DB.First(&hist, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "history not found"})
+		return
+	}
+
+	// 2. 从数据库删除
+	if err := db.DB.Delete(&db.UpdateHistory{}, id).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 3. 删除对应的物理日志文件
+	pkgVar := os.Getenv("TRIM_PKGVAR")
+	if pkgVar == "" {
+		pkgVar = "./data"
+	}
+	logFilePath := filepath.Join(pkgVar, "logs", fmt.Sprintf("%s.log", hist.ContainerName))
+	_ = os.Remove(logFilePath)
+
+	// 4. 广播给所有的前端客户端更新状态
+	go GlobalHub.BroadcastStatus()
+
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+

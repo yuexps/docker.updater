@@ -1,16 +1,17 @@
 <template>
-  <div class="view-fade-in">
-      <!-- Page Header -->
-      <div class="flex items-center justify-between mb-8 select-none">
+  <div class="view-fade-in flex flex-col h-full overflow-hidden">
+    <!-- Page Header -->
+    <div class="shrink-0 px-4 md:px-8 lg:px-10 pt-4 md:pt-8 lg:pt-10 pb-4 md:pb-6 select-none bg-canvas-parchment">
+      <div class="flex items-center justify-between">
         <div>
           <h1 class="text-[28px] font-semibold tracking-tight text-slate-800 apple-headline">镜像管理</h1>
         </div>
-        <div class="flex items-center space-x-3">
+        <div class="flex items-center shrink-0">
           <n-button 
             type="primary" 
             round 
             size="small"
-            class="active-scale"
+            class="active-scale font-semibold"
             :loading="pruning"
             @click="pruneImages"
           >
@@ -18,27 +19,35 @@
           </n-button>
         </div>
       </div>
+    </div>
 
+    <!-- 页面内容 -->
+    <div class="flex-1 min-w-0 overflow-y-auto px-4 md:px-8 lg:px-10 pb-24">
       <!-- Overview Stats -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10 select-none">
-        <div class="apple-card p-4 sm:p-6 rounded-lg flex items-center justify-between">
-          <div>
-            <span class="text-[12px] font-normal text-body-muted uppercase tracking-wider">镜像总数</span>
-            <span class="text-[34px] font-semibold tracking-tight block mt-2 text-primary">{{ images.length }}</span>
-          </div>
+      <div class="grid grid-cols-2 gap-4 md:gap-6 mb-10 select-none">
+        <!-- 镜像总数 -->
+        <div class="apple-card p-5 sm:p-6 rounded-lg hover:shadow-[0_12px_30px_rgba(0,102,204,0.03)] hover:border-primary/30 transition-all duration-300 bg-white">
+          <span class="text-[12px] font-semibold text-body-muted uppercase tracking-wider block">镜像总数</span>
+          <span class="text-[36px] font-bold tracking-tight block mt-2 text-primary leading-none">{{ images.length }}</span>
         </div>
-        <div class="apple-card p-4 sm:p-6 rounded-lg flex items-center justify-between">
-          <div>
-            <span class="text-[12px] font-normal text-body-muted uppercase tracking-wider">无标签残留</span>
+
+        <!-- 无标签残留 -->
+        <div 
+          class="apple-card p-5 sm:p-6 rounded-lg transition-all duration-300 bg-white"
+          :class="[
+            danglingCount > 0 
+              ? 'hover:shadow-[0_12px_30px_rgba(245,158,11,0.03)] hover:border-amber-500/30' 
+              : 'hover:shadow-[0_12px_30px_rgba(0,0,0,0.02)]'
+          ]"
+        >
+          <span class="text-[12px] font-semibold text-body-muted uppercase tracking-wider block">无标签残留</span>
+          <div class="flex items-baseline justify-between mt-2">
             <span 
-              class="text-[34px] font-semibold tracking-tight block mt-2"
+              class="text-[36px] font-bold tracking-tight leading-none"
               :class="danglingCount > 0 ? 'text-amber-600' : 'text-slate-600'"
             >
               {{ danglingCount }}
             </span>
-          </div>
-          <div v-if="danglingCount > 0" class="w-10 h-10 rounded-full bg-amber-50/10 flex items-center justify-center">
-            <div class="w-2.5 h-2.5 rounded-full status-dot-amber"></div>
           </div>
         </div>
       </div>
@@ -53,73 +62,24 @@
           未在宿主机上发现 Docker 镜像
         </div>
 
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div 
+        <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
+          <image-card 
             v-for="img in images" 
             :key="img.id"
-            class="apple-card rounded-lg p-4 sm:p-6 flex flex-col justify-between min-h-[180px] hover:border-primary transition-all duration-200"
-            :class="{'border-amber-400 bg-amber-50/5': isDangling(img)}"
-          >
-            <!-- Top Details -->
-            <div>
-              <div class="flex items-start justify-between mb-4">
-                <div class="space-y-1 max-w-[70%]">
-                  <div 
-                    v-for="tag in img.tags" 
-                    :key="tag"
-                    class="text-[14px] font-semibold text-slate-800 break-all leading-tight"
-                  >
-                    {{ tag }}
-                  </div>
-                </div>
-                
-                <n-tag v-if="isDangling(img)" type="warning" round size="small">
-                  无标签残留
-                </n-tag>
-                <n-tag v-else-if="isInUse(img)" type="success" round size="small">
-                  在用
-                </n-tag>
-                <n-tag v-else type="default" round size="small">
-                  未占用
-                </n-tag>
-              </div>
-
-              <!-- Metadata -->
-              <div class="space-y-1 text-[12px] font-normal text-body-muted font-mono">
-                <div class="truncate"><span class="font-sans text-slate-500 font-semibold">Image ID:</span> {{ formatID(img.id) }}</div>
-                <div><span class="font-sans text-slate-500 font-semibold">大小:</span> {{ formatSize(img.size) }}</div>
-                <div><span class="font-sans text-slate-500 font-semibold">创建时间:</span> {{ formatDate(img.created) }}</div>
-                <div class="truncate">
-                  <span class="font-sans text-slate-500 font-semibold">容器占用:</span>
-                  <span v-if="isInUse(img)" class="text-primary font-semibold font-sans ml-1">{{ img.containers!.join(', ') }}</span>
-                  <span v-else class="text-slate-400 font-sans ml-1">暂无容器引用</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Actions -->
-            <div class="mt-6 pt-4 border-t border-hairline flex justify-end">
-              <n-button 
-                type="error"
-                size="small"
-                round
-                ghost
-                class="active-scale"
-                @click="deleteImage(img.id)"
-              >
-                删除
-              </n-button>
-            </div>
-          </div>
+            :image="img"
+            @delete="deleteImage"
+          />
         </div>
       </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { NButton, NSpin, NTag, useMessage, useDialog } from 'naive-ui'
+import { NButton, NSpin, useMessage, useDialog } from 'naive-ui'
 import axios from 'axios'
+import ImageCard from '../components/ImageCard.vue'
 
 const apiBase = '/app/docker-updater/api'
 const message = useMessage()
@@ -131,6 +91,7 @@ interface ImageItem {
   size: number;
   created: number;
   containers?: string[];
+  architecture?: string;
 }
 
 const images = ref<ImageItem[]>([])
@@ -146,10 +107,6 @@ const isDangling = (img: ImageItem): boolean => {
   return img.tags.includes('<none>:<none>')
 }
 
-// 是否被至少一个容器实际引用
-const isInUse = (img: ImageItem): boolean => {
-  return !!(img.containers && img.containers.length > 0)
-}
 
 const fetchImages = async () => {
   loading.value = true
@@ -205,9 +162,6 @@ const deleteImage = async (id: string) => {
   })
 }
 
-const formatID = (rawId: string): string => {
-  return rawId.replace('sha256:', '').substring(0, 12)
-}
 
 const formatSize = (bytes: number): string => {
   if (bytes === 0) return '0 B'
@@ -217,10 +171,6 @@ const formatSize = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-const formatDate = (timestamp: number): string => {
-  const date = new Date(timestamp * 1000)
-  return date.toLocaleDateString()
-}
 
 onMounted(() => {
   fetchImages()
