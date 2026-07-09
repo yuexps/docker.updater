@@ -54,7 +54,7 @@ type RegistryCredential struct {
 
 // BeforeSave 敏感配置加密。
 func (s *Setting) BeforeSave(tx *gorm.DB) (err error) {
-	if s.Key == "smtp_password" && s.Value != "" && s.Value != "******" {
+	if s.Key == "smtp_password" && s.Value != "" {
 		enc, err := encrypt(s.Value)
 		if err != nil {
 			return err
@@ -69,7 +69,8 @@ func (s *Setting) AfterFind(tx *gorm.DB) (err error) {
 	if s.Key == "smtp_password" && s.Value != "" {
 		dec, err := decrypt(s.Value)
 		if err != nil {
-			return err
+			// 解密失败，可能是旧版明文数据，保持原样
+			return nil
 		}
 		s.Value = dec
 	}
@@ -78,7 +79,7 @@ func (s *Setting) AfterFind(tx *gorm.DB) (err error) {
 
 // BeforeSave 仓库凭据加密。
 func (rc *RegistryCredential) BeforeSave(tx *gorm.DB) (err error) {
-	if rc.Password != "" && rc.Password != "******" {
+	if rc.Password != "" {
 		enc, err := encrypt(rc.Password)
 		if err != nil {
 			return err
@@ -93,7 +94,8 @@ func (rc *RegistryCredential) AfterFind(tx *gorm.DB) (err error) {
 	if rc.Password != "" {
 		dec, err := decrypt(rc.Password)
 		if err != nil {
-			return err
+			// 解密失败，可能是旧版明文数据，保持原样
+			return nil
 		}
 		rc.Password = dec
 	}
