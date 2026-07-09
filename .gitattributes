@@ -1,5 +1,14 @@
 # Force build.cmd to use CRLF line endings
 build.cmd text eol=crlf
 
+# Force shell scripts to use LF line endings
+*.sh text eol=lf
+
 # Force all files inside the fnpack directory to use LF line endings
 fnpack/** text eol=lf
+
+# Treat binaries and images as binary files
+fnpack/fnpack-1.2.3-linux-amd64 binary
+fnpack/fnpack-1.2.3-windows-amd64 binary
+*.PNG binary
+*.png binary

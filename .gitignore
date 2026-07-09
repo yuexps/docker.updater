@@ -1,0 +1,17 @@
+# Dependency directories
+node_modules/
+
+# Build outputs
+dist/
+frontend/dist/
+fnpack/app/bin/docker-updater
+fnpack/docker.updater.fpk
+
+# Local data and logs
+data/
+*.log
+
+# OS/IDE metadata
+.DS_Store
+.vscode/
+.idea/
