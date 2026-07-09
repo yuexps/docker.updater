@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"embed"
-	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -29,7 +28,7 @@ func main() {
 	}
 	utils.InitLogger(pkgVar)
 
-	broadcastWriter := &sysLogBroadcaster{inner: os.Stdout}
+	broadcastWriter := &sysLogBroadcaster{}
 	utils.RegisterExtraWriter(broadcastWriter)
 	gin.DefaultWriter = os.Stdout
 	gin.DefaultErrorWriter = os.Stdout
@@ -87,9 +86,8 @@ func main() {
 	}
 }
 
-// sysLogBroadcaster 拦截 log 包的逐行输出，在写入底层 Writer 的同时通过 WebSocket 实时广播给前端
+// sysLogBroadcaster 拦截标准日志流，通过 WebSocket 实时广播给前端。
 type sysLogBroadcaster struct {
-	inner io.Writer
 	buf   []byte
 	mu    sync.Mutex
 }
@@ -97,7 +95,6 @@ type sysLogBroadcaster struct {
 func (w *sysLogBroadcaster) Write(p []byte) (n int, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	n, err = w.inner.Write(p)
 	// 逐字节扫描，提取完整行后广播
 	for _, b := range p {
 		if b == '\n' {
@@ -110,6 +107,6 @@ func (w *sysLogBroadcaster) Write(p []byte) (n int, err error) {
 			w.buf = append(w.buf, b)
 		}
 	}
-	return
+	return len(p), nil
 }
 

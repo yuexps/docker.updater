@@ -7,7 +7,7 @@
   - 执行动作: 监听 `${TRIM_APPDEST}/web.sock`。设置套接字文件读写权限为 `0666`。启动时自动清理历史残留套接字文件。
 * **路由根路径**: 所有请求及静态资源统一路由在 `/app/docker-updater/` 路径下。不匹配此路径的请求直接返回 HTTP 404。
 * **日志系统**:
-  - 全局日志文件: `${TRIM_PKGVAR}/info.log`（只写追加，支持 O_TRUNC 清空）。
+  - 全局日志文件: `${TRIM_PKGVAR}/info.log`（只写追加，通过守护进程启动脚本 `fnpack/cmd/main` 的标准输出重定向实现落盘，支持 O_TRUNC 截断清空。后端仅在启动时检测该文件大小，若超过 10MB，则自动截断前半部分，保留后半部分完整行日志）。
   - 任务日志文件: `${TRIM_PKGVAR}/logs/${container_name}.log`（动态按需创建）。
   - 日志前缀: 统一使用 `[INFO]`、`[WARNING]`、`[ERROR]`、`[SUCCESS]`。禁止包含任何 emoji 表情。
 

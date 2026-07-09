@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -110,11 +111,37 @@ func (w *RollingFileWriter) Close() error {
 	return nil
 }
 
-// InitLogger 初始化全局滚动日志，限制单文件大小并保留指定数目的历史备份。
+// InitLogger 初始化日志系统，更新标准 log 库的输出目标，并在启动时检测并截断日志。
 func InitLogger(pkgVar string) {
-	logFilePath := filepath.Join(pkgVar, "info.log")
-	RollingLogger = NewRollingFileWriter(logFilePath, 10*1024*1024, 3)
 	updateLoggerOutput()
+	logFilePath := filepath.Join(pkgVar, "info.log")
+	checkAndTruncateLog(logFilePath)
+}
+
+func checkAndTruncateLog(logFilePath string) {
+	info, err := os.Stat(logFilePath)
+	if err != nil {
+		return
+	}
+	if info.Size() <= 10*1024*1024 {
+		return
+	}
+	data, err := os.ReadFile(logFilePath)
+	if err != nil {
+		return
+	}
+	totalLen := len(data)
+	if totalLen <= 0 {
+		return
+	}
+	halfOffset := totalLen / 2
+	idx := bytes.IndexByte(data[halfOffset:], '\n')
+	if idx == -1 {
+		data = data[halfOffset:]
+	} else {
+		data = data[halfOffset+idx+1:]
+	}
+	_ = os.WriteFile(logFilePath, data, 0644)
 }
 
 // RegisterExtraWriter 注册额外的输出通道。

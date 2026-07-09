@@ -32,7 +32,7 @@
 3. **路由统一**: 所有 API 及静态服务统归 `/app/docker-updater/` 组。
 4. **单工排队**: 容器升级、回滚加入单工任务队列，规避并发争抢。
 5. **探活与自愈**: 容器更新后休眠探活，失败则回退至 `{name}_old` 旧容器并重启。
-6. **无 Emoji**: 系统日志、推送和前端 UI 禁止使用 emoji，统一采用文本前缀。
+6. **无 Emoji与日志落盘**: 统一采用文本前缀禁用 emoji。全局日志由启动脚本重定向落盘，Go 程序仅向标准输出与 WebSocket 广播以防写重；启动时若 `info.log` 超过 10MB 则自动对半截断。
 7. **CGO-free**: 禁止引入 CGO，采用纯 Go SQLite 驱动，支持交叉编译。
 8. **无 CLI 依赖**: 所有 Docker 操作均通过 Docker SDK 交互，禁止调用命令行 `docker` 进程。
 9. **文档优先**: 变更代码前，优先同步更新 [AGENTS.md](AGENTS.md) 及 [specification.md](docs/specification.md)。
