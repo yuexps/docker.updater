@@ -55,9 +55,7 @@ func SaveGlobalSettings(body GlobalSettings) error {
 	_ = db.SetSetting("smtp_host", body.SMTPHost)
 	_ = db.SetSetting("smtp_port", body.SMTPPort)
 	_ = db.SetSetting("smtp_username", body.SMTPUsername)
-	if body.SMTPPassword != "******" {
-		_ = db.SetSetting("smtp_password", body.SMTPPassword)
-	}
+	_ = db.SetSetting("smtp_password", body.SMTPPassword)
 	_ = db.SetSetting("smtp_ssl", strconv.FormatBool(body.SMTPSSL))
 	_ = db.SetSetting("smtp_to", body.SMTPTo)
 	_ = db.SetSetting("smtp_subject_template", body.SMTPSubjectTemplate)
