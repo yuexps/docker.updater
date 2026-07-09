@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"docker-updater/utils"
+
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -50,6 +52,10 @@ func InitDB() error {
 		sqlDB, errDb := DB.DB()
 		if errDb == nil {
 			sqlDB.SetMaxOpenConns(1)
+		}
+
+		if keyErr := initCryptoKey(pkgVar); keyErr != nil {
+			utils.LogWarning("无法初始化密钥: %s", keyErr.Error())
 		}
 
 		err = DB.AutoMigrate(
