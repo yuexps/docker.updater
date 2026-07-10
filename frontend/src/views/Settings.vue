@@ -84,91 +84,146 @@
           </div>
         </div>
 
-        <!-- Card 3.7: Email Notification Settings -->
+        <!-- Card 3.7: Notification Settings -->
         <div
           class="apple-card rounded-lg p-5 sm:p-6 hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white flex flex-col gap-4">
           <div class="flex items-start justify-between gap-4">
             <div class="min-w-0 flex-1">
-              <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">邮件通知服务</div>
-              <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">在后台静默检测到更新或自动更新容器操作完成时发送邮件通知。</div>
+              <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">通知服务</div>
+              <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">在后台静默检测到更新或自动更新容器操作完成时发送通知报告。</div>
             </div>
             <div class="shrink-0 pt-0.5">
-              <n-switch v-model:value="settings.smtp_enabled" @update:value="autoSaveSettings" />
+              <n-switch v-model:value="settings.notify_enabled" @update:value="autoSaveSettings" />
             </div>
           </div>
 
-          <!-- Email Config Form -->
-          <div v-if="settings.smtp_enabled"
-            class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-hairline pt-4">
-            <div class="sm:col-span-2">
-              <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">邮件服务商</label>
-              <n-select v-model:value="smtpProvider" :options="providerOptions" @update:value="onProviderChange" />
-            </div>
+          <!-- Notification Config Form -->
+          <div v-if="settings.notify_enabled"
+            class="mt-2 flex flex-col gap-4 border-t border-hairline pt-4">
+            
+            <!-- 通知方式选择滑块 -->
             <div>
-              <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">SMTP 服务器</label>
-              <n-input v-model:value="settings.smtp_host" placeholder="例如: smtp.qq.com" class="rounded-lg"
-                :disabled="smtpProvider !== 'custom'" @blur="autoSaveSettings" />
+              <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-2">通知类型</label>
+              <n-radio-group v-model:value="settings.notify_type" name="notify_type" size="medium" @update:value="autoSaveSettings">
+                <n-radio-button value="email">邮件通知 (SMTP)</n-radio-button>
+                <n-radio-button value="webhook">Webhook 推送</n-radio-button>
+              </n-radio-group>
             </div>
-            <div>
-              <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">SMTP 端口</label>
-              <n-input v-model:value="settings.smtp_port" placeholder="例如: 465 或 587" class="rounded-lg"
-                :disabled="smtpProvider !== 'custom'" @blur="autoSaveSettings" />
-            </div>
-            <div>
-              <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">发件人账号 / 邮箱</label>
-              <n-input v-model:value="settings.smtp_username" placeholder="请输入发件邮箱账号" class="rounded-lg"
-                @blur="autoSaveSettings" />
-            </div>
-            <div>
-              <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">授权码 / 密码</label>
-              <n-input v-model:value="settings.smtp_password" type="password" show-password-on="click"
-                placeholder="请输入授权码或密码" class="rounded-lg" @blur="autoSaveSettings" />
-            </div>
-            <div>
-              <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">接收者邮箱</label>
-              <n-input v-model:value="settings.smtp_to" placeholder="请输入接收报告的邮箱地址" class="rounded-lg"
-                @blur="autoSaveSettings" />
-            </div>
-            <div>
-              <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">自定义邮件主题模板</label>
-              <n-input v-model:value="settings.smtp_subject_template"
-                placeholder="例如: [Docker Updater] 容器 {container_name} {action_type} {status}" class="rounded-lg"
-                @blur="autoSaveSettings" />
-            </div>
-            <div class="sm:col-span-2">
-              <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">自定义邮件正文模板</label>
-              <n-input v-model:value="settings.smtp_body_template" type="textarea"
-                :autosize="{ minRows: 4, maxRows: 10 }" placeholder="请输入邮件正文模板内容..." class="rounded-lg"
-                @blur="autoSaveSettings" />
-              <div class="text-[11px] text-body-muted mt-2 leading-relaxed">
-                支持以下占位变量进行自动匹配：<br />
-                <code
-                  class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{container_name}</code>（容器名）、
-                <code
-                  class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{action_type}</code>（版本修改/回滚恢复）、
-                <code
-                  class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{status}</code>（执行成功/执行失败）、
-                <code
-                  class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{time}</code>（执行时间）、
-                <code
-                  class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{logs}</code>（最近
-                20 行运行日志）。
+
+            <!-- Email (SMTP) 设置项 -->
+            <div v-if="settings.notify_type === 'email'" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="sm:col-span-2">
+                <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">邮件服务商</label>
+                <n-select v-model:value="smtpProvider" :options="providerOptions" @update:value="onProviderChange" />
+              </div>
+              <div>
+                <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">SMTP 服务器</label>
+                <n-input v-model:value="settings.smtp_host" placeholder="例如: smtp.qq.com" class="rounded-lg"
+                  :disabled="smtpProvider !== 'custom'" @blur="autoSaveSettings" />
+              </div>
+              <div>
+                <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">SMTP 端口</label>
+                <n-input v-model:value="settings.smtp_port" placeholder="例如: 465 或 587" class="rounded-lg"
+                  :disabled="smtpProvider !== 'custom'" @blur="autoSaveSettings" />
+              </div>
+              <div>
+                <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">发件人账号 / 邮箱</label>
+                <n-input v-model:value="settings.smtp_username" placeholder="请输入发件邮箱账号" class="rounded-lg"
+                  @blur="autoSaveSettings" />
+              </div>
+              <div>
+                <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">授权码 / 密码</label>
+                <n-input v-model:value="settings.smtp_password" type="password" show-password-on="click"
+                  placeholder="请输入授权码或密码" class="rounded-lg" @blur="autoSaveSettings" />
+              </div>
+              <div>
+                <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">接收者邮箱</label>
+                <n-input v-model:value="settings.smtp_to" placeholder="请输入接收报告的邮箱地址" class="rounded-lg"
+                  @blur="autoSaveSettings" />
+              </div>
+              <div>
+                <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">自定义邮件主题模板</label>
+                <n-input v-model:value="settings.smtp_subject_template"
+                  placeholder="例如: [Docker Updater] 容器 {container_name} {action_type} {status}" class="rounded-lg"
+                  @blur="autoSaveSettings" />
+              </div>
+              <div class="sm:col-span-2">
+                <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">自定义邮件正文模板</label>
+                <n-input v-model:value="settings.smtp_body_template" type="textarea"
+                  :autosize="{ minRows: 4, maxRows: 10 }" placeholder="请输入邮件正文模板内容..." class="rounded-lg"
+                  @blur="autoSaveSettings" />
+                <div class="text-[11px] text-body-muted mt-2 leading-relaxed">
+                  支持以下占位变量进行自动匹配：<br />
+                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{container_name}</code>（容器名）、
+                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{action_type}</code>（版本修改/回滚恢复）、
+                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{status}</code>（执行成功/执行失败）、
+                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{time}</code>（执行时间）、
+                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{logs}</code>（最近 20 行运行日志）。
+                </div>
               </div>
             </div>
-            <div class="flex items-center justify-between sm:justify-start gap-6 mt-5 sm:col-span-2">
-              <div class="flex items-center gap-2">
+
+            <!-- Webhook 设置项 -->
+            <div v-if="settings.notify_type === 'webhook'" class="grid grid-cols-1 gap-4">
+              <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div class="sm:col-span-3">
+                  <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">Webhook URL</label>
+                  <n-input v-model:value="settings.webhook_url" placeholder="https://api.example.com/notify" class="rounded-lg"
+                    @blur="autoSaveSettings" />
+                </div>
+                <div>
+                  <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">请求方法</label>
+                  <n-select v-model:value="settings.webhook_method" :options="[
+                    { label: 'POST', value: 'POST' },
+                    { label: 'GET', value: 'GET' },
+                    { label: 'PUT', value: 'PUT' }
+                  ]" @update:value="autoSaveSettings" />
+                </div>
+              </div>
+                <div class="flex items-center justify-between mb-1.5">
+                  <label class="text-[12px] font-semibold tracking-wider text-slate-500 block">自定义 Payload 模板 (JSON 格式)</label>
+                  <n-select 
+                    placeholder="载入常用平台预设" 
+                    size="tiny" 
+                    style="width: 180px;"
+                    :options="[
+                      { label: '通用 JSON 格式', value: 'default' },
+                      { label: '企业微信群机器人', value: 'wechat' },
+                      { label: '钉钉群机器人', value: 'dingtalk' },
+                      { label: '飞书群机器人', value: 'feishu' }
+                    ]"
+                    @update:value="applyWebhookPreset"
+                  />
+                </div>
+                <n-input v-model:value="settings.webhook_template" type="textarea"
+                  :autosize="{ minRows: 4, maxRows: 10 }" placeholder="请输入 JSON 格式的通知 Payload..." class="rounded-lg"
+                  @blur="autoSaveSettings" />
+                <div class="text-[11px] text-body-muted mt-2 leading-relaxed">
+                  支持以下占位变量进行自动匹配：<br />
+                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{container_name}</code>（容器名）、
+                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{action_type}</code>（版本修改/回滚恢复）、
+                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{status}</code>（执行成功/执行失败）、
+                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{time}</code>（执行时间）、
+                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{logs}</code>（最近 20 行运行日志，换行符会被自动转义）。
+                </div>
+              </div>
+
+            <!-- 发送测试按钮部分 -->
+            <div class="flex items-center justify-between sm:justify-start gap-6 mt-5">
+              <div v-if="settings.notify_type === 'email'" class="flex items-center gap-2">
                 <span class="text-[13px] text-slate-600 font-medium">启用 SSL 加密</span>
                 <n-switch v-model:value="settings.smtp_ssl" :disabled="smtpProvider !== 'custom'"
                   @update:value="autoSaveSettings" />
               </div>
               <n-button secondary round size="small"
                 class="active-scale bg-surface-pearl border border-divider-soft text-slate-700 font-semibold"
-                :loading="testingEmail" @click="sendTestEmail">
-                发送测试邮件
+                :loading="testingEmail" @click="sendTestNotification">
+                {{ settings.notify_type === 'email' ? '发送测试邮件' : '发送测试 Webhook' }}
               </n-button>
             </div>
           </div>
         </div>
+
 
         <!-- Card 4: Private Registry Credentials Management -->
         <div
@@ -342,7 +397,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { NButton, NSwitch, NSelect, NInput, NInputNumber, NModal, useMessage, useDialog } from 'naive-ui'
+import { NButton, NSwitch, NSelect, NInput, NInputNumber, NModal, useMessage, useDialog, NRadioGroup, NRadioButton } from 'naive-ui'
 import axios from 'axios'
 
 const apiBase = '/app/docker-updater/api'
@@ -357,6 +412,8 @@ interface SettingsData {
   temp_mirrors: string[];
   check_type: string;
   check_value: number;
+  notify_enabled: boolean;
+  notify_type: string;
   smtp_enabled: boolean;
   smtp_host: string;
   smtp_port: string;
@@ -366,6 +423,9 @@ interface SettingsData {
   smtp_to: string;
   smtp_subject_template: string;
   smtp_body_template: string;
+  webhook_url: string;
+  webhook_method: string;
+  webhook_template: string;
 }
 
 const settings = ref<SettingsData>({
@@ -376,6 +436,8 @@ const settings = ref<SettingsData>({
   temp_mirrors: [],
   check_type: 'day',
   check_value: 1,
+  notify_enabled: false,
+  notify_type: 'email',
   smtp_enabled: false,
   smtp_host: '',
   smtp_port: '465',
@@ -384,7 +446,10 @@ const settings = ref<SettingsData>({
   smtp_ssl: true,
   smtp_to: '',
   smtp_subject_template: '',
-  smtp_body_template: ''
+  smtp_body_template: '',
+  webhook_url: '',
+  webhook_method: 'POST',
+  webhook_template: ''
 })
 
 const registries = ref<any[]>([])
@@ -465,14 +530,22 @@ const detectProvider = () => {
   smtpProvider.value = 'custom'
 }
 
-const sendTestEmail = async () => {
-  if (!settings.value.smtp_host || !settings.value.smtp_username || !settings.value.smtp_password || !settings.value.smtp_to) {
-    message.warning('请先填写完整的邮件通知配置（SMTP 服务器、账号、授权码和收件人）')
-    return
+const sendTestNotification = async () => {
+  if (settings.value.notify_type === 'email') {
+    if (!settings.value.smtp_host || !settings.value.smtp_username || !settings.value.smtp_password || !settings.value.smtp_to) {
+      message.warning('请先填写完整的邮件通知配置（SMTP 服务器、账号、授权码和收件人）')
+      return
+    }
+  } else if (settings.value.notify_type === 'webhook') {
+    if (!settings.value.webhook_url) {
+      message.warning('请先填写 Webhook URL')
+      return
+    }
   }
   testingEmail.value = true
   try {
     await axios.post(`${apiBase}/settings/test-email`, {
+      notify_type: settings.value.notify_type,
       smtp_host: settings.value.smtp_host,
       smtp_port: settings.value.smtp_port,
       smtp_username: settings.value.smtp_username,
@@ -480,12 +553,19 @@ const sendTestEmail = async () => {
       smtp_ssl: settings.value.smtp_ssl,
       smtp_to: settings.value.smtp_to,
       smtp_subject_template: settings.value.smtp_subject_template,
-      smtp_body_template: settings.value.smtp_body_template
+      smtp_body_template: settings.value.smtp_body_template,
+      webhook_url: settings.value.webhook_url,
+      webhook_method: settings.value.webhook_method,
+      webhook_template: settings.value.webhook_template
     })
-    message.success('测试邮件发送成功，请前往您的收件箱查收！')
+    if (settings.value.notify_type === 'email') {
+      message.success('测试邮件发送成功，请前往您的收件箱查收！')
+    } else {
+      message.success('测试 Webhook 发送成功，请前往 Webhook 服务端查收！')
+    }
   } catch (err: any) {
     const errorMsg = err.response?.data?.error || err.message || '网络连接异常'
-    message.error(`测试邮件发送失败: ${errorMsg}`)
+    message.error(`测试发送失败: ${errorMsg}`)
   } finally {
     testingEmail.value = false
   }
@@ -497,6 +577,15 @@ const loadSettings = async () => {
     settings.value = res.data
     if (!settings.value.temp_mirrors) {
       settings.value.temp_mirrors = []
+    }
+    if (settings.value.notify_type === undefined || settings.value.notify_type === '') {
+      settings.value.notify_type = 'email'
+    }
+    if (settings.value.webhook_method === undefined || settings.value.webhook_method === '') {
+      settings.value.webhook_method = 'POST'
+    }
+    if (settings.value.webhook_template === undefined) {
+      settings.value.webhook_template = ''
     }
     detectProvider()
   } catch (err) {
@@ -653,6 +742,65 @@ const deleteRegistry = (id: number) => {
           reject()
         }
       })
+    }
+  })
+}
+
+const webhookPresets = {
+  default: `{
+  "event": "docker_update",
+  "container": "{container_name}",
+  "action": "{action_type}",
+  "status": "{status}",
+  "time": "{time}",
+  "logs": "{logs}"
+}`,
+  wechat: `{
+  "msgtype": "markdown",
+  "markdown": {
+    "content": "### Docker Updater 容器更新报告\\n> 容器名称: <font color=\\"info\\">{container_name}</font>\\n> 任务类型: <font color=\\"comment\\">{action_type}</font>\\n> 执行状态: {status}\\n> 通知时间: <font color=\\"comment\\">{time}</font>\\n\\n最近运行日志:\\n\`\`\`\\n{logs}\\n\`\`\`"
+  }
+}`,
+  dingtalk: `{
+  "msgtype": "markdown",
+  "markdown": {
+    "title": "Docker Updater 更新报告",
+    "text": "### Docker Updater 容器更新报告\\n- **容器名称**: {container_name}\\n- **任务类型**: {action_type}\\n- **执行状态**: {status}\\n- **通知时间**: {time}\\n\\n最近运行日志:\\n\`\`\`\\n{logs}\\n\`\`\`"
+  }
+}`,
+  feishu: `{
+  "msg_type": "post",
+  "content": {
+    "post": {
+      "zh_cn": {
+        "title": "Docker Updater 容器更新报告",
+        "content": [
+          [
+            {"tag": "text", "text": "容器名称: {container_name}\\n"},
+            {"tag": "text", "text": "任务类型: {action_type}\\n"},
+            {"tag": "text", "text": "执行状态: {status}\\n"},
+            {"tag": "text", "text": "通知时间: {time}\\n\\n"}
+          ],
+          [
+            {"tag": "text", "text": "最近运行日志:\\n{logs}"}
+          ]
+        ]
+      }
+    }
+  }
+}`
+}
+
+const applyWebhookPreset = (val: string) => {
+  if (!webhookPresets[val as keyof typeof webhookPresets]) return
+  dialog.warning({
+    title: '载入预设模板',
+    content: '载入新模板将覆盖您当前输入的 Payload 模板内容，确定继续吗？',
+    positiveText: '确定覆盖',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      settings.value.webhook_template = webhookPresets[val as keyof typeof webhookPresets]
+      autoSaveSettings()
     }
   })
 }

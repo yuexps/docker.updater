@@ -63,8 +63,8 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 		}
 
 		imageName := inspect.Config.Image
-		imageInspect, _, err := cli.ImageInspectWithRaw(ctx, inspect.Image)
-		if err != nil || len(imageInspect.RepoDigests) == 0 {
+		_, _, inspectErr := cli.ImageInspectWithRaw(ctx, inspect.Image)
+		if inspectErr != nil {
 			continue
 		}
 
@@ -75,7 +75,7 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 		info, hasUpdate := availMap[name]
 		if hasUpdate {
 			checkedAt = info.CheckedAt
-			if d, isDeferred := deferMap[name]; isDeferred && d.Until > today {
+			if d, isDeferred := deferMap[name]; isDeferred && (d.Until == "forever" || d.Until > today) {
 				status = "deferred"
 				val := d.Until
 				deferUntil = &val

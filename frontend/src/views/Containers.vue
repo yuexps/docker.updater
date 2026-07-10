@@ -19,7 +19,7 @@
           未发现活动或已停止的容器
         </div>
 
-        <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
+        <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(310px,1fr))] gap-5">
           <container-card
             v-for="c in sortedContainers" 
             :key="c.name"

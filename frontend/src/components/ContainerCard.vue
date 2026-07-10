@@ -120,12 +120,12 @@
             <span class="text-[10px] font-normal text-amber-500/80" v-if="container.checked_at">检测于: {{ container.checked_at }}</span>
           </div>
           
-          <div class="text-[11px] text-amber-700 flex items-center py-1 mt-1">
+          <div class="text-[11px] text-amber-700 flex items-center justify-center py-1 mt-1">
             <svg class="w-3.5 h-3.5 mr-1.5 text-amber-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"/>
               <path d="M12 6v6l4 2"/>
             </svg>
-            <span class="font-medium">检测已暂挂至: {{ container.defer_until || '无限期' }}</span>
+            <span class="font-medium">检测已暂挂至: {{ container.defer_until === 'forever' ? '无限期' : (container.defer_until || '无限期') }}</span>
           </div>
         </div>
 
@@ -136,7 +136,7 @@
             <span class="text-[10px] font-normal text-slate-400" v-if="container.checked_at">检测于: {{ container.checked_at }}</span>
           </div>
           
-          <div class="text-[11px] text-emerald-700 flex items-center py-1 mt-1">
+          <div class="text-[11px] text-emerald-700 flex items-center justify-center py-1 mt-1">
             <svg class="w-3.5 h-3.5 mr-1.5 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
               <path d="M22 4L12 14.01l-3-3"/>

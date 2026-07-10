@@ -105,7 +105,7 @@
         </div>
 
         <!-- 待升级/已暂挂列表 -->
-        <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
+        <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(310px,1fr))] gap-5">
           <container-card
             v-for="c in pendingContainers" 
             :key="c.name"

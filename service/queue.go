@@ -292,6 +292,14 @@ func (q *QueueManager) worker() {
 		q.mu.Lock()
 		if err != nil {
 			task.Status = "failed"
+			if task.Type == TaskUpdate && task.IsAuto {
+				d := db.DeferredUpdate{
+					ContainerName: task.ContainerName,
+					Until:         "forever",
+				}
+				_ = db.DB.Save(&d).Error
+				task.AddLog("[SYSTEM] 自动升级失败，为了防止后台陷入死循环，已自动将该容器设为 [永久暂挂]")
+			}
 		} else {
 			task.Status = "success"
 		}
@@ -302,7 +310,7 @@ func (q *QueueManager) worker() {
 			GlobalObserver.OnStatusChange()
 		}
 
-		if db.GetSetting("smtp_enabled", "false") == "true" && task.IsAuto {
+		if task.IsAuto {
 			go func(taskName string, tType TaskType, status string, logs []string) {
 				typeName := "容器升级"
 				if tType == TaskRollback {
@@ -325,29 +333,7 @@ func (q *QueueManager) worker() {
 				recentLogs := logs[startIdx:]
 				logContent := strings.Join(recentLogs, "\n")
 
-				subjectTpl := db.GetSetting("smtp_subject_template", utils.DefaultSMTPSubject)
-				bodyTpl := db.GetSetting("smtp_body_template", utils.DefaultSMTPBody)
-
-				r := strings.NewReplacer(
-					"{container_name}", taskName,
-					"{action_type}", typeName,
-					"{status}", statusName,
-					"{time}", time.Now().Local().Format("2006-01-02 15:04:05"),
-					"{logs}", logContent,
-				)
-
-				subject := r.Replace(subjectTpl)
-				body := r.Replace(bodyTpl)
-
-				cfg := utils.SMTPConfig{
-					Host:     db.GetSetting("smtp_host", ""),
-					Port:     db.GetSetting("smtp_port", "465"),
-					Username: db.GetSetting("smtp_username", ""),
-					Password: db.GetSetting("smtp_password", ""),
-					SSL:      db.GetSetting("smtp_ssl", "true") == "true",
-					To:       db.GetSetting("smtp_to", ""),
-				}
-				_ = utils.SendNotificationEmail(cfg, subject, body)
+				SendNotification(taskName, typeName, statusName, logContent)
 			}(task.ContainerName, task.Type, task.Status, task.GetLogs())
 		}
 

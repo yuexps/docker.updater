@@ -100,21 +100,20 @@ func StartScheduler() {
 				}
 				utils.LogInfo("检测到有 %d 个服务需要升级更新: %s", len(names), strings.Join(names, ", "))
 
-				// 若启用邮件通知且未开启自动更新，则发送版本更新预警报告。
-				if db.GetSetting("smtp_enabled", "false") == "true" && db.GetSetting("auto_update_enabled", "false") != "true" {
+				// 若启用通知且未开启自动更新，则发送版本更新预警报告。
+				notifyEnabled := db.GetSetting("notify_enabled", "")
+				if notifyEnabled == "" {
+					notifyEnabled = db.GetSetting("smtp_enabled", "false")
+				}
+				if notifyEnabled == "true" && db.GetSetting("auto_update_enabled", "false") != "true" {
 					go func(namesList []string, detailList []string) {
-						subject := fmt.Sprintf("[Docker Updater] 检测到 %d 个服务有可用新镜像", len(namesList))
-						body := fmt.Sprintf("项目名：Docker Updater\n通知类型：可用版本更新预警 (手动升级模式)\n通知时间：%s\n\n检测到以下容器有最新镜像，请登录管理后台手动执行修改版本升级：\n----------------------------------------\n%s\n----------------------------------------",
-							time.Now().Local().Format("2006-01-02 15:04:05"), strings.Join(detailList, "\n"))
-						cfg := utils.SMTPConfig{
-							Host:     db.GetSetting("smtp_host", ""),
-							Port:     db.GetSetting("smtp_port", "465"),
-							Username: db.GetSetting("smtp_username", ""),
-							Password: db.GetSetting("smtp_password", ""),
-							SSL:      db.GetSetting("smtp_ssl", "true") == "true",
-							To:       db.GetSetting("smtp_to", ""),
-						}
-						_ = utils.SendNotificationEmail(cfg, subject, body)
+						detailText := strings.Join(detailList, "\n")
+						service.SendNotification(
+							fmt.Sprintf("多个容器 (%d个)", len(namesList)),
+							"可用版本更新预警 (手动升级模式)",
+							"发现新版本",
+							detailText,
+						)
 					}(names, details)
 				}
 			}
@@ -130,7 +129,7 @@ func StartScheduler() {
 				deferMap := make(map[string]bool)
 				today := time.Now().Format("2006-01-02")
 				for _, d := range deferred {
-					if d.Until > today {
+					if d.Until == "forever" || d.Until > today {
 						deferMap[d.ContainerName] = true
 					}
 				}

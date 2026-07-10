@@ -53,7 +53,7 @@
           未在宿主机上发现 Docker 镜像
         </div>
 
-        <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
+        <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(310px,1fr))] gap-5">
           <image-card v-for="img in images" :key="img.id" :image="img" @delete="deleteImage" />
         </div>
       </div>

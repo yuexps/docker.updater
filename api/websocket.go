@@ -3,12 +3,12 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"sync"
 	"time"
 
 	"docker-updater/service"
+	"docker-updater/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -198,7 +198,7 @@ func (h *WsHub) BroadcastSysLog(line string) {
 func (c *Client) readPump() {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("[ERROR] websocket readPump 异常恢复: %v", r)
+			utils.LogError("websocket readPump 异常恢复: %v", r)
 		}
 		c.hub.unregister <- c
 		c.conn.Close()
@@ -290,7 +290,7 @@ func (c *Client) writePump() {
 func HandleWebSocket(c *gin.Context) {
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Printf("[ERROR] WebSocket 升级失败: %s", err.Error())
+		utils.LogError("WebSocket 升级失败: %s", err.Error())
 		return
 	}
 

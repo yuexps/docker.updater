@@ -25,7 +25,7 @@
               <div 
                 class="text-[16px] font-bold text-slate-800 tracking-tight truncate select-all"
                 :class="{'text-slate-400': isDangling}"
-                :title="parsedInfo.repo"
+                :title="parsedInfo.fullRepo"
               >
                 {{ parsedInfo.repo }}
               </div>
@@ -239,20 +239,30 @@ const isInUse = computed(() => {
 const parsedInfo = computed(() => {
   const firstTag = props.image.tags[0]
   if (!firstTag || firstTag === '<none>:<none>') {
-    return { repo: '<none>', tag: '<none>' }
+    return { repo: '<none>', fullRepo: '<none>', tag: '<none>' }
   }
   
   const lastColon = firstTag.lastIndexOf(':')
   const lastSlash = firstTag.lastIndexOf('/')
   
+  let repo = firstTag
+  let tag = 'latest'
   if (lastColon > lastSlash) {
-    return {
-      repo: firstTag.substring(0, lastColon),
-      tag: firstTag.substring(lastColon + 1)
+    repo = firstTag.substring(0, lastColon)
+    tag = firstTag.substring(lastColon + 1)
+  }
+
+  // 剥离 Registry 域名（如果首段包含 "."、":" 或等于 "localhost"）
+  let displayRepo = repo
+  const parts = repo.split('/')
+  if (parts.length > 1) {
+    const first = parts[0]
+    if (first.includes('.') || first.includes(':') || first === 'localhost') {
+      displayRepo = parts.slice(1).join('/')
     }
   }
   
-  return { repo: firstTag, tag: 'latest' }
+  return { repo: displayRepo, fullRepo: repo, tag: tag }
 })
 
 // 镜像 ID 缩略显示

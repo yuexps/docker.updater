@@ -322,18 +322,25 @@ func apiSettingsGet(c *gin.Context) {
 		tempMirrors = []string{}
 	}
 
-	smtpEnabled := db.GetSetting("smtp_enabled", "false") == "true"
+	notifyEnabled := db.GetSetting("notify_enabled", "")
+	if notifyEnabled == "" {
+		notifyEnabled = db.GetSetting("smtp_enabled", "false")
+	}
+	notifyType := db.GetSetting("notify_type", "email")
+
+	smtpEnabled := notifyEnabled == "true"
 	smtpHost := db.GetSetting("smtp_host", "")
 	smtpPort := db.GetSetting("smtp_port", "465")
 	smtpUsername := db.GetSetting("smtp_username", "")
 	smtpPassword := db.GetSetting("smtp_password", "")
-	if smtpPassword != "" {
-		smtpPassword = "******"
-	}
 	smtpSSL := db.GetSetting("smtp_ssl", "true") == "true"
 	smtpTo := db.GetSetting("smtp_to", "")
 	smtpSubjectTemplate := db.GetSetting("smtp_subject_template", utils.DefaultSMTPSubject)
 	smtpBodyTemplate := db.GetSetting("smtp_body_template", utils.DefaultSMTPBody)
+
+	webhookURL := db.GetSetting("webhook_url", "")
+	webhookMethod := db.GetSetting("webhook_method", "POST")
+	webhookTemplate := db.GetSetting("webhook_template", utils.DefaultWebhookTemplate)
 
 	c.JSON(http.StatusOK, gin.H{
 		"backup_enabled":         backupEnabled,
@@ -343,6 +350,8 @@ func apiSettingsGet(c *gin.Context) {
 		"temp_mirrors":           tempMirrors,
 		"check_type":             checkType,
 		"check_value":            checkValue,
+		"notify_enabled":         notifyEnabled == "true",
+		"notify_type":            notifyType,
 		"smtp_enabled":           smtpEnabled,
 		"smtp_host":              smtpHost,
 		"smtp_port":              smtpPort,
@@ -352,6 +361,9 @@ func apiSettingsGet(c *gin.Context) {
 		"smtp_to":                smtpTo,
 		"smtp_subject_template":  smtpSubjectTemplate,
 		"smtp_body_template":     smtpBodyTemplate,
+		"webhook_url":            webhookURL,
+		"webhook_method":         webhookMethod,
+		"webhook_template":       webhookTemplate,
 	})
 }
 
@@ -372,15 +384,15 @@ func apiSettingsPost(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
-// apiSettingsTestEmail 测试发送邮件通知
+// apiSettingsTestEmail 测试发送邮件或 Webhook 通知
 func apiSettingsTestEmail(c *gin.Context) {
-	var body service.TestEmailSettings
+	var body service.TestNotificationSettings
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := service.SendTestEmail(body); err != nil {
+	if err := service.SendTestNotification(body); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -441,11 +453,10 @@ func apiDefer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if body.Days <= 0 {
-		body.Days = 7
+	untilDate := "forever"
+	if body.Days > 0 {
+		untilDate = time.Now().AddDate(0, 0, body.Days).Format("2006-01-02")
 	}
-
-	untilDate := time.Now().AddDate(0, 0, body.Days).Format("2006-01-02")
 	d := db.DeferredUpdate{
 		ContainerName: name,
 		Until:         untilDate,

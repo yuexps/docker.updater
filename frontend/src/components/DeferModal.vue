@@ -44,6 +44,7 @@ const deferOptions = [
   { label: '暂挂 7 天', value: 7 },
   { label: '暂挂 14 天', value: 14 },
   { label: '暂挂 30 天', value: 30 },
-  { label: '暂挂 90 天', value: 90 }
+  { label: '暂挂 90 天', value: 90 },
+  { label: '永久暂挂', value: 0 }
 ]
 </script>
