@@ -8,6 +8,12 @@ import (
 	"docker-updater/utils"
 )
 
+const (
+	NotifyActionUpdateCheck = "可用版本更新提醒"
+	NotifyActionUpdate      = "容器升级"
+	NotifyActionRollback    = "回滚恢复"
+)
+
 // SendNotification 发送统一通知报告（邮件或 Webhook）
 func SendNotification(containerName, actionType, statusName, logContent string) {
 	// 兼容原 smtp_enabled
@@ -20,11 +26,19 @@ func SendNotification(containerName, actionType, statusName, logContent string) 
 	}
 
 	notifyType := db.GetSetting("notify_type", "email")
+	isCheck := actionType == NotifyActionUpdateCheck
+
 	switch notifyType {
 	case "email":
 		// 邮件逻辑
-		subjectTpl := db.GetSetting("smtp_subject_template", utils.DefaultSMTPSubject)
-		bodyTpl := db.GetSetting("smtp_body_template", utils.DefaultSMTPBody)
+		var subjectTpl, bodyTpl string
+		if isCheck {
+			subjectTpl = db.GetSetting("smtp_subject_template_check", utils.DefaultSMTPSubjectCheck)
+			bodyTpl = db.GetSetting("smtp_body_template_check", utils.DefaultSMTPBodyCheck)
+		} else {
+			subjectTpl = db.GetSetting("smtp_subject_template", utils.DefaultSMTPSubject)
+			bodyTpl = db.GetSetting("smtp_body_template", utils.DefaultSMTPBody)
+		}
 
 		r := strings.NewReplacer(
 			"{container_name}", containerName,
@@ -52,7 +66,12 @@ func SendNotification(containerName, actionType, statusName, logContent string) 
 		// Webhook 逻辑
 		url := db.GetSetting("webhook_url", "")
 		method := db.GetSetting("webhook_method", "POST")
-		template := db.GetSetting("webhook_template", utils.DefaultWebhookTemplate)
+		var template string
+		if isCheck {
+			template = db.GetSetting("webhook_template_check", utils.DefaultWebhookTemplateCheck)
+		} else {
+			template = db.GetSetting("webhook_template", utils.DefaultWebhookTemplate)
+		}
 
 		// 规整 logs：如果是 JSON Webhook，日志中的换行符 \n 需要转义，否则会破坏 JSON 格式
 		escapedLogs := logContent

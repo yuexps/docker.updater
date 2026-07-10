@@ -15,27 +15,30 @@ var OnSettingsReload func()
 
 // GlobalSettings 全局配置结构体。
 type GlobalSettings struct {
-	BackupEnabled       bool     `json:"backup_enabled"`
-	BackupHours         int      `json:"backup_hours"`
-	RestartStack        bool     `json:"restart_stack"`
-	AutoUpdateEnabled   bool     `json:"auto_update_enabled"`
-	TempMirrors         []string `json:"temp_mirrors"`
-	CheckType           string   `json:"check_type"`
-	CheckValue          int      `json:"check_value"`
-	NotifyEnabled       bool     `json:"notify_enabled"`
-	NotifyType          string   `json:"notify_type"`
-	SMTPEnabled         bool     `json:"smtp_enabled"` // 保持兼容
-	SMTPHost            string   `json:"smtp_host"`
-	SMTPPort            string   `json:"smtp_port"`
-	SMTPUsername        string   `json:"smtp_username"`
-	SMTPPassword        string   `json:"smtp_password"`
-	SMTPSSL             bool     `json:"smtp_ssl"`
-	SMTPTo              string   `json:"smtp_to"`
-	SMTPSubjectTemplate string   `json:"smtp_subject_template"`
-	SMTPBodyTemplate    string   `json:"smtp_body_template"`
-	WebhookURL          string   `json:"webhook_url"`
-	WebhookMethod       string   `json:"webhook_method"`
-	WebhookTemplate     string   `json:"webhook_template"`
+	BackupEnabled            bool     `json:"backup_enabled"`
+	BackupHours              int      `json:"backup_hours"`
+	RestartStack             bool     `json:"restart_stack"`
+	AutoUpdateEnabled        bool     `json:"auto_update_enabled"`
+	TempMirrors              []string `json:"temp_mirrors"`
+	CheckType                string   `json:"check_type"`
+	CheckValue               int      `json:"check_value"`
+	NotifyEnabled            bool     `json:"notify_enabled"`
+	NotifyType               string   `json:"notify_type"`
+	SMTPEnabled              bool     `json:"smtp_enabled"` // 保持兼容
+	SMTPHost                 string   `json:"smtp_host"`
+	SMTPPort                 string   `json:"smtp_port"`
+	SMTPUsername             string   `json:"smtp_username"`
+	SMTPPassword             string   `json:"smtp_password"`
+	SMTPSSL                  bool     `json:"smtp_ssl"`
+	SMTPTo                   string   `json:"smtp_to"`
+	SMTPSubjectTemplate      string   `json:"smtp_subject_template"`
+	SMTPBodyTemplate         string   `json:"smtp_body_template"`
+	SMTPSubjectTemplateCheck string   `json:"smtp_subject_template_check"`
+	SMTPBodyTemplateCheck    string   `json:"smtp_body_template_check"`
+	WebhookURL               string   `json:"webhook_url"`
+	WebhookMethod            string   `json:"webhook_method"`
+	WebhookTemplate          string   `json:"webhook_template"`
+	WebhookTemplateCheck     string   `json:"webhook_template_check"`
 }
 
 // TestNotificationSettings 通知配置测试结构体。
@@ -73,9 +76,12 @@ func SaveGlobalSettings(body GlobalSettings) error {
 	_ = db.SetSetting("smtp_to", body.SMTPTo)
 	_ = db.SetSetting("smtp_subject_template", body.SMTPSubjectTemplate)
 	_ = db.SetSetting("smtp_body_template", body.SMTPBodyTemplate)
+	_ = db.SetSetting("smtp_subject_template_check", body.SMTPSubjectTemplateCheck)
+	_ = db.SetSetting("smtp_body_template_check", body.SMTPBodyTemplateCheck)
 	_ = db.SetSetting("webhook_url", body.WebhookURL)
 	_ = db.SetSetting("webhook_method", body.WebhookMethod)
 	_ = db.SetSetting("webhook_template", body.WebhookTemplate)
+	_ = db.SetSetting("webhook_template_check", body.WebhookTemplateCheck)
 
 	if body.CheckType != "" {
 		_ = db.SetSetting("check_type", body.CheckType)

@@ -312,9 +312,9 @@ func (q *QueueManager) worker() {
 
 		if task.IsAuto {
 			go func(taskName string, tType TaskType, status string, logs []string) {
-				typeName := "容器升级"
+				typeName := NotifyActionUpdate
 				if tType == TaskRollback {
-					typeName = "回滚恢复"
+					typeName = NotifyActionRollback
 				}
 
 				statusName := "执行成功"

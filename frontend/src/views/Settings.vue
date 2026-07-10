@@ -141,24 +141,38 @@
                 <n-input v-model:value="settings.smtp_to" placeholder="请输入接收报告的邮箱地址" class="rounded-lg"
                   @blur="autoSaveSettings" />
               </div>
-              <div>
+              <div v-if="settings.auto_update_enabled">
                 <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">自定义邮件主题模板</label>
                 <n-input v-model:value="settings.smtp_subject_template"
                   placeholder="例如: [Docker Updater] 容器 {container_name} {action_type} {status}" class="rounded-lg"
                   @blur="autoSaveSettings" />
               </div>
-              <div class="sm:col-span-2">
+              <div v-if="settings.auto_update_enabled" class="sm:col-span-2">
                 <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">自定义邮件正文模板</label>
                 <n-input v-model:value="settings.smtp_body_template" type="textarea"
                   :autosize="{ minRows: 4, maxRows: 10 }" placeholder="请输入邮件正文模板内容..." class="rounded-lg"
                   @blur="autoSaveSettings" />
+              </div>
+              <div v-if="!settings.auto_update_enabled">
+                <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">更新提醒邮件主题模板</label>
+                <n-input v-model:value="settings.smtp_subject_template_check"
+                  placeholder="例如: [Docker Updater] 发现新版本: {container_name}" class="rounded-lg"
+                  @blur="autoSaveSettings" />
+              </div>
+              <div v-if="!settings.auto_update_enabled" class="sm:col-span-2">
+                <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">更新提醒邮件正文模板</label>
+                <n-input v-model:value="settings.smtp_body_template_check" type="textarea"
+                  :autosize="{ minRows: 4, maxRows: 10 }" placeholder="请输入邮件正文模板内容..." class="rounded-lg"
+                  @blur="autoSaveSettings" />
+              </div>
+              <div class="sm:col-span-2">
                 <div class="text-[11px] text-body-muted mt-2 leading-relaxed">
                   支持以下占位变量进行自动匹配：<br />
                   <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{container_name}</code>（容器名）、
-                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{action_type}</code>（版本修改/回滚恢复）、
-                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{status}</code>（执行成功/执行失败）、
+                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{action_type}</code>（容器升级/回滚恢复/可用版本更新提醒 等）、
+                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{status}</code>（执行成功/执行失败/发现新版本 等）、
                   <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{time}</code>（执行时间）、
-                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{logs}</code>（最近 20 行运行日志）。
+                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{logs}</code>（运行日志/更新详情）。
                 </div>
               </div>
             </div>
@@ -180,31 +194,53 @@
                   ]" @update:value="autoSaveSettings" />
                 </div>
               </div>
-                <div class="flex items-center justify-between mb-1.5">
-                  <label class="text-[12px] font-semibold tracking-wider text-slate-500 block">自定义 Payload 模板 (JSON 格式)</label>
-                  <n-select 
-                    placeholder="载入常用平台预设" 
-                    size="tiny" 
-                    style="width: 180px;"
-                    :options="[
-                      { label: '通用 JSON 格式', value: 'default' },
-                      { label: '企业微信群机器人', value: 'wechat' },
-                      { label: '钉钉群机器人', value: 'dingtalk' },
-                      { label: '飞书群机器人', value: 'feishu' }
-                    ]"
-                    @update:value="applyWebhookPreset"
-                  />
+                <div v-if="settings.auto_update_enabled">
+                  <div class="flex items-center justify-between mb-1.5">
+                    <label class="text-[12px] font-semibold tracking-wider text-slate-500 block">自定义 Payload 模板 (JSON 格式)</label>
+                    <n-select 
+                      placeholder="载入常用平台预设" 
+                      size="tiny" 
+                      style="width: 180px;"
+                      :options="[
+                        { label: '通用 JSON 格式', value: 'default' },
+                        { label: '企业微信群机器人', value: 'wechat' },
+                        { label: '钉钉群机器人', value: 'dingtalk' },
+                        { label: '飞书群机器人', value: 'feishu' }
+                      ]"
+                      @update:value="applyWebhookPreset"
+                    />
+                  </div>
+                  <n-input v-model:value="settings.webhook_template" type="textarea"
+                    :autosize="{ minRows: 4, maxRows: 10 }" placeholder="请输入 JSON 格式的通知 Payload..." class="rounded-lg"
+                    @blur="autoSaveSettings" />
                 </div>
-                <n-input v-model:value="settings.webhook_template" type="textarea"
-                  :autosize="{ minRows: 4, maxRows: 10 }" placeholder="请输入 JSON 格式的通知 Payload..." class="rounded-lg"
-                  @blur="autoSaveSettings" />
+                <div v-if="!settings.auto_update_enabled">
+                  <div class="flex items-center justify-between mb-1.5">
+                    <label class="text-[12px] font-semibold tracking-wider text-slate-500 block">更新提醒 Payload 模板 (JSON 格式)</label>
+                    <n-select 
+                      placeholder="载入常用平台预设" 
+                      size="tiny" 
+                      style="width: 180px;"
+                      :options="[
+                        { label: '通用 JSON 格式', value: 'default' },
+                        { label: '企业微信群机器人', value: 'wechat' },
+                        { label: '钉钉群机器人', value: 'dingtalk' },
+                        { label: '飞书群机器人', value: 'feishu' }
+                      ]"
+                      @update:value="applyWebhookPreset"
+                    />
+                  </div>
+                  <n-input v-model:value="settings.webhook_template_check" type="textarea"
+                    :autosize="{ minRows: 4, maxRows: 10 }" placeholder="请输入 JSON 格式的通知 Payload..." class="rounded-lg"
+                    @blur="autoSaveSettings" />
+                </div>
                 <div class="text-[11px] text-body-muted mt-2 leading-relaxed">
                   支持以下占位变量进行自动匹配：<br />
                   <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{container_name}</code>（容器名）、
-                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{action_type}</code>（版本修改/回滚恢复）、
-                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{status}</code>（执行成功/执行失败）、
+                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{action_type}</code>（容器升级/回滚恢复/可用版本更新提醒 等）、
+                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{status}</code>（执行成功/执行失败/发现新版本 等）、
                   <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{time}</code>（执行时间）、
-                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{logs}</code>（最近 20 行运行日志，换行符会被自动转义）。
+                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{logs}</code>（运行日志/更新详情，换行符会被自动转义）。
                 </div>
               </div>
 
@@ -423,9 +459,12 @@ interface SettingsData {
   smtp_to: string;
   smtp_subject_template: string;
   smtp_body_template: string;
+  smtp_subject_template_check: string;
+  smtp_body_template_check: string;
   webhook_url: string;
   webhook_method: string;
   webhook_template: string;
+  webhook_template_check: string;
 }
 
 const settings = ref<SettingsData>({
@@ -447,9 +486,12 @@ const settings = ref<SettingsData>({
   smtp_to: '',
   smtp_subject_template: '',
   smtp_body_template: '',
+  smtp_subject_template_check: '',
+  smtp_body_template_check: '',
   webhook_url: '',
   webhook_method: 'POST',
-  webhook_template: ''
+  webhook_template: '',
+  webhook_template_check: ''
 })
 
 const registries = ref<any[]>([])
@@ -552,11 +594,11 @@ const sendTestNotification = async () => {
       smtp_password: settings.value.smtp_password,
       smtp_ssl: settings.value.smtp_ssl,
       smtp_to: settings.value.smtp_to,
-      smtp_subject_template: settings.value.smtp_subject_template,
-      smtp_body_template: settings.value.smtp_body_template,
+      smtp_subject_template: settings.value.auto_update_enabled ? settings.value.smtp_subject_template : settings.value.smtp_subject_template_check,
+      smtp_body_template: settings.value.auto_update_enabled ? settings.value.smtp_body_template : settings.value.smtp_body_template_check,
       webhook_url: settings.value.webhook_url,
       webhook_method: settings.value.webhook_method,
-      webhook_template: settings.value.webhook_template
+      webhook_template: settings.value.auto_update_enabled ? settings.value.webhook_template : settings.value.webhook_template_check
     })
     if (settings.value.notify_type === 'email') {
       message.success('测试邮件发送成功，请前往您的收件箱查收！')
@@ -586,6 +628,15 @@ const loadSettings = async () => {
     }
     if (settings.value.webhook_template === undefined) {
       settings.value.webhook_template = ''
+    }
+    if (settings.value.smtp_subject_template_check === undefined) {
+      settings.value.smtp_subject_template_check = ''
+    }
+    if (settings.value.smtp_body_template_check === undefined) {
+      settings.value.smtp_body_template_check = ''
+    }
+    if (settings.value.webhook_template_check === undefined) {
+      settings.value.webhook_template_check = ''
     }
     detectProvider()
   } catch (err) {
@@ -791,15 +842,68 @@ const webhookPresets = {
 }`
 }
 
+const webhookCheckPresets = {
+  default: `{
+  "event": "docker_update_check",
+  "container": "{container_name}",
+  "action": "{action_type}",
+  "status": "{status}",
+  "time": "{time}",
+  "logs": "{logs}"
+}`,
+  wechat: `{
+  "msgtype": "markdown",
+  "markdown": {
+    "content": "### Docker Updater 新版本提醒\\n> 镜像名称: <font color=\\"info\\">{container_name}</font>\\n> 通知类型: <font color=\\"comment\\">{action_type}</font>\\n> 当前状态: {status}\\n> 发现时间: <font color=\\"comment\\">{time}</font>\\n\\n可升级镜像明细:\\n\`\`\`\\n{logs}\\n\`\`\`"
+  }
+}`,
+  dingtalk: `{
+  "msgtype": "markdown",
+  "markdown": {
+    "title": "Docker Updater 新版本提醒",
+    "text": "### Docker Updater 新版本提醒\\n- **镜像名称**: {container_name}\\n- **通知类型**: {action_type}\\n- **当前状态**: {status}\\n- **发现时间**: {time}\\n\\n可升级镜像明细:\\n\`\`\`\\n{logs}\\n\`\`\`"
+  }
+}`,
+  feishu: `{
+  "msg_type": "post",
+  "content": {
+    "post": {
+      "zh_cn": {
+        "title": "Docker Updater 新版本提醒",
+        "content": [
+          [
+            {"tag": "text", "text": "镜像名称: {container_name}\\n"},
+            {"tag": "text", "text": "通知类型: {action_type}\\n"},
+            {"tag": "text", "text": "当前状态: {status}\\n"},
+            {"tag": "text", "text": "发现时间: {time}\\n\\n"}
+          ],
+          [
+            {"tag": "text", "text": "可升级镜像明细:\\n{logs}"}
+          ]
+        ]
+      }
+    }
+  }
+}`
+}
+
 const applyWebhookPreset = (val: string) => {
-  if (!webhookPresets[val as keyof typeof webhookPresets]) return
+  const isCheck = !settings.value.auto_update_enabled
+  const presetsObj = isCheck ? webhookCheckPresets : webhookPresets
+  if (!presetsObj[val as keyof typeof presetsObj]) return
+
   dialog.warning({
     title: '载入预设模板',
     content: '载入新模板将覆盖您当前输入的 Payload 模板内容，确定继续吗？',
     positiveText: '确定覆盖',
     negativeText: '取消',
     onPositiveClick: () => {
-      settings.value.webhook_template = webhookPresets[val as keyof typeof webhookPresets]
+      const presetContent = presetsObj[val as keyof typeof presetsObj]
+      if (isCheck) {
+        settings.value.webhook_template_check = presetContent
+      } else {
+        settings.value.webhook_template = presetContent
+      }
       autoSaveSettings()
     }
   })

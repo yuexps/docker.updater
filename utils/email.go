@@ -10,8 +10,14 @@ import (
 // DefaultSMTPSubject 默认的邮件主题模板
 const DefaultSMTPSubject = "[Docker Updater] 容器 {container_name} {action_type} {status}"
 
+// DefaultSMTPSubjectCheck 默认的更新提醒邮件主题模板
+const DefaultSMTPSubjectCheck = "[Docker Updater] 发现新版本: {container_name}"
+
 // DefaultSMTPBody 默认的邮件正文模板
 const DefaultSMTPBody = "项目名：Docker Updater\n容器名称：{container_name}\n操作类型：{action_type}\n执行状态：{status}\n通知时间：{time}\n\n最近 20 行运行日志：\n----------------------------------------\n{logs}\n----------------------------------------"
+
+// DefaultSMTPBodyCheck 默认的更新提醒邮件正文模板
+const DefaultSMTPBodyCheck = "项目名：Docker Updater\n检测对象：{container_name}\n通知类型：{action_type}\n状态：{status}\n发现时间：{time}\n\n可升级镜像明细：\n----------------------------------------\n{logs}\n----------------------------------------"
 
 // SMTPConfig 邮件发送配置参数，解耦数据库调用
 type SMTPConfig struct {

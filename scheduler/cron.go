@@ -108,9 +108,15 @@ func StartScheduler() {
 				if notifyEnabled == "true" && db.GetSetting("auto_update_enabled", "false") != "true" {
 					go func(namesList []string, detailList []string) {
 						detailText := strings.Join(detailList, "\n")
+						containerLabel := ""
+						if len(namesList) == 1 {
+							containerLabel = namesList[0]
+						} else {
+							containerLabel = fmt.Sprintf("多个容器 (%d个)", len(namesList))
+						}
 						service.SendNotification(
-							fmt.Sprintf("多个容器 (%d个)", len(namesList)),
-							"可用版本更新预警 (手动升级模式)",
+							containerLabel,
+							service.NotifyActionUpdateCheck,
 							"发现新版本",
 							detailText,
 						)

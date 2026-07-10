@@ -18,6 +18,16 @@ const DefaultWebhookTemplate = `{
   "logs": "{logs}"
 }`
 
+// DefaultWebhookTemplateCheck 默认的更新提醒 Webhook JSON 模板
+const DefaultWebhookTemplateCheck = `{
+  "event": "docker_update_check",
+  "container": "{container_name}",
+  "action": "{action_type}",
+  "status": "{status}",
+  "time": "{time}",
+  "logs": "{logs}"
+}`
+
 // SendWebhookNotification 发送 Webhook 通知。
 func SendWebhookNotification(url string, method string, payload string) error {
 	if url == "" {

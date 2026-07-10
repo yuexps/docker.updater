@@ -337,33 +337,39 @@ func apiSettingsGet(c *gin.Context) {
 	smtpTo := db.GetSetting("smtp_to", "")
 	smtpSubjectTemplate := db.GetSetting("smtp_subject_template", utils.DefaultSMTPSubject)
 	smtpBodyTemplate := db.GetSetting("smtp_body_template", utils.DefaultSMTPBody)
+	smtpSubjectTemplateCheck := db.GetSetting("smtp_subject_template_check", utils.DefaultSMTPSubjectCheck)
+	smtpBodyTemplateCheck := db.GetSetting("smtp_body_template_check", utils.DefaultSMTPBodyCheck)
 
 	webhookURL := db.GetSetting("webhook_url", "")
 	webhookMethod := db.GetSetting("webhook_method", "POST")
 	webhookTemplate := db.GetSetting("webhook_template", utils.DefaultWebhookTemplate)
+	webhookTemplateCheck := db.GetSetting("webhook_template_check", utils.DefaultWebhookTemplateCheck)
 
 	c.JSON(http.StatusOK, gin.H{
-		"backup_enabled":         backupEnabled,
-		"backup_hours":           backupHours,
-		"restart_stack":          restartStack,
-		"auto_update_enabled":    autoUpdateEnabled,
-		"temp_mirrors":           tempMirrors,
-		"check_type":             checkType,
-		"check_value":            checkValue,
-		"notify_enabled":         notifyEnabled == "true",
-		"notify_type":            notifyType,
-		"smtp_enabled":           smtpEnabled,
-		"smtp_host":              smtpHost,
-		"smtp_port":              smtpPort,
-		"smtp_username":          smtpUsername,
-		"smtp_password":          smtpPassword,
-		"smtp_ssl":               smtpSSL,
-		"smtp_to":                smtpTo,
-		"smtp_subject_template":  smtpSubjectTemplate,
-		"smtp_body_template":     smtpBodyTemplate,
-		"webhook_url":            webhookURL,
-		"webhook_method":         webhookMethod,
-		"webhook_template":       webhookTemplate,
+		"backup_enabled":              backupEnabled,
+		"backup_hours":                backupHours,
+		"restart_stack":               restartStack,
+		"auto_update_enabled":         autoUpdateEnabled,
+		"temp_mirrors":                tempMirrors,
+		"check_type":                  checkType,
+		"check_value":                 checkValue,
+		"notify_enabled":              notifyEnabled == "true",
+		"notify_type":                 notifyType,
+		"smtp_enabled":                smtpEnabled,
+		"smtp_host":                   smtpHost,
+		"smtp_port":                   smtpPort,
+		"smtp_username":               smtpUsername,
+		"smtp_password":               smtpPassword,
+		"smtp_ssl":                    smtpSSL,
+		"smtp_to":                     smtpTo,
+		"smtp_subject_template":       smtpSubjectTemplate,
+		"smtp_body_template":          smtpBodyTemplate,
+		"smtp_subject_template_check": smtpSubjectTemplateCheck,
+		"smtp_body_template_check":     smtpBodyTemplateCheck,
+		"webhook_url":                 webhookURL,
+		"webhook_method":              webhookMethod,
+		"webhook_template":            webhookTemplate,
+		"webhook_template_check":      webhookTemplateCheck,
 	})
 }
 
