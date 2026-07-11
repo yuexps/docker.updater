@@ -205,7 +205,7 @@ class SimulationDatabase {
       `[PULL] 正在从 registry 下载新镜像层: sha256:7f082ec15d86...`,
       `[PULL] 正在从 registry 下载新镜像层: sha256:1a84f3c0eb51...`,
       `[PULL] 最新镜像层拉取完毕，已校验校验和`,
-      `[INFO] 正在创建升级前镜像备份点: nginx-app_old`,
+      `[INFO] 正在创建升级前镜像备份点: nginx-app_backup_docker_updater`,
       `[INFO] 成功记录重启配置策略.`,
       `[INFO] 正在优雅停止运行中的旧容器...`,
       `[INFO] 旧容器实例已清理`,
@@ -366,7 +366,7 @@ class SimulationDatabase {
     if (mode === 'rollback') {
       return [
         `[INFO] 开启备份回退恢复机制: ${containerName}`,
-        `[INFO] 正在检查物理备份容器 ${containerName}_old...`,
+        `[INFO] 正在检查物理备份容器 ${containerName}_backup_docker_updater...`,
         `[INFO] 停止正在运行中的异常/新容器 ${containerName}...`,
         `[INFO] 正在解除其与 Docker 网桥的绑定...`,
         `[INFO] 重新映射磁盘挂载卷数据...`,
@@ -384,7 +384,7 @@ class SimulationDatabase {
         `[PULL] 正在从 registry 下载新镜像层: sha256:7f082ec15d86...`,
         `[PULL] 正在从 registry 下载新镜像层: sha256:1a84f3c0eb51...`,
         `[PULL] 最新镜像层拉取完毕，已校验校验和`,
-        `[INFO] 正在创建升级前镜像备份点: ${containerName}_old`,
+        `[INFO] 正在创建升级前镜像备份点: ${containerName}_backup_docker_updater`,
         `[INFO] 成功记录重启配置策略.`,
         `[INFO] 正在优雅停止运行中的旧容器...`,
         `[INFO] 旧容器实例已清理`,
@@ -407,7 +407,7 @@ class SimulationDatabase {
         `[INFO] 正在分析本地与远端分发凭证...`,
         `[PULL] 正在从 registry 下载新镜像层: sha256:7f082ec15d86...`,
         `[PULL] 最新镜像层拉取完毕，已校验校验和`,
-        `[INFO] 正在创建升级前镜像备份点: ${containerName}_old`,
+        `[INFO] 正在创建升级前镜像备份点: ${containerName}_backup_docker_updater`,
         `[INFO] 成功记录重启配置策略.`,
         `[INFO] 正在优雅停止运行中的旧容器...`,
         `[INFO] 旧容器实例已清理`,
@@ -416,7 +416,7 @@ class SimulationDatabase {
         `[ERROR] 启动新容器失败: port 80 is already allocated by another service`,
         `[INFO] 检测到容器启动异常，正在执行安全回滚自愈机制...`,
         `[INFO] 正在物理清除故障新容器实例...`,
-        `[INFO] 将备份容器 ${containerName}_old 重命名还原为 ${containerName}`,
+        `[INFO] 将备份容器 ${containerName}_backup_docker_updater 重命名还原为 ${containerName}`,
         `[INFO] 恢复原有的重启策略策略和网络网关绑定`,
         `[SUCCESS] 回滚恢复成功，原容器已上线运行`
       ]

@@ -2,9 +2,11 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
+	"net"
+	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"docker-updater/db"
 	"docker-updater/utils"
@@ -105,34 +107,65 @@ func SaveGlobalSettings(body GlobalSettings) error {
 }
 
 // SendTestNotification 发送测试通知。
-func SendTestNotification(body TestNotificationSettings) error {
+func SendTestNotification(body TestNotificationSettings) (string, error) {
 	if body.NotifyType == "webhook" {
-		url := body.WebhookURL
-		method := body.WebhookMethod
+		// 动态解析 Webhook 的网络参数
+		u, err := url.Parse(body.WebhookURL)
+		var host, scheme, path string
+		if err == nil {
+			host = u.Host
+			scheme = u.Scheme
+			path = u.Path
+		} else {
+			host = "unknown"
+			scheme = "http"
+			path = "/"
+		}
+		port := "80"
+		if scheme == "https" {
+			port = "443"
+		}
+		if h, p, err := net.SplitHostPort(host); err == nil {
+			host = h
+			port = p
+		}
+
+		var logSb strings.Builder
+		logSb.WriteString(fmt.Sprintf("[INFO] 正在解析 Webhook 服务器域名: %s\n", host))
+		logSb.WriteString(fmt.Sprintf("[INFO] 正在建立 TCP 网络连接: %s:%s...\n", host, port))
+		if scheme == "https" {
+			logSb.WriteString(fmt.Sprintf("[INFO] 正在与 %s 初始化 SSL/TLS 安全握手... 完毕。\n", host))
+		}
+		logSb.WriteString(fmt.Sprintf("[INFO] 连接已建立。正在构建 HTTP %s 请求...\n", body.WebhookMethod))
+		logSb.WriteString(fmt.Sprintf("[INFO] 请求目标路径: %s\n", path))
+		logSb.WriteString("[INFO] 正在发送 application/json 数据报文...\n")
+		logSb.WriteString("[SUCCESS] Webhook 测试数据包已成功投递。网络传输已完成。")
+		rawLogs := logSb.String()
+
 		template := body.WebhookTemplate
 		if template == "" {
 			template = utils.DefaultWebhookTemplate
 		}
 
-		rawLogs := "[PULL] Pulling image mysql:8.0\n[INFO] Stopping old container\n[INFO] Starting new container\n[SUCCESS] Container updated successfully"
-		// 规整 logs：如果是 JSON Webhook，日志中的换行符 \n 需要转义，否则会破坏 JSON 格式
-		escapedLogs := rawLogs
-		escapedLogs = strings.ReplaceAll(escapedLogs, `\`, `\\`)
-		escapedLogs = strings.ReplaceAll(escapedLogs, `"`, `\"`)
-		escapedLogs = strings.ReplaceAll(escapedLogs, "\n", `\n`)
-		escapedLogs = strings.ReplaceAll(escapedLogs, "\r", `\r`)
-		escapedLogs = strings.ReplaceAll(escapedLogs, "\t", `\t`)
-
-		r := strings.NewReplacer(
-			"{container_name}", "test-mysql",
-			"{action_type}", "测试通知",
-			"{status}", "测试成功",
-			"{time}", time.Now().Local().Format("2006-01-02 15:04:05"),
-			"{logs}", escapedLogs,
-		)
-		payload := r.Replace(template)
-		return utils.SendWebhookNotification(url, method, payload)
+		payload := renderTemplate(template, "docker-updater", "测试通知", "测试成功", rawLogs, true)
+		return utils.SendWebhookNotification(body.WebhookURL, body.WebhookMethod, payload)
 	}
+
+	// 动态解析 SMTP 邮件网络参数
+	var logSb strings.Builder
+	logSb.WriteString(fmt.Sprintf("[INFO] 正在连接 SMTP 邮件服务器 %s:%s...\n", body.SMTPHost, body.SMTPPort))
+	logSb.WriteString("[INFO] TCP 网络套接字连接已建立。\n")
+	if body.SMTPSSL {
+		logSb.WriteString(fmt.Sprintf("[INFO] 正在与 %s 初始化 SSL/TLS 加密信道... 完毕。\n", body.SMTPHost))
+	} else {
+		logSb.WriteString("[INFO] 已通过非加密信道建立连接 (明文模式)。\n")
+	}
+	logSb.WriteString("[INFO] 正在与邮件服务器握手并初始化 EHLO 协议...\n")
+	logSb.WriteString(fmt.Sprintf("[INFO] 正在验证发件用户账号 %s 的授权凭证...\n", body.SMTPUsername))
+	logSb.WriteString(fmt.Sprintf("[INFO] 正在构建邮件信封: 发件人<%s> -> 收件人<%s>\n", body.SMTPUsername, body.SMTPTo))
+	logSb.WriteString("[INFO] 正在传输邮件 MIME 数据报文...\n")
+	logSb.WriteString("[SUCCESS] 邮件已成功投递至远程邮件传输网关。SMTP 传输已完成。")
+	rawLogs := logSb.String()
 
 	subjectTpl := body.SMTPSubjectTemplate
 	if subjectTpl == "" {
@@ -143,25 +176,17 @@ func SendTestNotification(body TestNotificationSettings) error {
 		bodyTpl = utils.DefaultSMTPBody
 	}
 
-	r := strings.NewReplacer(
-		"{container_name}", "test-mysql",
-		"{action_type}", "测试通知",
-		"{status}", "测试成功",
-		"{time}", time.Now().Local().Format("2006-01-02 15:04:05"),
-		"{logs}", "[PULL] Pulling image mysql:8.0\n[INFO] Stopping old container\n[INFO] Starting new container\n[SUCCESS] Container updated successfully",
-	)
+	subject := renderTemplate(subjectTpl, "docker-updater", "测试通知", "测试成功", rawLogs, false)
+	bodyText := renderTemplate(bodyTpl, "docker-updater", "测试通知", "测试成功", rawLogs, false)
 
-	subject := r.Replace(subjectTpl)
-	bodyText := r.Replace(bodyTpl)
-
-	return utils.SendEmailRaw(
-		body.SMTPHost,
-		body.SMTPPort,
-		body.SMTPUsername,
-		body.SMTPPassword,
-		body.SMTPTo,
-		body.SMTPSSL,
-		subject,
-		bodyText,
-	)
+	cfg := utils.SMTPConfig{
+		Host:     body.SMTPHost,
+		Port:     body.SMTPPort,
+		Username: body.SMTPUsername,
+		Password: body.SMTPPassword,
+		SSL:      body.SMTPSSL,
+		To:       body.SMTPTo,
+	}
+	errEmail := utils.SendNotificationEmail(cfg, subject, bodyText)
+	return "邮件投递成功", errEmail
 }

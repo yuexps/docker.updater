@@ -300,53 +300,106 @@ body {
   }
 }
 
-/* 确保移动端 Webkit 容器具备原生平滑的滚动惯性 */
-* {
+/* 自定义滚动条 */
+.overflow-y-auto,
+.overflow-y-scroll {
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
-/* 自定义滚动条 */
-::-webkit-scrollbar {
+.overflow-x-auto,
+.overflow-x-scroll {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+}
+
+/* 滚动条悬浮 */
+.overflow-y-auto {
+  overflow-y: auto;
+  overflow-y: overlay;
+}
+
+.overflow-y-scroll {
+  overflow-y: scroll;
+  overflow-y: overlay;
+}
+
+.overflow-x-auto {
+  overflow-x: auto;
+  overflow-x: overlay;
+}
+
+.overflow-x-scroll {
+  overflow-x: scroll;
+  overflow-x: overlay;
+}
+
+/* 局部作用域的自定义滚动条 */
+.overflow-y-auto::-webkit-scrollbar,
+.overflow-y-scroll::-webkit-scrollbar,
+.overflow-x-auto::-webkit-scrollbar,
+.overflow-x-scroll::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-::-webkit-scrollbar-track {
+.overflow-y-auto::-webkit-scrollbar-track,
+.overflow-y-scroll::-webkit-scrollbar-track,
+.overflow-x-auto::-webkit-scrollbar-track,
+.overflow-x-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 
-::-webkit-scrollbar-thumb {
+.overflow-y-auto::-webkit-scrollbar-thumb,
+.overflow-y-scroll::-webkit-scrollbar-thumb,
+.overflow-x-auto::-webkit-scrollbar-thumb,
+.overflow-x-scroll::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.12);
   border-radius: 9999px;
   background-clip: padding-box;
   border: 1px solid transparent;
 }
 
-::-webkit-scrollbar-thumb:hover {
+.overflow-y-auto::-webkit-scrollbar-thumb:hover,
+.overflow-y-scroll::-webkit-scrollbar-thumb:hover,
+.overflow-x-auto::-webkit-scrollbar-thumb:hover,
+.overflow-x-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.24);
   background-clip: padding-box;
   border: 1px solid transparent;
 }
 
-/* 深色模式下的自定义滚动条 */
-:root.dark ::-webkit-scrollbar-thumb {
+/* 深色模式下的局部自定义滚动条 */
+:root.dark .overflow-y-auto::-webkit-scrollbar-thumb,
+:root.dark .overflow-y-scroll::-webkit-scrollbar-thumb,
+:root.dark .overflow-x-auto::-webkit-scrollbar-thumb,
+:root.dark .overflow-x-scroll::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12);
   background-clip: padding-box;
   border: 1px solid transparent;
 }
 
-:root.dark ::-webkit-scrollbar-thumb:hover {
+:root.dark .overflow-y-auto::-webkit-scrollbar-thumb:hover,
+:root.dark .overflow-y-scroll::-webkit-scrollbar-thumb:hover,
+:root.dark .overflow-x-auto::-webkit-scrollbar-thumb:hover,
+:root.dark .overflow-x-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.24);
   background-clip: padding-box;
   border: 1px solid transparent;
 }
 
 /* Firefox 兼容适配 */
-* {
+.overflow-y-auto,
+.overflow-y-scroll,
+.overflow-x-auto,
+.overflow-x-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
 }
 
-:root.dark * {
+:root.dark .overflow-y-auto,
+:root.dark .overflow-y-scroll,
+:root.dark .overflow-x-auto,
+:root.dark .overflow-x-scroll {
   scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }

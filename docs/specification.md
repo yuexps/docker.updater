@@ -99,7 +99,7 @@ type RegistryCredential struct {
 | POST | `/check` | 无 | `{"ok": true}` | 异步触发本地活动容器版本扫描比对并更新数据库 |
 | GET | `/update/:name` | 无 | SSE 日志流 (分块传输) | 异步将容器升级任务注册至全局队列。SSE 从日志缓冲区推流 |
 | GET | `/rollback/:name` | 无 | SSE 日志流 (分块传输) | 异步将容器回滚任务注册至全局队列 |
-| DELETE| `/backup/:name` | 无 | `{"ok": true}` | 物理删除指定的 `{name}_old` 备份容器，清除相关数据库元数据 |
+| DELETE| `/backup/:name` | 无 | `{"ok": true}` | 物理删除指定的 `{name}_backup_docker_updater` 备份容器，清除相关数据库元数据 |
 | POST | `/defer/:name` | `{"days": int}` | `{"ok": true, "until": "YYYY-MM-DD"}` | 写入延迟截止日期约束 |
 | POST | `/undefer/:name`| 无 | `{"ok": true}` | 移除延迟更新约束 |
 | GET | `/container/:name/logs`| 无 | `{"logs": string}` | 从 Docker 引擎获取容器的末尾 200 行标准输出与标准错误日志 |
@@ -143,8 +143,8 @@ graph TD
     A[启动升级任务] --> B[Docker 探测容器原始 Config 与 HostConfig]
     B --> C[使用镜像加速源拉取目标镜像]
     C --> D[优雅停止旧容器 - 超时30s]
-    D --> E[将旧容器重命名备份为 name_old]
-    E --> F[将 name_old 重启策略修改为 no]
+    D --> E[将旧容器重命名备份为 name_backup_docker_updater]
+    E --> F[将 name_backup_docker_updater 重启策略修改为 no]
     F --> G[使用继承的 Config 创建新容器并绑定网络]
     G -->|创建成功| H[启动新容器]
     G -->|创建失败| R[回滚还原分支]
@@ -153,11 +153,11 @@ graph TD
     I -->|探测成功| J[容器升级成功]
     I -->|探测失败| R
     J --> K{开启了备份保留?}
-    K -->|是| L[保留 name_old, 并在数据库写入 RollbackMetadata]
-    K -->|否| M[物理删除 name_old 容器并释放空间]
+    K -->|是| L[保留 name_backup_docker_updater, 并在数据库写入 RollbackMetadata]
+    K -->|否| M[物理删除 name_backup_docker_updater 容器并释放空间]
     
     R[回滚还原分支] --> S[物理移除已创建的损坏新容器]
-    S --> T[将 name_old 重命名还原为原容器名 name]
+    S --> T[将 name_backup_docker_updater 重命名还原为原容器名 name]
     T --> U[恢复原容器重启策略]
     U --> V[使用绝对不变的旧 ID 启动原容器]
     V --> W[向日志分发失败错误并结束任务]

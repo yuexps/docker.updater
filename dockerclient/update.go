@@ -177,7 +177,7 @@ func ApplyUpdate(ctx context.Context, name string, targetImage string, opts Upda
 		logChan <- fmt.Sprintf("[WARNING] 停止容器失败: %s", err.Error())
 	}
 
-	oldNameBackup := name + "_old"
+	oldNameBackup := name + "_backup_docker_updater"
 	_ = cli.ContainerRemove(ctx, oldNameBackup, types.ContainerRemoveOptions{Force: true})
 
 	logChan <- fmt.Sprintf("[INFO] 将旧容器改名为备份: %s", oldNameBackup)
@@ -320,7 +320,7 @@ func ApplyRollback(ctx context.Context, name string, originalPolicy container.Re
 	}
 	defer cli.Close()
 
-	oldName := name + "_old"
+	oldName := name + "_backup_docker_updater"
 	backup, err := cli.ContainerInspect(ctx, oldName)
 	if err != nil {
 		logChan <- fmt.Sprintf("[ERROR] 找不到对应的备份容器 %s: %s", oldName, err.Error())
@@ -389,7 +389,7 @@ func scheduleStackRestart(ctx context.Context, cli *client.Client, project strin
 
 		for _, c := range containers {
 			name := strings.TrimPrefix(c.Names[0], "/")
-			if name == "" || strings.HasSuffix(name, "_old") || updated[name] {
+			if name == "" || strings.HasSuffix(name, "_backup_docker_updater") || updated[name] {
 				continue
 			}
 			if c.Labels["com.docker.compose.project"] == project {
@@ -499,8 +499,23 @@ func pullImageWithMirrors(ctx context.Context, cli *client.Client, imageName str
 	isOfficial, fullName := parseDockerHubImage(imageName)
 
 	if isOfficial {
-		if len(tempMirrors) > 0 {
-			for _, mirror := range tempMirrors {
+		systemMirrors := getSystemMirrors()
+		// 融合系统级与应用级配置的镜像加速器，并进行去重（系统级优先）
+		seen := make(map[string]bool)
+		var mirrors []string
+		for _, m := range append(systemMirrors, tempMirrors...) {
+			m = strings.TrimSpace(m)
+			if m == "" {
+				continue
+			}
+			if !seen[m] {
+				seen[m] = true
+				mirrors = append(mirrors, m)
+			}
+		}
+
+		if len(mirrors) > 0 {
+			for _, mirror := range mirrors {
 				mirror = strings.TrimSpace(mirror)
 				if mirror == "" {
 					continue
@@ -512,7 +527,7 @@ func pullImageWithMirrors(ctx context.Context, cli *client.Client, imageName str
 				mirrorHost = strings.TrimSuffix(mirrorHost, "/")
 
 				tempImageName := fmt.Sprintf("%s/%s", mirrorHost, fullName)
-				logChan <- fmt.Sprintf("[INFO] 检测到官方镜像，尝试通过临时镜像源 %s 加速拉取...", mirrorHost)
+				logChan <- fmt.Sprintf("[INFO] 检测到官方镜像，尝试通过镜像源 %s 加速拉取...", mirrorHost)
 
 				reader, err := cli.ImagePull(ctx, tempImageName, types.ImagePullOptions{})
 				if err != nil {
@@ -550,7 +565,7 @@ func pullImageWithMirrors(ctx context.Context, cli *client.Client, imageName str
 
 				return io.NopCloser(strings.NewReader(`{"status":"Success"}`)), nil
 			}
-			logChan <- "[WARNING] 所有配置的临时镜像源均已尝试拉取失败，将降级为官方直接拉取..."
+			logChan <- "[WARNING] 所有配置的镜像源均已尝试拉取失败，将降级为官方直接拉取..."
 		}
 	}
 

@@ -72,7 +72,13 @@ document.addEventListener('touchstart', (event) => {
     target.closest('button') ||
     target.closest('a') ||
     target.closest('.n-button') ||
-    target.closest('[role="button"]');
+    target.closest('[role="button"]') ||
+    // 允许 Naive UI 下拉菜单、下拉选项及常见浮层容器不触发失焦，防止其无法正常触摸或滚动
+    target.closest('.n-base-select-menu') ||
+    target.closest('.n-dropdown-menu') ||
+    target.closest('.n-popover') ||
+    target.closest('.n-date-panel') ||
+    target.closest('.n-time-picker-panel');
 
   if (!isInteractive && document.activeElement && typeof (document.activeElement as any).blur === 'function') {
     (document.activeElement as HTMLElement).blur();

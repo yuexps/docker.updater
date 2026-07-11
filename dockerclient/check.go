@@ -179,7 +179,7 @@ func getRemoteDigest(imageName string, localDigest string, localImageID string, 
 		// 融合系统级与应用级配置的镜像加速器，并进行去重
 		seen := make(map[string]bool)
 		var mirrors []string
-		for _, m := range append(appMirrors, systemMirrors...) {
+		for _, m := range append(systemMirrors, appMirrors...) {
 			m = strings.TrimSpace(m)
 			if m == "" {
 				continue
@@ -409,7 +409,7 @@ func ScanLocalHostForUpdates(ctx context.Context) ([]UpdateCheckResult, error) {
 		if len(c.Names) > 0 {
 			name = strings.TrimPrefix(c.Names[0], "/")
 		}
-		if name == "" || strings.HasSuffix(name, "_old") {
+		if name == "" || strings.HasSuffix(name, "_backup_docker_updater") {
 			continue
 		}
 

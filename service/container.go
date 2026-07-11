@@ -53,7 +53,7 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 		if len(containerItem.Names) > 0 {
 			name = strings.TrimPrefix(containerItem.Names[0], "/")
 		}
-		if name == "" || strings.HasSuffix(name, "_old") {
+		if name == "" || strings.HasSuffix(name, "_backup_docker_updater") {
 			continue
 		}
 
@@ -88,7 +88,7 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 		rb, hasRollback := rbMap[name]
 		var rollbackExpires *string
 		if hasRollback {
-			if _, err := cli.ContainerInspect(ctx, name+"_old"); err == nil {
+			if _, err := cli.ContainerInspect(ctx, name+"_backup_docker_updater"); err == nil {
 				val := rb.ExpiresAt
 				rollbackExpires = &val
 			} else {

@@ -34,11 +34,11 @@ func SelfHealInterruptedOperations() {
 		if len(c.Names) > 0 {
 			name = strings.TrimPrefix(c.Names[0], "/")
 		}
-		if name == "" || !strings.HasSuffix(name, "_old") {
+		if name == "" || !strings.HasSuffix(name, "_backup_docker_updater") {
 			continue
 		}
 
-		baseName := strings.TrimSuffix(name, "_old")
+		baseName := strings.TrimSuffix(name, "_backup_docker_updater")
 		utils.LogInfo("发现未完成备份记录: %s", name)
 
 		primaryRunning := false

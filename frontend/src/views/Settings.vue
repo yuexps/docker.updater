@@ -586,7 +586,7 @@ const sendTestNotification = async () => {
   }
   testingEmail.value = true
   try {
-    await axios.post(`${apiBase}/settings/test-email`, {
+    const res = await axios.post(`${apiBase}/settings/test-email`, {
       notify_type: settings.value.notify_type,
       smtp_host: settings.value.smtp_host,
       smtp_port: settings.value.smtp_port,
@@ -600,14 +600,28 @@ const sendTestNotification = async () => {
       webhook_method: settings.value.webhook_method,
       webhook_template: settings.value.auto_update_enabled ? settings.value.webhook_template : settings.value.webhook_template_check
     })
+    const respBody = res.data?.response
     if (settings.value.notify_type === 'email') {
       message.success('测试邮件发送成功，请前往您的收件箱查收！')
     } else {
-      message.success('测试 Webhook 发送成功，请前往 Webhook 服务端查收！')
+      let displayResp = respBody || ''
+      if (displayResp.length > 80) {
+        displayResp = displayResp.substring(0, 80) + '...'
+      }
+      message.success(`测试 Webhook 发送成功！平台响应: ${displayResp || '无'}`)
     }
   } catch (err: any) {
     const errorMsg = err.response?.data?.error || err.message || '网络连接异常'
-    message.error(`测试发送失败: ${errorMsg}`)
+    const respBody = err.response?.data?.response
+    if (respBody) {
+      let displayResp = respBody
+      if (displayResp.length > 80) {
+        displayResp = displayResp.substring(0, 80) + '...'
+      }
+      message.error(`测试发送失败: ${errorMsg} (平台响应: ${displayResp})`)
+    } else {
+      message.error(`测试发送失败: ${errorMsg}`)
+    }
   } finally {
     testingEmail.value = false
   }
@@ -809,14 +823,14 @@ const webhookPresets = {
   wechat: `{
   "msgtype": "markdown",
   "markdown": {
-    "content": "### Docker Updater 容器更新报告\\n> 容器名称: <font color=\\"info\\">{container_name}</font>\\n> 任务类型: <font color=\\"comment\\">{action_type}</font>\\n> 执行状态: {status}\\n> 通知时间: <font color=\\"comment\\">{time}</font>\\n\\n最近运行日志:\\n\`\`\`\\n{logs}\\n\`\`\`"
+    "content": "### 【{status}】{container_name} {action_type}\\n> 容器名称: <font color=\\"info\\">{container_name}</font>\\n> 任务类型: <font color=\\"comment\\">{action_type}</font>\\n> 执行状态: {status}\\n> 执行时间: <font color=\\"comment\\">{time}</font>\\n\\n最近运行日志:\\n\`\`\`\\n{logs}\\n\`\`\`"
   }
 }`,
   dingtalk: `{
   "msgtype": "markdown",
   "markdown": {
-    "title": "Docker Updater 更新报告",
-    "text": "### Docker Updater 容器更新报告\\n- **容器名称**: {container_name}\\n- **任务类型**: {action_type}\\n- **执行状态**: {status}\\n- **通知时间**: {time}\\n\\n最近运行日志:\\n\`\`\`\\n{logs}\\n\`\`\`"
+    "title": "【{status}】{container_name}",
+    "text": "### 【{status}】{container_name} {action_type}\\n- **容器名称**: {container_name}\\n- **任务类型**: {action_type}\\n- **执行状态**: {status}\\n- **执行时间**: {time}\\n\\n最近运行日志:\\n\`\`\`\\n{logs}\\n\`\`\`"
   }
 }`,
   feishu: `{
@@ -824,13 +838,13 @@ const webhookPresets = {
   "content": {
     "post": {
       "zh_cn": {
-        "title": "Docker Updater 容器更新报告",
+        "title": "【{status}】{container_name} {action_type}",
         "content": [
           [
             {"tag": "text", "text": "容器名称: {container_name}\\n"},
             {"tag": "text", "text": "任务类型: {action_type}\\n"},
             {"tag": "text", "text": "执行状态: {status}\\n"},
-            {"tag": "text", "text": "通知时间: {time}\\n\\n"}
+            {"tag": "text", "text": "执行时间: {time}\\n\\n"}
           ],
           [
             {"tag": "text", "text": "最近运行日志:\\n{logs}"}
@@ -854,14 +868,14 @@ const webhookCheckPresets = {
   wechat: `{
   "msgtype": "markdown",
   "markdown": {
-    "content": "### Docker Updater 新版本提醒\\n> 镜像名称: <font color=\\"info\\">{container_name}</font>\\n> 通知类型: <font color=\\"comment\\">{action_type}</font>\\n> 当前状态: {status}\\n> 发现时间: <font color=\\"comment\\">{time}</font>\\n\\n可升级镜像明细:\\n\`\`\`\\n{logs}\\n\`\`\`"
+    "content": "### 【发现新版本】{container_name} 可升级\\n> 镜像名称: <font color=\\"info\\">{container_name}</font>\\n> 通知类型: <font color=\\"comment\\">{action_type}</font>\\n> 当前状态: {status}\\n> 检测时间: <font color=\\"comment\\">{time}</font>\\n\\n可升级镜像明细:\\n\`\`\`\\n{logs}\\n\`\`\`"
   }
 }`,
   dingtalk: `{
   "msgtype": "markdown",
   "markdown": {
-    "title": "Docker Updater 新版本提醒",
-    "text": "### Docker Updater 新版本提醒\\n- **镜像名称**: {container_name}\\n- **通知类型**: {action_type}\\n- **当前状态**: {status}\\n- **发现时间**: {time}\\n\\n可升级镜像明细:\\n\`\`\`\\n{logs}\\n\`\`\`"
+    "title": "【发现新版本】{container_name}",
+    "text": "### 【发现新版本】{container_name} 可升级\\n- **镜像名称**: {container_name}\\n- **通知类型**: {action_type}\\n- **当前状态**: {status}\\n- **检测时间**: {time}\\n\\n可升级镜像明细:\\n\`\`\`\\n{logs}\\n\`\`\`"
   }
 }`,
   feishu: `{
@@ -869,13 +883,13 @@ const webhookCheckPresets = {
   "content": {
     "post": {
       "zh_cn": {
-        "title": "Docker Updater 新版本提醒",
+        "title": "【发现新版本】{container_name} 可升级",
         "content": [
           [
             {"tag": "text", "text": "镜像名称: {container_name}\\n"},
             {"tag": "text", "text": "通知类型: {action_type}\\n"},
             {"tag": "text", "text": "当前状态: {status}\\n"},
-            {"tag": "text", "text": "发现时间: {time}\\n\\n"}
+            {"tag": "text", "text": "检测时间: {time}\\n\\n"}
           ],
           [
             {"tag": "text", "text": "可升级镜像明细:\\n{logs}"}

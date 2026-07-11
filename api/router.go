@@ -289,7 +289,7 @@ func apiBackupDelete(c *gin.Context) {
 	}
 	defer cli.Close()
 
-	backupName := name + "_old"
+	backupName := name + "_backup_docker_updater"
 	err = cli.ContainerRemove(c, backupName, types.ContainerRemoveOptions{Force: true})
 	if err != nil {
 		utils.LogError("手动删除备份容器 %s 失败: %s", backupName, err.Error())
@@ -398,12 +398,13 @@ func apiSettingsTestEmail(c *gin.Context) {
 		return
 	}
 
-	if err := service.SendTestNotification(body); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	respBody, err := service.SendTestNotification(body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "response": respBody})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"ok": true})
+	c.JSON(http.StatusOK, gin.H{"ok": true, "response": respBody})
 }
 
 // apiImageTags 从对应远端拉取镜像的可用 tags（最多 20 个）

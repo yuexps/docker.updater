@@ -161,7 +161,7 @@
           </div>
 
           <!-- Right Content Container -->
-          <div class="flex-1 min-w-0 h-screen flex flex-col bg-canvas-parchment overflow-hidden">
+          <div class="flex-1 min-w-0 h-dvh md:h-screen flex flex-col bg-canvas-parchment overflow-hidden">
             <router-view />
           </div>
 

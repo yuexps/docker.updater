@@ -31,12 +31,13 @@
 2. **UDS 监听**: 生产环境强依赖 `TRIM_APPDEST` 环境变量，监听 Unix Domain Socket 进行网关代理。
 3. **路由统一**: 所有 API 及静态服务统归 `/app/docker-updater/` 组。
 4. **单工排队**: 容器升级、回滚加入单工任务队列，规避并发争抢。
-5. **探活与自愈**: 容器更新后休眠探活，失败则回退至 `{name}_old` 旧容器并重启。
+5. **探活与自愈**: 容器更新后休眠探活，失败则回退至 `{name}_backup_docker_updater` 旧容器并重启。
 6. **无 Emoji与日志落盘**: 统一采用文本前缀禁用 emoji。全局日志由启动脚本重定向落盘，Go 程序仅向标准输出与 WebSocket 广播以防写重；启动时若 `info.log` 超过 10MB 则自动对半截断。
 7. **CGO-free**: 禁止引入 CGO，采用纯 Go SQLite 驱动，支持交叉编译。
 8. **无 CLI 依赖**: 所有 Docker 操作均通过 Docker SDK 交互，禁止调用命令行 `docker` 进程。
 9. **文档优先**: 变更代码前，优先同步更新 [AGENTS.md](AGENTS.md) 及 [specification.md](docs/specification.md)。
 10. **禁止自动构建**: AI 代理禁止自行运行构建或打包脚本（如 `build.cmd` 或 `build.sh`），如有构建需求应引导并交由用户手动执行。
+11. **移动端手势与视口优化**: 样式中禁止使用全局通配符 `*` 开启滚动惯性以避免手势拦截 Bug。对于需要滚动的容器应精准指定类名并配置 `touch-action`。页面右侧主内容容器在移动端应采用 `h-dvh`（动态视口高度）以防止底部内容被浏览器工具栏遮挡。
 
 ## 构建命令
 * **Windows 平台**:

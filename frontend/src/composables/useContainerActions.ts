@@ -161,7 +161,7 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
   const deleteBackup = (name: string, onSuccess?: () => void) => {
     dialog?.warning({
       title: '清除备份容器',
-      content: `清理备份容器 ${name}_old 将释放本地磁盘空间，但这之后您将无法直接一键回滚。确定清除吗？`,
+      content: `清理备份容器 ${name}_backup_docker_updater 将释放本地磁盘空间，但这之后您将无法直接一键回滚。确定清除吗？`,
       positiveText: '确认清除',
       negativeText: '取消',
       onPositiveClick: () => {

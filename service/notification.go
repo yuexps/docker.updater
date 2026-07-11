@@ -40,16 +40,8 @@ func SendNotification(containerName, actionType, statusName, logContent string) 
 			bodyTpl = db.GetSetting("smtp_body_template", utils.DefaultSMTPBody)
 		}
 
-		r := strings.NewReplacer(
-			"{container_name}", containerName,
-			"{action_type}", actionType,
-			"{status}", statusName,
-			"{time}", time.Now().Local().Format("2006-01-02 15:04:05"),
-			"{logs}", logContent,
-		)
-
-		subject := r.Replace(subjectTpl)
-		body := r.Replace(bodyTpl)
+		subject := renderTemplate(subjectTpl, containerName, actionType, statusName, logContent, false)
+		body := renderTemplate(bodyTpl, containerName, actionType, statusName, logContent, false)
 
 		cfg := utils.SMTPConfig{
 			Host:     db.GetSetting("smtp_host", ""),
@@ -73,25 +65,37 @@ func SendNotification(containerName, actionType, statusName, logContent string) 
 			template = db.GetSetting("webhook_template", utils.DefaultWebhookTemplate)
 		}
 
-		// 规整 logs：如果是 JSON Webhook，日志中的换行符 \n 需要转义，否则会破坏 JSON 格式
-		escapedLogs := logContent
-		escapedLogs = strings.ReplaceAll(escapedLogs, `\`, `\\`)
-		escapedLogs = strings.ReplaceAll(escapedLogs, `"`, `\"`)
-		escapedLogs = strings.ReplaceAll(escapedLogs, "\n", `\n`)
-		escapedLogs = strings.ReplaceAll(escapedLogs, "\r", `\r`)
-		escapedLogs = strings.ReplaceAll(escapedLogs, "\t", `\t`)
-
-		r := strings.NewReplacer(
-			"{container_name}", containerName,
-			"{action_type}", actionType,
-			"{status}", statusName,
-			"{time}", time.Now().Local().Format("2006-01-02 15:04:05"),
-			"{logs}", escapedLogs,
-		)
-		payload := r.Replace(template)
+		payload := renderTemplate(template, containerName, actionType, statusName, logContent, true)
 
 		go func() {
-			_ = utils.SendWebhookNotification(url, method, payload)
+			_, _ = utils.SendWebhookNotification(url, method, payload)
 		}()
 	}
 }
+
+// escapeJSONString 转义 JSON 中的特殊字符与换行符。
+func escapeJSONString(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	s = strings.ReplaceAll(s, "\t", `\t`)
+	return s
+}
+
+// renderTemplate 渲染通知模板。
+func renderTemplate(tpl, containerName, actionType, statusName, logContent string, escapeJSON bool) string {
+	logs := logContent
+	if escapeJSON {
+		logs = escapeJSONString(logs)
+	}
+	r := strings.NewReplacer(
+		"{container_name}", containerName,
+		"{action_type}", actionType,
+		"{status}", statusName,
+		"{time}", time.Now().Local().Format("2006-01-02 15:04:05"),
+		"{logs}", logs,
+	)
+	return r.Replace(tpl)
+}
+

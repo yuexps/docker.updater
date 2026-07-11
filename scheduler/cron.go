@@ -164,7 +164,7 @@ func StartScheduler() {
 		if dbErr := db.DB.Find(&expired, "expires_at <= ?", nowStr).Error; dbErr == nil && len(expired) > 0 {
 			var backupNames []string
 			for _, meta := range expired {
-				backupNames = append(backupNames, meta.ContainerName+"_old")
+				backupNames = append(backupNames, meta.ContainerName+"_backup_docker_updater")
 			}
 			dockerclient.CleanExpiredBackups(ctx, backupNames)
 			db.DB.Delete(&expired)
@@ -181,7 +181,7 @@ func StartScheduler() {
 			if cliErr == nil {
 				defer cli.Close()
 				for _, rb := range rollbacks {
-					backupName := rb.ContainerName + "_old"
+					backupName := rb.ContainerName + "_backup_docker_updater"
 					if _, inspectErr := cli.ContainerInspect(ctx, backupName); inspectErr != nil {
 						db.DB.Delete(&rb)
 					}
