@@ -662,16 +662,7 @@ axios.defaults.adapter = async function (config) {
     }
   }
 
-  // 12.5 获取系统源加速镜像
-  if (url.includes('/api/settings/system-mirrors')) {
-    return {
-      data: ['https://registry.docker-cn.com', 'https://docker.mirrors.ustc.edu.cn'],
-      status: 200,
-      statusText: 'OK',
-      headers: config.headers || {},
-      config
-    }
-  }
+
 
   // 13. 获取/保存配置
   if (url.includes('/api/settings')) {

@@ -127,8 +127,7 @@ func InitRoutes(r *gin.Engine) {
 		api.POST("/registries", apiRegistriesPost)
 		api.DELETE("/registries/:id", apiRegistriesDelete)
 
-		// 镜像加速源只读 API
-		api.GET("/settings/system-mirrors", apiSettingsSystemMirrorsGet)
+
 		api.POST("/settings/test-email", apiSettingsTestEmail)
 		api.GET("/image/tags", apiImageTags)
 	}
@@ -423,32 +422,6 @@ func apiImageTags(c *gin.Context) {
 	c.JSON(http.StatusOK, tags)
 }
 
-type DockerDaemonConfig struct {
-	RegistryMirrors []string `json:"registry-mirrors"`
-}
-
-// apiSettingsSystemMirrorsGet 只读获取宿主机 daemon.json 加速源
-func apiSettingsSystemMirrorsGet(c *gin.Context) {
-	filePath := "/etc/docker/daemon.json"
-	fileBytes, err := os.ReadFile(filePath)
-	if err != nil {
-		c.JSON(http.StatusOK, []string{})
-		return
-	}
-
-	var config DockerDaemonConfig
-	if err := json.Unmarshal(fileBytes, &config); err != nil {
-		c.JSON(http.StatusOK, []string{})
-		return
-	}
-
-	if config.RegistryMirrors == nil {
-		c.JSON(http.StatusOK, []string{})
-		return
-	}
-
-	c.JSON(http.StatusOK, config.RegistryMirrors)
-}
 
 // apiDefer 手动延迟更新
 func apiDefer(c *gin.Context) {

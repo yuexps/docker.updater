@@ -264,10 +264,24 @@
         <!-- Card 4: Private Registry Credentials Management -->
         <div
           class="apple-card rounded-lg p-5 sm:p-6 hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white flex flex-col gap-5">
-          <div class="min-w-0 flex-1">
-            <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">仓库凭证</div>
-            <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">配置镜像源仓库（如阿里云、自建 Harbor 等）的认证账号，用于拉取和比对私有镜像。
+          <!-- Card Header (Title & Button in one row) -->
+          <div class="flex flex-col gap-1.5">
+            <div class="flex items-center justify-between gap-4">
+              <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">仓库凭证</div>
+              <n-button secondary circle size="small"
+                class="active-scale bg-surface-pearl border border-divider-soft text-slate-700 font-semibold shrink-0"
+                title="添加仓库凭证"
+                @click="openAddRegistryModal">
+                <template #icon>
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                </template>
+              </n-button>
             </div>
+            <div class="text-[13px] text-body-muted leading-relaxed">配置镜像源仓库（如阿里云、自建 Harbor 等）的认证账号，用于拉取和比对私有镜像。</div>
           </div>
 
           <!-- Credentials List -->
@@ -297,11 +311,20 @@
               class="text-center py-8 text-body-muted text-[13px] bg-slate-50/20 rounded-xl border border-dashed border-hairline select-none flex flex-col items-center justify-center">
               暂未配置任何仓库凭证
             </div>
+          </div>
+        </div>
 
-            <div class="pt-4">
-              <n-button secondary round size="small"
-                class="active-scale bg-surface-pearl border border-divider-soft text-slate-700 w-full font-medium"
-                @click="openAddRegistryModal">
+        <!-- Card 4: Registry Mirrors (Temporary) -->
+        <div
+          class="apple-card rounded-lg p-5 sm:p-6 hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white flex flex-col gap-5">
+          <!-- Card Header (Title & Button in one row) -->
+          <div class="flex flex-col gap-1.5">
+            <div class="flex items-center justify-between gap-4">
+              <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">镜像加速源</div>
+              <n-button secondary circle size="small"
+                class="active-scale bg-surface-pearl border border-divider-soft text-slate-700 font-semibold shrink-0"
+                title="添加镜像加速源"
+                @click="mirrorModalVisible = true">
                 <template #icon>
                   <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
                     stroke-linecap="round" stroke-linejoin="round">
@@ -309,50 +332,12 @@
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                   </svg>
                 </template>
-                添加仓库凭证
               </n-button>
             </div>
-          </div>
-        </div>
-
-        <!-- Card 4: Registry Mirrors (System & Temporary) -->
-        <div
-          class="apple-card rounded-lg p-5 sm:p-6 hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white flex flex-col gap-5">
-          <!-- Title Section -->
-          <div>
-            <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">镜像加速源</div>
-            <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">查看系统全局镜像加速源，或配置仅在当前升级器中生效的临时加速源（不修改宿主机全局配置）。</div>
+            <div class="text-[13px] text-body-muted leading-relaxed">配置当前应用的 Docker 镜像加速源。</div>
           </div>
 
-          <!-- Part 1: System Mirrors -->
-          <div class="flex flex-col gap-2">
-            <div class="text-[12px] font-bold text-slate-500 tracking-wider">系统全局加速源（只读）</div>
-            <div v-if="systemMirrors.length > 0"
-              class="border border-hairline rounded-xl overflow-hidden divide-y divide-hairline bg-slate-50/5">
-              <div v-for="m in systemMirrors" :key="m"
-                class="p-3.5 text-[13px] font-mono text-slate-700 break-all select-all flex items-center justify-between">
-                <span class="truncate mr-2">{{ m }}</span>
-                <button
-                  class="text-slate-400 hover:text-primary transition-colors p-1 rounded hover:bg-white cursor-pointer shrink-0"
-                  title="复制加速源地址" @click="copyText(m)">
-                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div v-else
-              class="text-center py-6 text-body-muted text-[12px] bg-slate-50/20 rounded-xl border border-dashed border-hairline select-none flex flex-col items-center justify-center">
-              当前宿主机系统未配置任何全局镜像加速源
-            </div>
-          </div>
-
-          <!-- Part 2: Temporary Mirrors -->
-          <div class="border-t border-hairline pt-4 flex flex-col gap-3">
-            <div class="text-[12px] font-bold text-slate-500 tracking-wider">临时镜像加速源（可编辑）</div>
-
+          <div class="flex flex-col gap-3">
             <!-- Temporary Mirrors List -->
             <div v-if="settings.temp_mirrors && settings.temp_mirrors.length > 0"
               class="border border-hairline rounded-xl overflow-hidden divide-y divide-hairline bg-slate-50/5">
@@ -367,25 +352,7 @@
             </div>
             <div v-else
               class="text-center py-6 text-body-muted text-[12px] bg-slate-50/20 rounded-xl border border-dashed border-hairline select-none flex flex-col items-center justify-center">
-              暂未配置任何临时镜像加速源
-            </div>
-
-            <!-- Input bar for adding mirror -->
-            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
-              <n-input v-model:value="newTempMirror" placeholder="例如: https://docker.m.daocloud.io"
-                class="flex-1 rounded-xl" @keyup.enter="addTempMirror" />
-              <n-button secondary round size="medium"
-                class="active-scale bg-surface-pearl border border-divider-soft text-slate-700 font-semibold shrink-0"
-                @click="addTempMirror">
-                <template #icon>
-                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                  </svg>
-                </template>
-                添加加速源
-              </n-button>
+              暂未配置任何镜像加速源
             </div>
           </div>
         </div>
@@ -424,6 +391,47 @@
           <n-button type="primary" round class="active-scale px-5 font-semibold" :loading="submittingRegistry"
             @click="submitRegistry">
             保存凭据
+          </n-button>
+        </div>
+      </div>
+    </n-modal>
+
+    <!-- Add Mirror Modal -->
+    <n-modal v-model:show="mirrorModalVisible" transform-origin="center">
+      <div class="w-[90vw] max-w-[460px] bg-white rounded-lg border border-hairline p-6 shadow-xl relative select-none">
+        <div class="text-[18px] font-bold text-slate-800 tracking-tight mb-4">
+          添加镜像加速源
+        </div>
+
+        <div class="space-y-4 py-2">
+          <div>
+            <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">加速源地址</label>
+            <n-input v-model:value="newTempMirror" placeholder="例如: https://docker.m.daocloud.io"
+              class="rounded-lg" @keyup.enter="addTempMirror" />
+          </div>
+
+          <div class="pt-1.5">
+            <div class="text-[12px] font-semibold tracking-wider text-slate-500 mb-2">常用镜像源</div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="url in recommendedMirrors"
+                :key="url"
+                class="px-2.5 py-1 text-[11px] font-mono rounded-lg border border-slate-200 hover:border-primary hover:text-primary bg-slate-50/50 hover:bg-primary-50/20 active:scale-95 transition-all cursor-pointer select-none"
+                @click="newTempMirror = url"
+              >
+                {{ url.replace('https://', '') }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 mt-6">
+          <n-button round class="active-scale px-5" @click="mirrorModalVisible = false">
+            取消
+          </n-button>
+          <n-button type="primary" round class="active-scale px-5 font-semibold"
+            @click="addTempMirror">
+            确定
           </n-button>
         </div>
       </div>
@@ -504,8 +512,15 @@ const registryForm = ref({
   password: ''
 })
 
-const systemMirrors = ref<string[]>([])
 const newTempMirror = ref<string>('')
+const mirrorModalVisible = ref<boolean>(false)
+
+const recommendedMirrors = [
+  'https://docker.1ms.run',
+  'https://docker.m.daocloud.io',
+  'https://atomhub.openatom.cn',
+  'https://docker.fxxk.dedyn.io'
+]
 
 const saving = ref<boolean>(false)
 const showFeedback = ref<boolean>(false)
@@ -694,25 +709,22 @@ const loadRegistries = async () => {
   }
 }
 
-const loadSystemMirrors = async () => {
-  try {
-    const res = await axios.get(`${apiBase}/settings/system-mirrors`)
-    systemMirrors.value = res.data || []
-  } catch (err) {
-    // 静默忽略
-  }
-}
 
 const addTempMirror = async () => {
   const url = newTempMirror.value.trim()
-  if (!url) return
+  if (!url) {
+    message.warning('请输入加速源地址')
+    return
+  }
   if (!settings.value.temp_mirrors) {
     settings.value.temp_mirrors = []
   }
   if (!settings.value.temp_mirrors.includes(url)) {
     settings.value.temp_mirrors.push(url)
     newTempMirror.value = ''
+    mirrorModalVisible.value = false
     await autoSaveSettings()
+    message.success('添加成功')
   } else {
     message.warning('该加速源已存在')
   }
@@ -926,6 +938,5 @@ const applyWebhookPreset = (val: string) => {
 onMounted(() => {
   loadSettings()
   loadRegistries()
-  loadSystemMirrors()
 })
 </script>

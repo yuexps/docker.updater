@@ -499,11 +499,10 @@ func pullImageWithMirrors(ctx context.Context, cli *client.Client, imageName str
 	isOfficial, fullName := parseDockerHubImage(imageName)
 
 	if isOfficial {
-		systemMirrors := getSystemMirrors()
-		// 融合系统级与应用级配置的镜像加速器，并进行去重（系统级优先）
+		// 融合应用级配置的镜像加速器并进行去重
 		seen := make(map[string]bool)
 		var mirrors []string
-		for _, m := range append(systemMirrors, tempMirrors...) {
+		for _, m := range tempMirrors {
 			m = strings.TrimSpace(m)
 			if m == "" {
 				continue

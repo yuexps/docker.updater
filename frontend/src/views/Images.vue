@@ -21,22 +21,33 @@
       <div class="grid grid-cols-2 gap-4 md:gap-6 mb-10 select-none">
         <!-- 镜像总数 -->
         <div
-          class="apple-card p-5 sm:p-6 rounded-lg hover:shadow-[0_12px_30px_rgba(0,102,204,0.03)] hover:border-primary/30 transition-all duration-300 bg-white">
+          class="apple-card p-5 sm:p-6 rounded-lg transition-all duration-300 cursor-pointer select-none"
+          :class="[
+            currentFilter === 'all'
+              ? 'border-2 border-primary! bg-white'
+              : 'border-2 border-slate-100 bg-white hover:border-primary/35'
+          ]"
+          @click="currentFilter = 'all'"
+        >
           <span class="text-[12px] font-semibold text-body-muted uppercase tracking-wider block">镜像总数</span>
           <span class="text-[36px] font-bold tracking-tight block mt-2 text-primary leading-none">{{ images.length
             }}</span>
         </div>
 
         <!-- 无标签残留 -->
-        <div class="apple-card p-5 sm:p-6 rounded-lg transition-all duration-300 bg-white" :class="[
-          danglingCount > 0
-            ? 'hover:shadow-[0_12px_30px_rgba(245,158,11,0.03)] hover:border-amber-500/30'
-            : 'hover:shadow-[0_12px_30px_rgba(0,0,0,0.02)]'
-        ]">
+        <div 
+          class="apple-card p-5 sm:p-6 rounded-lg transition-all duration-300 cursor-pointer select-none"
+          :class="[
+            currentFilter === 'dangling'
+              ? 'border-2 border-amber-500! bg-white'
+              : 'border-2 border-slate-100 bg-white hover:border-amber-500/35'
+          ]"
+          @click="currentFilter = currentFilter === 'dangling' ? 'all' : 'dangling'"
+        >
           <span class="text-[12px] font-semibold text-body-muted uppercase tracking-wider block">无标签残留</span>
           <div class="flex items-baseline justify-between mt-2">
             <span class="text-[36px] font-bold tracking-tight leading-none"
-              :class="danglingCount > 0 ? 'text-amber-600' : 'text-slate-600'">
+              :class="danglingCount > 0 || currentFilter === 'dangling' ? 'text-amber-600' : 'text-slate-600'">
               {{ danglingCount }}
             </span>
           </div>
@@ -49,12 +60,12 @@
           <n-spin size="large" />
         </div>
 
-        <div v-else-if="images.length === 0" class="apple-card p-12 text-center text-body-muted rounded-lg select-none">
-          未在宿主机上发现 Docker 镜像
+        <div v-else-if="filteredImages.length === 0" class="apple-card p-12 text-center text-body-muted rounded-lg select-none">
+          {{ images.length === 0 ? '未在宿主机上发现 Docker 镜像' : '未发现满足筛选条件的镜像' }}
         </div>
 
         <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(310px,1fr))] gap-5">
-          <image-card v-for="img in images" :key="img.id" :image="img" @delete="deleteImage" />
+          <image-card v-for="img in filteredImages" :key="img.id" :image="img" @delete="deleteImage" />
         </div>
       </div>
     </div>
@@ -81,6 +92,7 @@ interface ImageItem {
 }
 
 const images = ref<ImageItem[]>([])
+const currentFilter = ref<'all' | 'dangling'>('all')
 const loading = ref<boolean>(false)
 const pruning = ref<boolean>(false)
 
@@ -92,6 +104,15 @@ const danglingCount = computed(() => {
 const isDangling = (img: ImageItem): boolean => {
   return img.tags.includes('<none>:<none>')
 }
+
+const filteredImages = computed(() => {
+  return images.value.filter(img => {
+    if (currentFilter.value === 'dangling') {
+      return isDangling(img)
+    }
+    return true
+  })
+})
 
 
 const fetchImages = async () => {

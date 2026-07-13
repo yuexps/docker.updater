@@ -26,13 +26,29 @@
       <!-- 统计卡片区 -->
       <div class="grid grid-cols-2 gap-4 md:gap-6 mb-10 select-none">
         <!-- 待升级卡片 -->
-        <div class="apple-card p-5 sm:p-6 rounded-lg hover:shadow-[0_12px_30px_rgba(0,102,204,0.03)] hover:border-primary/30 transition-all duration-300 bg-white">
+        <div 
+          class="apple-card p-5 sm:p-6 rounded-lg transition-all duration-300 cursor-pointer select-none"
+          :class="[
+            currentFilter === 'update'
+              ? 'border-2 border-primary! bg-white'
+              : 'border-2 border-slate-100 bg-white hover:border-primary/35'
+          ]"
+          @click="currentFilter = 'update'"
+        >
           <span class="text-[12px] font-semibold text-body-muted uppercase tracking-wider block">待升级容器</span>
           <span class="text-[36px] font-bold tracking-tight block mt-2 text-primary leading-none">{{ updateCount }}</span>
         </div>
 
         <!-- 已暂挂卡片 -->
-        <div class="apple-card p-5 sm:p-6 rounded-lg hover:shadow-[0_12px_30px_rgba(245,158,11,0.03)] hover:border-amber-500/30 transition-all duration-300 bg-white">
+        <div 
+          class="apple-card p-5 sm:p-6 rounded-lg transition-all duration-300 cursor-pointer select-none"
+          :class="[
+            currentFilter === 'deferred'
+              ? 'border-2 border-amber-500! bg-white'
+              : 'border-2 border-slate-100 bg-white hover:border-amber-500/35'
+          ]"
+          @click="currentFilter = 'deferred'"
+        >
           <span class="text-[12px] font-semibold text-body-muted uppercase tracking-wider block">已暂挂检测</span>
           <span class="text-[36px] font-bold tracking-tight block mt-2 text-amber-600 leading-none">{{ deferredCount }}</span>
         </div>
@@ -98,9 +114,11 @@
               <polyline points="22 4 12 14.01 9 11.01" />
             </svg>
           </div>
-          <h3 class="text-[17px] font-bold text-slate-800 mb-2">所有本地容器已是最新版本</h3>
+          <h3 class="text-[17px] font-bold text-slate-800 mb-2">
+            {{ currentFilter === 'deferred' ? '暂无被暂挂的容器' : '所有本地容器已是最新版本' }}
+          </h3>
           <p class="text-[13px] text-body-muted max-w-sm leading-relaxed mb-0">
-            未检测到待升级的本地运行容器。系统将会在后台定时检测镜像版本。您也可以手动触发即时检测。
+            {{ currentFilter === 'deferred' ? '未检测到任何被设置暂挂检测的本地运行容器。' : '未检测到待升级的本地运行容器。系统将会在后台定时检测镜像版本。您也可以手动触发即时检测。' }}
           </p>
         </div>
 
@@ -167,6 +185,7 @@ const loading = ref<boolean>(false)
 const checking = ref<boolean>(false)
 
 const selectedContainers = ref<string[]>([])
+const currentFilter = ref<'update' | 'deferred'>('update')
 const message = useMessage()
 
 // 初始化共享 Composable 业务方法
@@ -177,7 +196,7 @@ let unsubscribeStatus: (() => void) | null = null
 // 待更新或已挂起列表
 const pendingContainers = computed(() => {
   return containers.value
-    .filter(c => c.status === 'update' || c.status === 'deferred')
+    .filter(c => c.status === currentFilter.value)
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name))
 })
