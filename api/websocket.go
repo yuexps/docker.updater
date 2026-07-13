@@ -46,6 +46,16 @@ type Client struct {
 	send          chan []byte
 	subscriptions map[string]bool // 已订阅的主题映射表。
 	mu            sync.Mutex
+	done          chan struct{}
+	closeOnce     sync.Once
+}
+
+// Close 安全地关闭 Client 相关的连接和通道。
+func (c *Client) Close() {
+	c.closeOnce.Do(func() {
+		close(c.done)
+		c.conn.Close()
+	})
 }
 
 // WsHub 全局 WebSocket 连接与广播事务控制中心。
@@ -77,7 +87,7 @@ func (h *WsHub) Run() {
 			h.mu.Lock()
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
-				close(client.send)
+				client.Close()
 			}
 			h.mu.Unlock()
 		}
@@ -194,14 +204,14 @@ func (h *WsHub) BroadcastSysLog(line string) {
 	}
 }
 
-// readPump 循环读取客户端数据。
+// readPump 循环读取客户端 data。
 func (c *Client) readPump() {
 	defer func() {
 		if r := recover(); r != nil {
 			utils.LogError("websocket readPump 异常恢复: %v", r)
 		}
 		c.hub.unregister <- c
-		c.conn.Close()
+		c.Close()
 	}()
 
 	c.conn.SetReadLimit(4096)
@@ -249,18 +259,13 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		c.Close()
 	}()
 
 	for {
 		select {
-		case message, ok := <-c.send:
+		case message := <-c.send:
 			_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if !ok {
-				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
-				return
-			}
-
 			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
 				return
@@ -276,6 +281,9 @@ func (c *Client) writePump() {
 			if err := w.Close(); err != nil {
 				return
 			}
+
+		case <-c.done:
+			return
 
 		case <-ticker.C:
 			_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
@@ -299,6 +307,7 @@ func HandleWebSocket(c *gin.Context) {
 		conn:          conn,
 		send:          make(chan []byte, 256),
 		subscriptions: make(map[string]bool),
+		done:          make(chan struct{}),
 	}
 
 	client.hub.register <- client

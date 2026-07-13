@@ -284,6 +284,9 @@ onMounted(async () => {
   unsubscribeSysLog = wsService.subscribeSysLog((line: string) => {
     if (line.trim()) {
       logLines.value.push(line)
+      if (logLines.value.length > 1000) {
+        logLines.value.shift()
+      }
       scrollToBottom()
     }
   })

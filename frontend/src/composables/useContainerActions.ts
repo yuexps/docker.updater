@@ -1,4 +1,4 @@
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, onScopeDispose } from 'vue'
 import { useMessage, useDialog } from 'naive-ui'
 import axios from 'axios'
 import wsService from '../utils/websocket'
@@ -281,6 +281,14 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
       activeUnsubscribeLogs()
       activeUnsubscribeLogs = null
     }
+  }
+
+  try {
+    onScopeDispose(() => {
+      cleanup()
+    })
+  } catch (e) {
+    // 忽略非组件上下文调用的异常
   }
 
   const openUpdateVersionModal = (name: string, currentImage: string) => {

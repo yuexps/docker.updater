@@ -1,5 +1,5 @@
 appname               = docker.updater
-version               = 1.0.7
+version               = 1.0.8
 display_name          = Docker Updater
 desc                  = Docker 容器 版本检测、一键升级
 arch                  = x86_64

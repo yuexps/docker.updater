@@ -286,7 +286,7 @@ func ApplyUpdate(ctx context.Context, name string, targetImage string, opts Upda
 
 	project = inspect.Config.Labels["com.docker.compose.project"]
 	if opts.RestartStack && project != "" {
-		scheduleStackRestart(ctx, cli, project, name, logChan)
+		scheduleStackRestart(project, name, logChan)
 	}
 
 	logChan <- "[SUCCESS] 容器版本修改任务全部完成"
@@ -360,7 +360,7 @@ func ApplyRollback(ctx context.Context, name string, originalPolicy container.Re
 }
 
 // scheduleStackRestart 执行 Compose 容器组延迟重启。
-func scheduleStackRestart(ctx context.Context, cli *client.Client, project string, excludedContainer string, logChan chan<- string) {
+func scheduleStackRestart(project string, excludedContainer string, logChan chan<- string) {
 	stackLock.Lock()
 	defer stackLock.Unlock()
 
@@ -382,7 +382,17 @@ func scheduleStackRestart(ctx context.Context, cli *client.Client, project strin
 		delete(stackTimers, project)
 		stackLock.Unlock()
 
-		containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})
+		asyncCtx, asyncCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer asyncCancel()
+
+		asyncCli, err := NewLocalClient()
+		if err != nil {
+			utils.LogError("重启 Compose 栈时无法连接 Docker 引擎: %s", err.Error())
+			return
+		}
+		defer asyncCli.Close()
+
+		containers, err := asyncCli.ContainerList(asyncCtx, types.ContainerListOptions{})
 		if err != nil {
 			return
 		}
@@ -395,7 +405,7 @@ func scheduleStackRestart(ctx context.Context, cli *client.Client, project strin
 			if c.Labels["com.docker.compose.project"] == project {
 				utils.LogInfo("重启 Compose 栈同僚: %s", name)
 				stopTimeout := 30
-				if err := cli.ContainerRestart(ctx, c.ID, container.StopOptions{Timeout: &stopTimeout}); err != nil {
+				if err := asyncCli.ContainerRestart(asyncCtx, c.ID, container.StopOptions{Timeout: &stopTimeout}); err != nil {
 					utils.LogWarning("重启 Compose 栈同僚 %s 失败: %s", name, err.Error())
 				}
 			}

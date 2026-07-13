@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"docker-updater/db"
@@ -15,7 +16,10 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-var CronScheduler *cron.Cron
+var (
+	CronScheduler *cron.Cron
+	schedulerMu   sync.Mutex
+)
 
 // StartScheduler 启动定时任务调度
 func StartScheduler() {
@@ -54,6 +58,12 @@ func StartScheduler() {
 
 	// 注册定时镜像更新检测任务
 	_, err = CronScheduler.AddFunc(cronExpr, func() {
+		if !service.TryStartScan() {
+			utils.LogInfo("定时更新检测已触发，但检测到后台已有扫描任务正在运行，本次定时任务略过...")
+			return
+		}
+		defer service.EndScan()
+
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 		utils.LogInfo("启动定时镜像更新检查...")
@@ -199,6 +209,9 @@ func StartScheduler() {
 
 // ReloadScheduler 重新加载定时任务调度器 (在配置更新后被自动触发热重载)
 func ReloadScheduler() {
+	schedulerMu.Lock()
+	defer schedulerMu.Unlock()
+
 	if CronScheduler != nil {
 		CronScheduler.Stop()
 	}

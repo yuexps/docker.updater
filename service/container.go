@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"docker-updater/db"
@@ -10,6 +12,18 @@ import (
 
 	"github.com/docker/docker/api/types"
 )
+
+var isScanning atomic.Bool
+
+// TryStartScan 尝试抢占更新扫描任务状态锁，抢占成功返回 true，否则返回 false。
+func TryStartScan() bool {
+	return isScanning.CompareAndSwap(false, true)
+}
+
+// EndScan 释放扫描状态锁。
+func EndScan() {
+	isScanning.Store(false)
+}
 
 // GetContainerStatusData 获取容器状态数据。
 func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error) {
@@ -48,25 +62,74 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 	today := time.Now().Format("2006-01-02")
 	var result []map[string]interface{}
 
-	for _, containerItem := range containers {
+	// 1. 筛选目标容器
+	type targetContainer struct {
+		item types.Container
+		name string
+	}
+	var targets []targetContainer
+	for _, c := range containers {
 		name := ""
-		if len(containerItem.Names) > 0 {
-			name = strings.TrimPrefix(containerItem.Names[0], "/")
+		if len(c.Names) > 0 {
+			name = strings.TrimPrefix(c.Names[0], "/")
 		}
 		if name == "" || strings.HasSuffix(name, "_backup_docker_updater") {
 			continue
 		}
+		targets = append(targets, targetContainer{item: c, name: name})
+	}
 
-		inspect, err := cli.ContainerInspect(ctx, containerItem.ID)
-		if err != nil {
+	// 2. 并发拉取 Inspect 信息 (限制最大并发度为 8)
+	type inspectResult struct {
+		name         string
+		container    types.Container
+		inspectData  types.ContainerJSON
+		imageMissing bool
+		err          error
+	}
+
+	resultCh := make(chan inspectResult, len(targets))
+	sem := make(chan struct{}, 8)
+	var wg sync.WaitGroup
+
+	for _, t := range targets {
+		wg.Add(1)
+		go func(tc targetContainer) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			inspect, err := cli.ContainerInspect(ctx, tc.item.ID)
+			if err != nil {
+				resultCh <- inspectResult{name: tc.name, err: err}
+				return
+			}
+
+			_, _, inspectErr := cli.ImageInspectWithRaw(ctx, inspect.Image)
+			imageMissing := inspectErr != nil
+
+			resultCh <- inspectResult{
+				name:         tc.name,
+				container:    tc.item,
+				inspectData:  inspect,
+				imageMissing: imageMissing,
+			}
+		}(t)
+	}
+
+	wg.Wait()
+	close(resultCh)
+
+	// 3. 构建结果列表
+	for res := range resultCh {
+		if res.err != nil {
 			continue
 		}
 
+		name := res.name
+		containerItem := res.container
+		inspect := res.inspectData
 		imageName := inspect.Config.Image
-		_, _, inspectErr := cli.ImageInspectWithRaw(ctx, inspect.Image)
-		if inspectErr != nil {
-			continue
-		}
 
 		status := "ok"
 		var checkedAt string
@@ -98,7 +161,7 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 
 		localDigest := ""
 		remoteDigest := ""
-		if hasUpdate {
+		if hasUpdate && !res.imageMissing {
 			localDigest = info.LocalDigest
 			remoteDigest = info.RemoteDigest
 		}
@@ -115,6 +178,7 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 			"running":          containerItem.State == "running",
 			"local_digest":     localDigest,
 			"remote_digest":    remoteDigest,
+			"image_missing":    res.imageMissing,
 		})
 	}
 

@@ -20,6 +20,9 @@
 * **[service/](service)**: 队列调度 ([queue.go](service/queue.go))、断电自愈 ([selfheal.go](service/selfheal.go))、仓库凭证 ([credentials.go](service/credentials.go)) 等业务逻辑。
 * **[utils/](utils)**: 统一日志与网络辅助方法。
 * **[frontend/](frontend)**: Vue 前端 SPA 源码。
+* **[docs/](docs)**: 包含项目设计与规范文档。
+  * **[specification.md](docs/specification.md)**: 飞牛 FNOS Docker 容器升级管理器后端技术规格书。
+  * **[frontend_features.md](docs/frontend_features.md)**: 前端所有视图、组件、底层交互机制及业务逻辑功能总结文档。
 * **[fnpack/](fnpack)**: `.fpk` 打包配置及应用静态资产。
 * **[main.go](main.go)**: 入口程序，嵌有前端静态资产，监听 Unix Domain Socket。
 * **[build.cmd](build.cmd)**: Windows 构建与 `.fpk` 打包脚本。
@@ -37,7 +40,6 @@
 8. **无 CLI 依赖**: 所有 Docker 操作均通过 Docker SDK 交互，禁止调用命令行 `docker` 进程。
 9. **文档优先**: 变更代码前，优先同步更新 [AGENTS.md](AGENTS.md) 及 [specification.md](docs/specification.md)。
 10. **禁止自动构建**: AI 代理禁止自行运行构建或打包脚本（如 `build.cmd` 或 `build.sh`），如有构建需求应引导并交由用户手动执行。
-11. **移动端手势与视口优化**: 样式中禁止使用全局通配符 `*` 开启滚动惯性以避免手势拦截 Bug。对于需要滚动的容器应精准指定类名并配置 `touch-action`。页面右侧主内容容器在移动端应采用 `h-dvh`（动态视口高度）以防止底部内容被浏览器工具栏遮挡。
 
 ## 构建命令
 * **Windows 平台**:

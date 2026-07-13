@@ -526,6 +526,7 @@ const saving = ref<boolean>(false)
 const showFeedback = ref<boolean>(false)
 const feedbackText = ref<string>('')
 let feedbackTimer: any = null
+let autoSaveTimer: any = null
 
 const hoursOptions = [
   { label: '保留 12 小时', value: 12 },
@@ -674,6 +675,9 @@ const loadSettings = async () => {
 }
 
 const autoSaveSettings = async () => {
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+  }
   if (feedbackTimer) {
     clearTimeout(feedbackTimer)
   }
@@ -682,22 +686,24 @@ const autoSaveSettings = async () => {
   showFeedback.value = true
   saving.value = true
 
-  try {
-    await axios.post(`${apiBase}/settings`, settings.value)
-    saving.value = false
-    feedbackText.value = '配置已自动保存'
+  autoSaveTimer = setTimeout(async () => {
+    try {
+      await axios.post(`${apiBase}/settings`, settings.value)
+      saving.value = false
+      feedbackText.value = '配置已自动保存'
 
-    // 2.5秒后渐变淡出
-    feedbackTimer = setTimeout(() => {
-      showFeedback.value = false
-    }, 2500)
-  } catch (err) {
-    saving.value = false
-    feedbackText.value = '保存配置失败'
-    feedbackTimer = setTimeout(() => {
-      showFeedback.value = false
-    }, 3000)
-  }
+      // 2.5秒后渐变淡出
+      feedbackTimer = setTimeout(() => {
+        showFeedback.value = false
+      }, 2500)
+    } catch (err) {
+      saving.value = false
+      feedbackText.value = '保存配置失败'
+      feedbackTimer = setTimeout(() => {
+        showFeedback.value = false
+      }, 3000)
+    }
+  }, 300)
 }
 
 const loadRegistries = async () => {

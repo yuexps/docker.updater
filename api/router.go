@@ -160,8 +160,14 @@ func apiStatus(c *gin.Context) {
 
 // apiCheck 触发手动更新比对
 func apiCheck(c *gin.Context) {
+	if !service.TryStartScan() {
+		c.JSON(http.StatusOK, gin.H{"ok": true, "message": "已有更新比对检测任务在后台运行中，请勿重复触发"})
+		return
+	}
+
 	utils.LogInfo("手动镜像更新比对比对检查已被用户触发...")
 	go func() {
+		defer service.EndScan()
 		ctx := context.Background()
 		results, err := dockerclient.ScanLocalHostForUpdates(ctx)
 		if err == nil {
@@ -864,6 +870,13 @@ func apiRegistriesDelete(c *gin.Context) {
 // apiContainerStart 启动已停止的容器
 func apiContainerStart(c *gin.Context) {
 	name := c.Param("name")
+
+	// 校验队列排他锁
+	if t := service.GlobalQueue.GetTask(name); t != nil && (t.Status == "running" || t.Status == "waiting") {
+		c.JSON(http.StatusConflict, gin.H{"error": "该容器当前正处于队列任务中，无法执行生命周期操作"})
+		return
+	}
+
 	cli, err := dockerclient.NewLocalClient()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -884,6 +897,13 @@ func apiContainerStart(c *gin.Context) {
 // apiContainerStop 停止运行中的容器
 func apiContainerStop(c *gin.Context) {
 	name := c.Param("name")
+
+	// 校验队列排他锁
+	if t := service.GlobalQueue.GetTask(name); t != nil && (t.Status == "running" || t.Status == "waiting") {
+		c.JSON(http.StatusConflict, gin.H{"error": "该容器当前正处于队列任务中，无法执行生命周期操作"})
+		return
+	}
+
 	timeoutStr := c.DefaultQuery("timeout", "10")
 	timeoutVal, err := strconv.Atoi(timeoutStr)
 	if err != nil || timeoutVal < 0 {
@@ -910,6 +930,13 @@ func apiContainerStop(c *gin.Context) {
 // apiContainerRestart 重启容器
 func apiContainerRestart(c *gin.Context) {
 	name := c.Param("name")
+
+	// 校验队列排他锁
+	if t := service.GlobalQueue.GetTask(name); t != nil && (t.Status == "running" || t.Status == "waiting") {
+		c.JSON(http.StatusConflict, gin.H{"error": "该容器当前正处于队列任务中，无法执行生命周期操作"})
+		return
+	}
+
 	timeoutStr := c.DefaultQuery("timeout", "10")
 	timeoutVal, err := strconv.Atoi(timeoutStr)
 	if err != nil || timeoutVal < 0 {
