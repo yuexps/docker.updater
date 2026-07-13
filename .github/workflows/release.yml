@@ -38,6 +38,26 @@ jobs:
         run: |
           chmod +x build.sh
           ./build.sh
+          
+          # 1. 提取并保存 x86 fpk
+          mv fnpack/docker.updater.fpk ./docker.updater-x86.fpk
+          
+          # 2. 提取 amd64 原生二进制
+          cp fnpack/app/bin/docker-updater ./docker-updater-linux-amd64
+          
+          # 3. 交叉编译 arm64 原生二进制
+          GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o ./docker-updater-linux-arm64
+          
+          # 4. 复制并打包 arm fpk
+          cp -r fnpack fnpack_arm
+          sed -i 's/platform[[:space:]]*=[[:space:]]*x86/platform              = arm/g' fnpack_arm/manifest
+          cp ./docker-updater-linux-arm64 fnpack_arm/app/bin/docker-updater
+          cd fnpack_arm
+          chmod +x fnpack-1.2.3-linux-amd64
+          ./fnpack-1.2.3-linux-amd64 build
+          cd ..
+          mv fnpack_arm/docker.updater.fpk ./docker.updater-arm.fpk
+          rm -rf fnpack_arm
 
       - name: Upload Pre-release Asset
         uses: marvinpinto/action-automatic-releases@latest
@@ -47,4 +67,7 @@ jobs:
           prerelease: true
           title: "Latest Pre-release Build"
           files: |
-            fnpack/docker.updater.fpk
+            docker.updater-x86.fpk
+            docker.updater-arm.fpk
+            docker-updater-linux-amd64
+            docker-updater-linux-arm64

@@ -2,7 +2,7 @@
   <n-config-provider :theme="isDark ? darkTheme : null" :theme-overrides="isDark ? darkThemeOverrides : themeOverrides" :locale="zhCN" :date-locale="dateZhCN">
     <n-dialog-provider>
       <n-message-provider>
-        <div class="flex min-h-screen bg-canvas-parchment font-sans text-ink">
+        <div class="flex h-screen bg-canvas-parchment font-sans text-ink">
 
           <!-- Left Sidebar Navigation -->
           <div

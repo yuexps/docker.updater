@@ -24,14 +24,14 @@
   * **[specification.md](docs/specification.md)**: 飞牛 FNOS Docker 容器升级管理器后端技术规格书。
   * **[frontend_features.md](docs/frontend_features.md)**: 前端所有视图、组件、底层交互机制及业务逻辑功能总结文档。
 * **[fnpack/](fnpack)**: `.fpk` 打包配置及应用静态资产。
-* **[main.go](main.go)**: 入口程序，嵌有前端静态资产，监听 Unix Domain Socket。
+* **[main.go](main.go)**: 入口程序，嵌有前端静态资产，支持 `--fnos` 参数启动模式。
 * **[build.cmd](build.cmd)**: Windows 构建与 `.fpk` 打包脚本。
 * **[build.sh](build.sh)**: Linux 构建与 `.fpk` 打包脚本。
 * **[.github/workflows/release.yml](.github/workflows/release.yml)**: GitHub Actions 自动构建与 Pre-release 发布工作流。
 
 ## 关键架构与设计决策
 1. **单二进制嵌入**: 后端通过 `go:embed` 挂载 `frontend/dist/*` 资产。
-2. **UDS 监听**: 生产环境强依赖 `TRIM_APPDEST` 环境变量，监听 Unix Domain Socket 进行网关代理。
+2. **启动与监听模式**: 支持飞牛模式与原生模式。飞牛模式（携带启动参数 `--fnos`）下强依赖 `TRIM_APPDEST` 环境变量，监听 Unix Domain Socket 进行网关代理；原生模式（无启动参数，默认）下监听 TCP 端口 `2293`，并将日志和配置文件路径强制设为可执行文件同目录下。
 3. **路由统一**: 所有 API 及静态服务统归 `/app/docker-updater/` 组。
 4. **单工排队**: 容器升级、回滚加入单工任务队列，规避并发争抢。
 5. **探活与自愈**: 容器更新后休眠探活，失败则回退至 `{name}_backup_docker_updater` 旧容器并重启。
@@ -54,4 +54,4 @@
 ## 自动化构建与发布
 项目配置了 GitHub Actions 自动化工作流：
 * 当有代码推送（push）至 `main` 分支时，将自动执行构建与打包。
-* 自动发布并覆盖名为 `pre-release` 的预发布版本，始终只保留最新的那一版构建产物（`docker.updater.fpk`）。
+* 自动发布并覆盖名为 `pre-release` 的预发布版本，始终只保留最新的那一版构建产物（`docker.updater-x86.fpk` 与 `docker.updater-arm.fpk` 及其对应的原生 Linux 二进制 `docker-updater-linux-amd64` 与 `docker-updater-linux-arm64`）。

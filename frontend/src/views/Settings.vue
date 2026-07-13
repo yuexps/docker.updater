@@ -435,7 +435,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, h } from 'vue'
 import { NButton, NSwitch, NSelect, NInput, NInputNumber, NModal, useMessage, useDialog, NRadioGroup, NRadioButton } from 'naive-ui'
 import axios from 'axios'
 
@@ -670,11 +670,11 @@ const sendTestNotification = async () => {
     const errorMsg = err.response?.data?.error || err.message || '网络连接异常'
     const respBody = err.response?.data?.response
     if (respBody) {
-      let displayResp = respBody
-      if (displayResp.length > 80) {
-        displayResp = displayResp.substring(0, 80) + '...'
-      }
-      message.error(`测试发送失败: ${errorMsg} (平台响应: ${displayResp})`)
+      dialog.error({
+        title: '测试发送失败',
+        content: () => h('pre', { class: 'bg-slate-50/50 border border-slate-200/80 rounded-lg p-3 text-[11px] font-mono text-slate-600 whitespace-pre-wrap break-all overflow-x-auto mt-2 max-h-[220px] overflow-y-auto' }, respBody),
+        positiveText: '好的'
+      })
     } else {
       message.error(`测试发送失败: ${errorMsg}`)
     }

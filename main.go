@@ -21,11 +21,31 @@ import (
 var embeddedWebFS embed.FS
 
 func main() {
-	// 1. 初始化统一日志工具与目录
-	pkgVar := os.Getenv("TRIM_PKGVAR")
-	if pkgVar == "" {
-		pkgVar = "./data"
+	isFnos := false
+	for _, arg := range os.Args[1:] {
+		if arg == "--fnos" {
+			isFnos = true
+			break
+		}
 	}
+
+	var pkgVar string
+	if isFnos {
+		pkgVar = os.Getenv("TRIM_PKGVAR")
+		if pkgVar == "" {
+			pkgVar = "./data"
+		}
+	} else {
+		exePath, err := os.Executable()
+		if err != nil {
+			pkgVar = "./data"
+		} else {
+			pkgVar = filepath.Dir(exePath)
+		}
+		_ = os.Setenv("TRIM_PKGVAR", pkgVar)
+	}
+
+	// 1. 初始化统一日志工具与目录
 	utils.InitLogger(pkgVar)
 
 	broadcastWriter := &sysLogBroadcaster{}
@@ -61,28 +81,40 @@ func main() {
 	api.WebFS = embeddedWebFS
 	api.InitRoutes(r)
 
-	trimAppDest := os.Getenv("TRIM_APPDEST")
-	if trimAppDest == "" {
-		utils.LogFatal("缺失 TRIM_APPDEST 环境变量，程序终止")
-	}
+	if isFnos {
+		trimAppDest := os.Getenv("TRIM_APPDEST")
+		if trimAppDest == "" {
+			utils.LogFatal("缺失 TRIM_APPDEST 环境变量，程序终止")
+		}
 
-	_ = os.MkdirAll(trimAppDest, 0755)
-	socketPath := filepath.Join(trimAppDest, "web.sock")
-	_ = os.Remove(socketPath)
+		_ = os.MkdirAll(trimAppDest, 0755)
+		socketPath := filepath.Join(trimAppDest, "web.sock")
+		_ = os.Remove(socketPath)
 
-	listener, err := net.Listen("unix", socketPath)
-	if err != nil {
-		utils.LogFatal("无法监听 Unix Domain Socket %s: %s", socketPath, err.Error())
-	}
-	defer listener.Close()
+		listener, err := net.Listen("unix", socketPath)
+		if err != nil {
+			utils.LogFatal("无法监听 Unix Domain Socket %s: %s", socketPath, err.Error())
+		}
+		defer listener.Close()
 
-	if err := os.Chmod(socketPath, 0666); err != nil {
-		utils.LogWarning("无法配置文件权限: %s", err.Error())
-	}
+		if err := os.Chmod(socketPath, 0666); err != nil {
+			utils.LogWarning("无法配置文件权限: %s", err.Error())
+		}
 
-	utils.LogInfo("服务运行于 Unix Domain Socket 模式: %s", socketPath)
-	if err := r.RunListener(listener); err != nil {
-		utils.LogFatal("服务运行异常中断: %s", err.Error())
+		utils.LogInfo("服务运行于 Unix Domain Socket 模式: %s", socketPath)
+		if err := r.RunListener(listener); err != nil {
+			utils.LogFatal("服务运行异常中断: %s", err.Error())
+		}
+	} else {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "2293"
+		}
+		addr := ":" + port
+		utils.LogInfo("服务运行于 TCP 端口模式: %s", addr)
+		if err := r.Run(addr); err != nil {
+			utils.LogFatal("服务运行异常中断: %s", err.Error())
+		}
 	}
 }
 
