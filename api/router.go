@@ -507,6 +507,14 @@ func apiUpdateLogGet(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid container name format"})
 		return
 	}
+
+	// 优先在内存队列中查询该任务
+	task := service.GlobalQueue.GetTask(name)
+	if task != nil {
+		c.JSON(http.StatusOK, gin.H{"found": true, "logs": task.GetLogs()})
+		return
+	}
+
 	pkgVar := os.Getenv("TRIM_PKGVAR")
 	if pkgVar == "" {
 		pkgVar = "./data"

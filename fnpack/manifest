@@ -1,7 +1,7 @@
 appname               = docker.updater
-version               = 1.0.8
+version               = 1.0.9
 display_name          = Docker Updater
-desc                  = Docker 容器 版本检测、一键升级
+desc                  = Docker 容器更新检测与升级管理器，支持版本升级、备份回滚及消息通知。
 arch                  = x86_64
 source                = thirdparty
 maintainer            = yuexps

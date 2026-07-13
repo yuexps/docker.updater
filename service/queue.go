@@ -74,10 +74,24 @@ func (t *Task) RemoveListener(ch chan string) {
 	defer t.mu.Unlock()
 	for i, l := range t.listeners {
 		if l == ch {
-			t.listeners = append(t.listeners[:i], t.listeners[i+1:]...)
+			copy(t.listeners[i:], t.listeners[i+1:])
+			t.listeners[len(t.listeners)-1] = nil
+			t.listeners = t.listeners[:len(t.listeners)-1]
 			break
 		}
 	}
+}
+
+func (t *Task) SetStatus(status string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.Status = status
+}
+
+func (t *Task) GetStatus() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.Status
 }
 
 type QueueManager struct {
@@ -100,20 +114,14 @@ func InitQueueManager() {
 
 func (q *QueueManager) AddTask(name string, tType TaskType, targetImage string, isAuto bool) *Task {
 	q.mu.Lock()
-	needBroadcast := false
-	defer func() {
-		q.mu.Unlock()
-		if needBroadcast && GlobalObserver != nil {
-			GlobalObserver.OnStatusChange()
-		}
-	}()
-
 	if q.active != nil && q.active.ContainerName == name {
+		q.mu.Unlock()
 		return q.active
 	}
 
 	for _, t := range q.tasks {
 		if t.ContainerName == name {
+			q.mu.Unlock()
 			return t
 		}
 	}
@@ -129,8 +137,13 @@ func (q *QueueManager) AddTask(name string, tType TaskType, targetImage string, 
 		listeners:     make([]chan string, 0),
 	}
 	q.tasks = append(q.tasks, t)
+	q.mu.Unlock()
+
 	q.jobChan <- t
-	needBroadcast = true
+
+	if GlobalObserver != nil {
+		GlobalObserver.OnStatusChange()
+	}
 	return t
 }
 
@@ -145,9 +158,9 @@ func (q *QueueManager) CancelTask(name string) bool {
 	}()
 
 	for i, t := range q.tasks {
-		if t.ContainerName == name && t.Status == "waiting" {
+		if t.ContainerName == name && t.GetStatus() == "waiting" {
 			q.tasks = append(q.tasks[:i], q.tasks[i+1:]...)
-			t.Status = "cancelled"
+			t.SetStatus("cancelled")
 			needBroadcast = true
 			return true
 		}
@@ -182,7 +195,7 @@ func (q *QueueManager) GetTask(name string) *Task {
 func (q *QueueManager) worker() {
 	for task := range q.jobChan {
 		q.mu.Lock()
-		if task.Status == "cancelled" {
+		if task.GetStatus() == "cancelled" {
 			q.mu.Unlock()
 			continue
 		}
@@ -192,7 +205,7 @@ func (q *QueueManager) worker() {
 				break
 			}
 		}
-		task.Status = "running"
+		task.SetStatus("running")
 		q.active = task
 		q.mu.Unlock()
 
@@ -291,7 +304,7 @@ func (q *QueueManager) worker() {
 
 		q.mu.Lock()
 		if err != nil {
-			task.Status = "failed"
+			task.SetStatus("failed")
 			if task.Type == TaskUpdate && task.IsAuto {
 				d := db.DeferredUpdate{
 					ContainerName: task.ContainerName,
@@ -301,7 +314,7 @@ func (q *QueueManager) worker() {
 				task.AddLog("[SYSTEM] 自动升级失败，为了防止后台陷入死循环，已自动将该容器设为 [永久暂挂]")
 			}
 		} else {
-			task.Status = "success"
+			task.SetStatus("success")
 		}
 		q.active = nil
 		q.mu.Unlock()
@@ -334,7 +347,7 @@ func (q *QueueManager) worker() {
 				logContent := strings.Join(recentLogs, "\n")
 
 				SendNotification(taskName, typeName, statusName, logContent)
-			}(task.ContainerName, task.Type, task.Status, task.GetLogs())
+			}(task.ContainerName, task.Type, task.GetStatus(), task.GetLogs())
 		}
 
 		pkgVar := os.Getenv("TRIM_PKGVAR")
@@ -344,7 +357,7 @@ func (q *QueueManager) worker() {
 		logDir := filepath.Join(pkgVar, "logs")
 		_ = os.MkdirAll(logDir, 0755)
 		logFilePath := filepath.Join(logDir, fmt.Sprintf("%s.log", task.ContainerName))
-		_ = os.WriteFile(logFilePath, []byte(strings.Join(task.Logs, "\n")), 0644)
+		_ = os.WriteFile(logFilePath, []byte(strings.Join(task.GetLogs(), "\n")), 0644)
 		utils.LogInfo("任务队列: 容器 %s 升级流日志已持久化保存 (%d 行)", task.ContainerName, len(task.Logs))
 	}
 }

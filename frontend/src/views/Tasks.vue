@@ -59,8 +59,7 @@
           </div>
 
           <!-- 右侧状态指示与操作 -->
-          <div class="flex items-center shrink-0 sm:border-l sm:border-slate-100 sm:pl-6 pt-3 sm:pt-0 border-t border-slate-100 sm:border-t-0 justify-between sm:justify-end gap-3 select-none">
-            <span class="text-[12px] text-body-muted font-medium sm:hidden">操作 & 状态</span>
+          <div class="flex items-center shrink-0 sm:border-l sm:border-slate-100 sm:pl-6 pt-3 sm:pt-0 border-t border-slate-100 sm:border-t-0 justify-end gap-3 select-none">
             <div class="flex items-center gap-3">
               <n-button 
                 size="small" 
@@ -129,13 +128,13 @@
             </div>
 
             <!-- 右侧操作 -->
-            <div class="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center shrink-0 border-t border-slate-100 md:border-0 pt-3 md:pt-0 gap-3">
-              <span class="text-[12px] text-body-muted font-medium md:hidden">操作</span>
+            <div class="flex flex-row md:flex-col items-center md:items-end justify-end md:justify-center shrink-0 border-t border-slate-100 md:border-0 pt-3 md:pt-0 gap-3">
               <n-button 
                 type="error"
                 size="small"
                 ghost
                 round
+                :loading="cancelLoadingMap[task.container_name]"
                 class="active-scale text-[12px] font-medium px-4"
                 @click="cancelQueuedTask(task.container_name)"
               >
@@ -221,16 +220,22 @@ const closeLogModal = () => {
   }
 }
 
+const cancelLoadingMap = ref<Record<string, boolean>>({})
+
 const cancelQueuedTask = async (name: string) => {
+  if (cancelLoadingMap.value[name]) return
+  cancelLoadingMap.value[name] = true
   try {
     const res = await axios.post(`${apiBase}/tasks/cancel/${name}`)
     if (res.data.success) {
-      message.success(`已成功移成排队任务: ${name}`)
+      message.success(`已成功将容器移出排队: ${name}`)
     } else {
       message.error('无法取消该任务，可能它已开始运行')
     }
   } catch (err) {
     message.error('取消排队请求失败')
+  } finally {
+    cancelLoadingMap.value[name] = false
   }
 }
 

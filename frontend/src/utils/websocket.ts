@@ -139,12 +139,27 @@ class WsService {
   }
 
   // 注册全局状态更新回调，返回取消订阅函数
-  // 若缓存存在则立即同步回调，消除页面切换时 loading 永久等待
+  // 若缓存存在则立即同步回调，消除页面切换时 loading 永久等待；若缓存为空则主动异步拉取一次以防白屏
   subscribeStatus(callback: StatusCallback): () => void {
     this.listeners.add(callback);
     this.connect();
     if (this.cachedStatus !== null) {
       callback(this.cachedStatus);
+    } else {
+      fetch('/app/docker-updater/api/status')
+        .then(res => {
+          if (res.ok) return res.json();
+          throw new Error('HTTP status error');
+        })
+        .then(data => {
+          if (this.cachedStatus === null) {
+            this.cachedStatus = data;
+            callback(data);
+          }
+        })
+        .catch(err => {
+          console.warn('[WS-Init] 初始拉取状态失败:', err);
+        });
     }
     return () => {
       this.listeners.delete(callback);
