@@ -347,8 +347,28 @@ func apiSettingsGet(c *gin.Context) {
 
 	webhookURL := db.GetSetting("webhook_url", "")
 	webhookMethod := db.GetSetting("webhook_method", "POST")
-	webhookTemplate := db.GetSetting("webhook_template", utils.DefaultWebhookTemplate)
-	webhookTemplateCheck := db.GetSetting("webhook_template_check", utils.DefaultWebhookTemplateCheck)
+	webhookType := db.GetSetting("webhook_type", "custom")
+	if webhookType == "" {
+		webhookType = "custom"
+	}
+
+	getTpl := func(key string, wType string, isCheck bool) string {
+		val := db.GetSetting(key, "")
+		if val == "" {
+			val = utils.GetDefaultWebhookTemplate(wType, isCheck)
+		}
+		return val
+	}
+
+	webhookTemplateCustom := getTpl("webhook_template_custom", "custom", false)
+	webhookTemplateWechat := getTpl("webhook_template_wechat", "wechat", false)
+	webhookTemplateDingtalk := getTpl("webhook_template_dingtalk", "dingtalk", false)
+	webhookTemplateFeishu := getTpl("webhook_template_feishu", "feishu", false)
+
+	webhookTemplateCheckCustom := getTpl("webhook_template_check_custom", "custom", true)
+	webhookTemplateCheckWechat := getTpl("webhook_template_check_wechat", "wechat", true)
+	webhookTemplateCheckDingtalk := getTpl("webhook_template_check_dingtalk", "dingtalk", true)
+	webhookTemplateCheckFeishu := getTpl("webhook_template_check_feishu", "feishu", true)
 
 	c.JSON(http.StatusOK, gin.H{
 		"backup_enabled":              backupEnabled,
@@ -373,8 +393,15 @@ func apiSettingsGet(c *gin.Context) {
 		"smtp_body_template_check":     smtpBodyTemplateCheck,
 		"webhook_url":                 webhookURL,
 		"webhook_method":              webhookMethod,
-		"webhook_template":            webhookTemplate,
-		"webhook_template_check":      webhookTemplateCheck,
+		"webhook_type":                webhookType,
+		"webhook_template_custom":     webhookTemplateCustom,
+		"webhook_template_wechat":     webhookTemplateWechat,
+		"webhook_template_dingtalk":   webhookTemplateDingtalk,
+		"webhook_template_feishu":     webhookTemplateFeishu,
+		"webhook_template_check_custom":   webhookTemplateCheckCustom,
+		"webhook_template_check_wechat":   webhookTemplateCheckWechat,
+		"webhook_template_check_dingtalk": webhookTemplateCheckDingtalk,
+		"webhook_template_check_feishu":   webhookTemplateCheckFeishu,
 	})
 }
 

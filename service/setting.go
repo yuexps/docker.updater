@@ -39,24 +39,35 @@ type GlobalSettings struct {
 	SMTPBodyTemplateCheck    string   `json:"smtp_body_template_check"`
 	WebhookURL               string   `json:"webhook_url"`
 	WebhookMethod            string   `json:"webhook_method"`
-	WebhookTemplate          string   `json:"webhook_template"`
-	WebhookTemplateCheck     string   `json:"webhook_template_check"`
+	WebhookType              string   `json:"webhook_type"`
+	WebhookTemplateCustom    string   `json:"webhook_template_custom"`
+	WebhookTemplateWechat    string   `json:"webhook_template_wechat"`
+	WebhookTemplateDingtalk  string   `json:"webhook_template_dingtalk"`
+	WebhookTemplateFeishu    string   `json:"webhook_template_feishu"`
+	WebhookTemplateCheckCustom   string   `json:"webhook_template_check_custom"`
+	WebhookTemplateCheckWechat   string   `json:"webhook_template_check_wechat"`
+	WebhookTemplateCheckDingtalk string   `json:"webhook_template_check_dingtalk"`
+	WebhookTemplateCheckFeishu   string   `json:"webhook_template_check_feishu"`
 }
 
 // TestNotificationSettings 通知配置测试结构体。
 type TestNotificationSettings struct {
-	NotifyType          string `json:"notify_type"`
-	SMTPHost            string `json:"smtp_host"`
-	SMTPPort            string `json:"smtp_port"`
-	SMTPUsername        string `json:"smtp_username"`
-	SMTPPassword        string `json:"smtp_password"`
-	SMTPSSL             bool   `json:"smtp_ssl"`
-	SMTPTo              string `json:"smtp_to"`
-	SMTPSubjectTemplate string `json:"smtp_subject_template"`
-	SMTPBodyTemplate    string `json:"smtp_body_template"`
-	WebhookURL          string `json:"webhook_url"`
-	WebhookMethod       string `json:"webhook_method"`
-	WebhookTemplate     string `json:"webhook_template"`
+	NotifyType              string `json:"notify_type"`
+	SMTPHost                string `json:"smtp_host"`
+	SMTPPort                string `json:"smtp_port"`
+	SMTPUsername            string `json:"smtp_username"`
+	SMTPPassword            string `json:"smtp_password"`
+	SMTPSSL                 bool   `json:"smtp_ssl"`
+	SMTPTo                  string `json:"smtp_to"`
+	SMTPSubjectTemplate     string `json:"smtp_subject_template"`
+	SMTPBodyTemplate        string `json:"smtp_body_template"`
+	WebhookURL              string `json:"webhook_url"`
+	WebhookMethod           string `json:"webhook_method"`
+	WebhookType             string `json:"webhook_type"`
+	WebhookTemplateCustom    string `json:"webhook_template_custom"`
+	WebhookTemplateWechat    string `json:"webhook_template_wechat"`
+	WebhookTemplateDingtalk  string `json:"webhook_template_dingtalk"`
+	WebhookTemplateFeishu    string `json:"webhook_template_feishu"`
 }
 
 // SaveGlobalSettings 保存全局配置。
@@ -82,8 +93,15 @@ func SaveGlobalSettings(body GlobalSettings) error {
 	_ = db.SetSetting("smtp_body_template_check", body.SMTPBodyTemplateCheck)
 	_ = db.SetSetting("webhook_url", body.WebhookURL)
 	_ = db.SetSetting("webhook_method", body.WebhookMethod)
-	_ = db.SetSetting("webhook_template", body.WebhookTemplate)
-	_ = db.SetSetting("webhook_template_check", body.WebhookTemplateCheck)
+	_ = db.SetSetting("webhook_type", body.WebhookType)
+	_ = db.SetSetting("webhook_template_custom", body.WebhookTemplateCustom)
+	_ = db.SetSetting("webhook_template_wechat", body.WebhookTemplateWechat)
+	_ = db.SetSetting("webhook_template_dingtalk", body.WebhookTemplateDingtalk)
+	_ = db.SetSetting("webhook_template_feishu", body.WebhookTemplateFeishu)
+	_ = db.SetSetting("webhook_template_check_custom", body.WebhookTemplateCheckCustom)
+	_ = db.SetSetting("webhook_template_check_wechat", body.WebhookTemplateCheckWechat)
+	_ = db.SetSetting("webhook_template_check_dingtalk", body.WebhookTemplateCheckDingtalk)
+	_ = db.SetSetting("webhook_template_check_feishu", body.WebhookTemplateCheckFeishu)
 
 	if body.CheckType != "" {
 		_ = db.SetSetting("check_type", body.CheckType)
@@ -142,13 +160,27 @@ func SendTestNotification(body TestNotificationSettings) (string, error) {
 		logSb.WriteString("[SUCCESS] Webhook 测试数据包已成功投递。网络传输已完成。")
 		rawLogs := logSb.String()
 
-		template := body.WebhookTemplate
+		wType := body.WebhookType
+		if wType == "" {
+			wType = "custom"
+		}
+		var template string
+		switch wType {
+		case "feishu":
+			template = body.WebhookTemplateFeishu
+		case "wechat":
+			template = body.WebhookTemplateWechat
+		case "dingtalk":
+			template = body.WebhookTemplateDingtalk
+		default:
+			template = body.WebhookTemplateCustom
+		}
 		if template == "" {
-			template = utils.DefaultWebhookTemplate
+			template = utils.GetDefaultWebhookTemplate(wType, false)
 		}
 
 		payload := renderTemplate(template, "docker-updater", "测试通知", "测试成功", rawLogs, true)
-		return utils.SendWebhookNotification(body.WebhookURL, body.WebhookMethod, payload)
+		return utils.SendWebhookNotification(body.WebhookURL, body.WebhookMethod, payload, wType)
 	}
 
 	// 动态解析 SMTP 邮件网络参数

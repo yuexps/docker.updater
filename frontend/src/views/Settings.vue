@@ -179,13 +179,27 @@
 
             <!-- Webhook 设置项 -->
             <div v-if="settings.notify_type === 'webhook'" class="grid grid-cols-1 gap-4">
-              <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <div class="sm:col-span-3">
+              <div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                <div class="col-span-2 sm:col-span-1">
+                  <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">Webhook 平台</label>
+                  <n-select 
+                    v-model:value="settings.webhook_type"
+                    placeholder="选择推送平台" 
+                    :options="[
+                      { label: '自定义 Payload', value: 'custom' },
+                      { label: '飞书群机器人', value: 'feishu' },
+                      { label: '企业微信群机器人', value: 'wechat' },
+                      { label: '钉钉群机器人', value: 'dingtalk' }
+                    ]"
+                    @update:value="autoSaveSettings"
+                  />
+                </div>
+                <div class="col-span-2 sm:col-span-2">
                   <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">Webhook URL</label>
                   <n-input v-model:value="settings.webhook_url" placeholder="https://api.example.com/notify" class="rounded-lg"
                     @blur="autoSaveSettings" />
                 </div>
-                <div>
+                <div class="col-span-1 sm:col-span-1">
                   <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">请求方法</label>
                   <n-select v-model:value="settings.webhook_method" :options="[
                     { label: 'POST', value: 'POST' },
@@ -193,60 +207,41 @@
                     { label: 'PUT', value: 'PUT' }
                   ]" @update:value="autoSaveSettings" />
                 </div>
-              </div>
-                <div v-if="settings.auto_update_enabled">
-                  <div class="flex items-center justify-between mb-1.5">
-                    <label class="text-[12px] font-semibold tracking-wider text-slate-500 block">自定义 Payload 模板 (JSON 格式)</label>
-                    <n-select 
-                      placeholder="载入常用平台预设" 
-                      size="tiny" 
-                      style="width: 180px;"
-                      :options="[
-                        { label: '通用 JSON 格式', value: 'default' },
-                        { label: '企业微信群机器人', value: 'wechat' },
-                        { label: '钉钉群机器人', value: 'dingtalk' },
-                        { label: '飞书群机器人', value: 'feishu' }
-                      ]"
-                      @update:value="applyWebhookPreset"
-                    />
-                  </div>
-                  <n-input v-model:value="settings.webhook_template" type="textarea"
-                    :autosize="{ minRows: 4, maxRows: 10 }" placeholder="请输入 JSON 格式的通知 Payload..." class="rounded-lg"
-                    @blur="autoSaveSettings" />
-                </div>
-                <div v-if="!settings.auto_update_enabled">
-                  <div class="flex items-center justify-between mb-1.5">
-                    <label class="text-[12px] font-semibold tracking-wider text-slate-500 block">更新提醒 Payload 模板 (JSON 格式)</label>
-                    <n-select 
-                      placeholder="载入常用平台预设" 
-                      size="tiny" 
-                      style="width: 180px;"
-                      :options="[
-                        { label: '通用 JSON 格式', value: 'default' },
-                        { label: '企业微信群机器人', value: 'wechat' },
-                        { label: '钉钉群机器人', value: 'dingtalk' },
-                        { label: '飞书群机器人', value: 'feishu' }
-                      ]"
-                      @update:value="applyWebhookPreset"
-                    />
-                  </div>
-                  <n-input v-model:value="settings.webhook_template_check" type="textarea"
-                    :autosize="{ minRows: 4, maxRows: 10 }" placeholder="请输入 JSON 格式的通知 Payload..." class="rounded-lg"
-                    @blur="autoSaveSettings" />
-                </div>
-                <div class="text-[11px] text-body-muted mt-2 leading-relaxed">
-                  支持以下占位变量进行自动匹配：<br />
-                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{container_name}</code>（容器名）、
-                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{action_type}</code>（容器升级/回滚恢复/可用版本更新提醒 等）、
-                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{status}</code>（执行成功/执行失败/发现新版本 等）、
-                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{time}</code>（执行时间）、
-                  <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{logs}</code>（运行日志/更新详情，换行符会被自动转义）。
+                <div class="col-span-1 sm:col-span-1 flex items-end">
+                  <n-button type="primary" secondary round class="active-scale w-full font-semibold"
+                    :loading="testingEmail" @click="sendTestNotification">
+                    测试推送
+                  </n-button>
                 </div>
               </div>
+              <div v-if="settings.auto_update_enabled">
+                <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">{{ webhookTemplateTitle }}</label>
+                <n-input v-model:value="settings['webhook_template_' + settings.webhook_type]" type="textarea"
+                  :autosize="{ minRows: 4, maxRows: 10 }" placeholder="请输入 JSON 格式的通知 Payload..." class="rounded-lg"
+                  @blur="autoSaveSettings" />
+              </div>
+              <div v-if="!settings.auto_update_enabled">
+                <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">{{ webhookTemplateCheckTitle }}</label>
+                <n-input v-model:value="settings['webhook_template_check_' + settings.webhook_type]" type="textarea"
+                  :autosize="{ minRows: 4, maxRows: 10 }" placeholder="请输入 JSON 格式的通知 Payload..." class="rounded-lg"
+                  @blur="autoSaveSettings" />
+              </div>
+              <div class="text-[11px] text-body-muted mt-2 leading-relaxed">
+                <div v-if="settings.webhook_type === 'custom'" class="text-slate-500 font-medium mb-1">
+                  提示：自定义模式下，请根据您的 Webhook 提供商提供的参数格式进行配置。
+                </div>
+                支持以下占位变量进行自动匹配：<br />
+                <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{container_name}</code>（容器名）、
+                <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{action_type}</code>（容器升级/回滚恢复/可用版本更新提醒 等）、
+                <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{status}</code>（执行成功/执行失败/发现新版本 等）、
+                <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{time}</code>（执行时间）、
+                <code class="text-primary font-mono font-bold bg-slate-50 border border-hairline px-1 rounded">{logs}</code>（运行日志/更新详情，换行符会被自动转义）。
+              </div>
+            </div>
 
-            <!-- 发送测试按钮部分 -->
-            <div class="flex items-center justify-between sm:justify-start gap-6 mt-5">
-              <div v-if="settings.notify_type === 'email'" class="flex items-center gap-2">
+            <!-- 发送测试按钮部分 (仅在 Email 模式下显示在底部) -->
+            <div v-if="settings.notify_type === 'email'" class="flex items-center justify-between sm:justify-start gap-6 mt-5">
+              <div class="flex items-center gap-2">
                 <span class="text-[13px] text-slate-600 font-medium">启用 SSL 加密</span>
                 <n-switch v-model:value="settings.smtp_ssl" :disabled="smtpProvider !== 'custom'"
                   @update:value="autoSaveSettings" />
@@ -254,7 +249,7 @@
               <n-button secondary round size="small"
                 class="active-scale bg-surface-pearl border border-divider-soft text-slate-700 font-semibold"
                 :loading="testingEmail" @click="sendTestNotification">
-                {{ settings.notify_type === 'email' ? '发送测试邮件' : '发送测试 Webhook' }}
+                测试推送
               </n-button>
             </div>
           </div>
@@ -440,7 +435,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { NButton, NSwitch, NSelect, NInput, NInputNumber, NModal, useMessage, useDialog, NRadioGroup, NRadioButton } from 'naive-ui'
 import axios from 'axios'
 
@@ -471,8 +466,16 @@ interface SettingsData {
   smtp_body_template_check: string;
   webhook_url: string;
   webhook_method: string;
-  webhook_template: string;
-  webhook_template_check: string;
+  webhook_type: string;
+  webhook_template_custom: string;
+  webhook_template_wechat: string;
+  webhook_template_dingtalk: string;
+  webhook_template_feishu: string;
+  webhook_template_check_custom: string;
+  webhook_template_check_wechat: string;
+  webhook_template_check_dingtalk: string;
+  webhook_template_check_feishu: string;
+  [key: string]: any;
 }
 
 const settings = ref<SettingsData>({
@@ -498,8 +501,41 @@ const settings = ref<SettingsData>({
   smtp_body_template_check: '',
   webhook_url: '',
   webhook_method: 'POST',
-  webhook_template: '',
-  webhook_template_check: ''
+  webhook_type: 'custom',
+  webhook_template_custom: '',
+  webhook_template_wechat: '',
+  webhook_template_dingtalk: '',
+  webhook_template_feishu: '',
+  webhook_template_check_custom: '',
+  webhook_template_check_wechat: '',
+  webhook_template_check_dingtalk: '',
+  webhook_template_check_feishu: ''
+})
+
+const webhookTemplateTitle = computed(() => {
+  switch (settings.value.webhook_type) {
+    case 'feishu':
+      return '飞书群机器人通知模板'
+    case 'wechat':
+      return '企业微信群机器人通知模板'
+    case 'dingtalk':
+      return '钉钉群机器人通知模板'
+    default:
+      return '自定义推送服务模板'
+  }
+})
+
+const webhookTemplateCheckTitle = computed(() => {
+  switch (settings.value.webhook_type) {
+    case 'feishu':
+      return '飞书群机器人更新提醒模板'
+    case 'wechat':
+      return '企业微信群机器人更新提醒模板'
+    case 'dingtalk':
+      return '钉钉群机器人更新提醒模板'
+    default:
+      return '自定义推送服务更新提醒模板'
+  }
 })
 
 const registries = ref<any[]>([])
@@ -614,7 +650,11 @@ const sendTestNotification = async () => {
       smtp_body_template: settings.value.auto_update_enabled ? settings.value.smtp_body_template : settings.value.smtp_body_template_check,
       webhook_url: settings.value.webhook_url,
       webhook_method: settings.value.webhook_method,
-      webhook_template: settings.value.auto_update_enabled ? settings.value.webhook_template : settings.value.webhook_template_check
+      webhook_type: settings.value.webhook_type,
+      webhook_template_custom: settings.value.auto_update_enabled ? settings.value.webhook_template_custom : settings.value.webhook_template_check_custom,
+      webhook_template_wechat: settings.value.auto_update_enabled ? settings.value.webhook_template_wechat : settings.value.webhook_template_check_wechat,
+      webhook_template_dingtalk: settings.value.auto_update_enabled ? settings.value.webhook_template_dingtalk : settings.value.webhook_template_check_dingtalk,
+      webhook_template_feishu: settings.value.auto_update_enabled ? settings.value.webhook_template_feishu : settings.value.webhook_template_check_feishu
     })
     const respBody = res.data?.response
     if (settings.value.notify_type === 'email') {
@@ -656,18 +696,25 @@ const loadSettings = async () => {
     if (settings.value.webhook_method === undefined || settings.value.webhook_method === '') {
       settings.value.webhook_method = 'POST'
     }
-    if (settings.value.webhook_template === undefined) {
-      settings.value.webhook_template = ''
-    }
+
     if (settings.value.smtp_subject_template_check === undefined) {
       settings.value.smtp_subject_template_check = ''
     }
     if (settings.value.smtp_body_template_check === undefined) {
       settings.value.smtp_body_template_check = ''
     }
-    if (settings.value.webhook_template_check === undefined) {
-      settings.value.webhook_template_check = ''
+    if (settings.value.webhook_type === undefined || settings.value.webhook_type === '') {
+      settings.value.webhook_type = 'custom'
     }
+    const tplKeys = [
+      'webhook_template_custom', 'webhook_template_wechat', 'webhook_template_dingtalk', 'webhook_template_feishu',
+      'webhook_template_check_custom', 'webhook_template_check_wechat', 'webhook_template_check_dingtalk', 'webhook_template_check_feishu'
+    ]
+    tplKeys.forEach(k => {
+      if (settings.value[k] === undefined) {
+        settings.value[k] = ''
+      }
+    })
     detectProvider()
   } catch (err) {
     message.error('载入配置失败')
@@ -829,117 +876,7 @@ const deleteRegistry = (id: number) => {
   })
 }
 
-const webhookPresets = {
-  default: `{
-  "event": "docker_update",
-  "container": "{container_name}",
-  "action": "{action_type}",
-  "status": "{status}",
-  "time": "{time}",
-  "logs": "{logs}"
-}`,
-  wechat: `{
-  "msgtype": "markdown",
-  "markdown": {
-    "content": "### 【{status}】{container_name} {action_type}\\n> 容器名称: <font color=\\"info\\">{container_name}</font>\\n> 任务类型: <font color=\\"comment\\">{action_type}</font>\\n> 执行状态: {status}\\n> 执行时间: <font color=\\"comment\\">{time}</font>\\n\\n最近运行日志:\\n\`\`\`\\n{logs}\\n\`\`\`"
-  }
-}`,
-  dingtalk: `{
-  "msgtype": "markdown",
-  "markdown": {
-    "title": "【{status}】{container_name}",
-    "text": "### 【{status}】{container_name} {action_type}\\n- **容器名称**: {container_name}\\n- **任务类型**: {action_type}\\n- **执行状态**: {status}\\n- **执行时间**: {time}\\n\\n最近运行日志:\\n\`\`\`\\n{logs}\\n\`\`\`"
-  }
-}`,
-  feishu: `{
-  "msg_type": "post",
-  "content": {
-    "post": {
-      "zh_cn": {
-        "title": "【{status}】{container_name} {action_type}",
-        "content": [
-          [
-            {"tag": "text", "text": "容器名称: {container_name}\\n"},
-            {"tag": "text", "text": "任务类型: {action_type}\\n"},
-            {"tag": "text", "text": "执行状态: {status}\\n"},
-            {"tag": "text", "text": "执行时间: {time}\\n\\n"}
-          ],
-          [
-            {"tag": "text", "text": "最近运行日志:\\n{logs}"}
-          ]
-        ]
-      }
-    }
-  }
-}`
-}
 
-const webhookCheckPresets = {
-  default: `{
-  "event": "docker_update_check",
-  "container": "{container_name}",
-  "action": "{action_type}",
-  "status": "{status}",
-  "time": "{time}",
-  "logs": "{logs}"
-}`,
-  wechat: `{
-  "msgtype": "markdown",
-  "markdown": {
-    "content": "### 【发现新版本】{container_name} 可升级\\n> 镜像名称: <font color=\\"info\\">{container_name}</font>\\n> 通知类型: <font color=\\"comment\\">{action_type}</font>\\n> 当前状态: {status}\\n> 检测时间: <font color=\\"comment\\">{time}</font>\\n\\n可升级镜像明细:\\n\`\`\`\\n{logs}\\n\`\`\`"
-  }
-}`,
-  dingtalk: `{
-  "msgtype": "markdown",
-  "markdown": {
-    "title": "【发现新版本】{container_name}",
-    "text": "### 【发现新版本】{container_name} 可升级\\n- **镜像名称**: {container_name}\\n- **通知类型**: {action_type}\\n- **当前状态**: {status}\\n- **检测时间**: {time}\\n\\n可升级镜像明细:\\n\`\`\`\\n{logs}\\n\`\`\`"
-  }
-}`,
-  feishu: `{
-  "msg_type": "post",
-  "content": {
-    "post": {
-      "zh_cn": {
-        "title": "【发现新版本】{container_name} 可升级",
-        "content": [
-          [
-            {"tag": "text", "text": "镜像名称: {container_name}\\n"},
-            {"tag": "text", "text": "通知类型: {action_type}\\n"},
-            {"tag": "text", "text": "当前状态: {status}\\n"},
-            {"tag": "text", "text": "检测时间: {time}\\n\\n"}
-          ],
-          [
-            {"tag": "text", "text": "可升级镜像明细:\\n{logs}"}
-          ]
-        ]
-      }
-    }
-  }
-}`
-}
-
-const applyWebhookPreset = (val: string) => {
-  const isCheck = !settings.value.auto_update_enabled
-  const presetsObj = isCheck ? webhookCheckPresets : webhookPresets
-  if (!presetsObj[val as keyof typeof presetsObj]) return
-
-  dialog.warning({
-    title: '载入预设模板',
-    content: '载入新模板将覆盖您当前输入的 Payload 模板内容，确定继续吗？',
-    positiveText: '确定覆盖',
-    negativeText: '取消',
-    onPositiveClick: () => {
-      const presetContent = presetsObj[val as keyof typeof presetsObj]
-      if (isCheck) {
-        settings.value.webhook_template_check = presetContent
-      } else {
-        settings.value.webhook_template = presetContent
-      }
-      autoSaveSettings()
-    }
-  })
-}
 
 onMounted(() => {
   loadSettings()

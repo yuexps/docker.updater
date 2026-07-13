@@ -58,17 +58,28 @@ func SendNotification(containerName, actionType, statusName, logContent string) 
 		// Webhook 逻辑
 		url := db.GetSetting("webhook_url", "")
 		method := db.GetSetting("webhook_method", "POST")
+		webhookType := db.GetSetting("webhook_type", "custom")
+		if webhookType == "" {
+			webhookType = "custom"
+		}
+
 		var template string
 		if isCheck {
-			template = db.GetSetting("webhook_template_check", utils.DefaultWebhookTemplateCheck)
+			template = db.GetSetting("webhook_template_check_"+webhookType, "")
+			if template == "" {
+				template = utils.GetDefaultWebhookTemplate(webhookType, true)
+			}
 		} else {
-			template = db.GetSetting("webhook_template", utils.DefaultWebhookTemplate)
+			template = db.GetSetting("webhook_template_"+webhookType, "")
+			if template == "" {
+				template = utils.GetDefaultWebhookTemplate(webhookType, false)
+			}
 		}
 
 		payload := renderTemplate(template, containerName, actionType, statusName, logContent, true)
 
 		go func() {
-			_, _ = utils.SendWebhookNotification(url, method, payload)
+			_, _ = utils.SendWebhookNotification(url, method, payload, webhookType)
 		}()
 	}
 }
