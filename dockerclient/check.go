@@ -457,6 +457,7 @@ type checkItem struct {
 	composeProject string
 	imageName      string
 	imageID        string
+	rawRepoDigest  string
 	localDigest    string
 	localVersion   string
 	localPlatform  map[string]string
@@ -557,6 +558,7 @@ func ScanLocalHostForUpdates(ctx context.Context) ([]UpdateCheckResult, error) {
 			composeProject: c.Labels["com.docker.compose.project"],
 			imageName:      imageName,
 			imageID:        imageInspect.ID,
+			rawRepoDigest:  rawLocalDigest,
 			localDigest:    displayLocalDigest,
 			localVersion:   localVersion,
 			localPlatform: map[string]string{
@@ -584,7 +586,7 @@ func ScanLocalHostForUpdates(ctx context.Context) ([]UpdateCheckResult, error) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			remoteDigest, remoteConfigDigest, err := getRemoteDigest(it.imageName, it.localDigest, it.imageID, it.localPlatform)
+			remoteDigest, remoteConfigDigest, err := getRemoteDigest(it.imageName, it.rawRepoDigest, it.imageID, it.localPlatform)
 			resultCh <- checkResult{
 				item:               it,
 				remoteDigest:       remoteDigest,
@@ -609,25 +611,29 @@ func ScanLocalHostForUpdates(ctx context.Context) ([]UpdateCheckResult, error) {
 
 		hasUpdate := false
 		if res.remoteDigest != "" {
-			// 优先使用镜像规范 RepoDigest 比对
-			if res.item.localDigest != "" && res.item.localDigest != res.item.imageID {
-				hasUpdate = res.item.localDigest != res.remoteDigest
+			if res.item.rawRepoDigest != "" {
+				hasUpdate = res.item.rawRepoDigest != res.remoteDigest
+			} else if res.remoteConfigDigest != "" && res.item.imageID != "" {
+				// 无 RepoDigest 时对比 remoteConfigDigest 与本地 Image ID
+				localID := res.item.imageID
+				remoteID := res.remoteConfigDigest
+				if !strings.HasPrefix(localID, "sha256:") {
+					localID = "sha256:" + localID
+				}
+				if !strings.HasPrefix(remoteID, "sha256:") {
+					remoteID = "sha256:" + remoteID
+				}
+				hasUpdate = localID != remoteID
 			} else {
-				// 无 RepoDigest 时优先比对远程 Config.Digest 与本地 Image ID
-				if res.remoteConfigDigest != "" && res.item.imageID != "" {
-					localID := res.item.imageID
-					remoteID := res.remoteConfigDigest
-					if !strings.HasPrefix(localID, "sha256:") {
-						localID = "sha256:" + localID
-					}
-					if !strings.HasPrefix(remoteID, "sha256:") {
-						remoteID = "sha256:" + remoteID
-					}
-					hasUpdate = localID != remoteID
-				} else {
-					// 兜底查询本地是否存在此远程 Digest 镜像
-					_, _, err = cli.ImageInspectWithRaw(ctx, res.remoteDigest)
-					if err != nil {
+				// 本地 Docker 物理存储兜底校验
+				_, _, err = cli.ImageInspectWithRaw(ctx, res.remoteDigest)
+				if err != nil {
+					if res.remoteConfigDigest != "" {
+						_, _, errCfg := cli.ImageInspectWithRaw(ctx, res.remoteConfigDigest)
+						if errCfg != nil {
+							hasUpdate = true
+						}
+					} else {
 						hasUpdate = true
 					}
 				}

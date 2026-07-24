@@ -95,10 +95,10 @@ type RegistryCredential struct {
 ```
 
 ## 3. 升级检测机制与分层回退规范
-* **分层回退摘要解析 (Layered Fallback Digest Parsing)**:
-  - **首选算法**: 当镜像从 Registry 规范拉取时，使用 Docker 引擎中的 `RepoDigests` SHA256 摘要进行精确判定。
-  - **回退算法**: 当镜像由于本地 `docker build`、`docker load` 或离线导入导致 `RepoDigests` 为空时，系统自动提取镜像本身的 `Image ID`（即 Config SHA）作为 `LocalDigest` 的可靠替代，彻底消除系统中的“未知”误导。
-  - **比对精确性**: 在执行 `ScanLocalHostForUpdates` 时，当本地缺乏 `RepoDigest` 时，系统自动触发 `remoteConfigDigest vs localImageID` 双重校验，确保更新检测结果 100% 精确。
+* **分层回退摘要解析与同维度比对引擎 (Layered Fallback Digest Parsing & Hash Alignment)**:
+  - **首选算法 (RepoDigest 比对)**: 当镜像带有 `RepoDigests` 时，优先使用 Docker 引擎中的 `RepoDigests` SHA256 摘要与远端 `Manifest Digest` 进行精确比对。
+  - **回退算法 (同维度 Config ID 比对)**: 当镜像由于本地 `docker build`、`docker load`、离线导入或加速拉取重打标导致 `RepoDigests` 为空时，系统保留真实的空 Digest 状态，强制向 Registry 请求解析远端对应架构的 `config.digest`（Config ID），通过 `remoteConfigDigest vs localImageID` 进行同维度 1:1 比对，消除跨维度 Hash 导致的误判。
+  - **本地存储兜底校验**: 若比对未直接匹配，系统自动检查远端 Manifest Digest 是否已存在于本地 Docker 存储中且与当前容器匹配，从物理存储层面做最终校验，确保比对判定 100% 精确。
 
 ## 4. 加密与安全策略
 * **对称加密**: 使用 AES-256-GCM 算法。

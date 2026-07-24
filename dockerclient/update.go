@@ -580,12 +580,12 @@ func pullImageWithMirrors(ctx context.Context, cli *client.Client, imageName str
 				logChan <- fmt.Sprintf("[INFO] 临时加速拉取成功，正在为镜像打标回官方原名: %s", imageName)
 				if err := cli.ImageTag(ctx, tempImageName, imageName); err != nil {
 					logChan <- fmt.Sprintf("[WARN] 打标回原名失败: %s", err.Error())
-					_, _ = cli.ImageRemove(ctx, tempImageName, types.ImageRemoveOptions{PruneChildren: true})
+					_, _ = cli.ImageRemove(ctx, tempImageName, types.ImageRemoveOptions{PruneChildren: false})
 					continue
 				}
 
 				logChan <- fmt.Sprintf("[INFO] 正在清理临时镜像源冗余标签: %s", tempImageName)
-				_, _ = cli.ImageRemove(ctx, tempImageName, types.ImageRemoveOptions{PruneChildren: true})
+				_, _ = cli.ImageRemove(ctx, tempImageName, types.ImageRemoveOptions{PruneChildren: false})
 
 				return io.NopCloser(strings.NewReader(`{"status":"Success"}`)), nil
 			}
