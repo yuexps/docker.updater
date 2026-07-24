@@ -1,23 +1,21 @@
 <template>
-  <div 
-    class="apple-card rounded-lg p-4.5 flex flex-col justify-between min-h-50 hover:border-primary hover:shadow-[0_12px_28px_rgba(0,0,0,0.04)] transition-all duration-300 bg-white"
-  >
+  <div
+    class="apple-card rounded-lg p-4.5 flex flex-col justify-between min-h-50 hover:border-primary hover:shadow-[0_12px_28px_rgba(0,0,0,0.04)] transition-all duration-300 bg-white">
     <!-- 顶部主要信息展示 -->
     <div>
       <div class="flex items-start">
         <!-- 左侧：选择复选框与堆栈图标 -->
         <div class="flex items-center space-x-2 shrink-0">
-          <n-checkbox 
-            v-if="showCheckbox"
-            :checked="checked"
-            class="mr-1 touch-auto"
-            @update:checked="(val) => emit('update:checked', val)"
-          />
-          <div class="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-500 shadow-xs shrink-0">
+          <n-checkbox v-if="showCheckbox" :checked="checked" class="mr-1 touch-auto"
+            @update:checked="(val) => emit('update:checked', val)" />
+          <div
+            class="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-500 shadow-xs shrink-0">
             <svg class="w-5 h-5 text-slate-500" viewBox="0 0 32 32">
               <path d="M17 13V6H8v16h16v-9zm-7-5h5v5h-5zm0 7h5v5h-5zm12 5h-5v-5h5z" fill="currentColor"></path>
               <path d="M28 11h-9V2h9zm-7-2h5V4h-5z" fill="currentColor"></path>
-              <path d="M28 20h-2v2h2v6H4v-6h2v-2H4a2.002 2.002 0 0 0-2 2v6a2.002 2.002 0 0 0 2 2h24a2.002 2.002 0 0 0 2-2v-6a2.002 2.002 0 0 0-2-2z" fill="currentColor"></path>
+              <path
+                d="M28 20h-2v2h2v6H4v-6h2v-2H4a2.002 2.002 0 0 0-2 2v6a2.002 2.002 0 0 0 2 2h24a2.002 2.002 0 0 0 2-2v-6a2.002 2.002 0 0 0-2-2z"
+                fill="currentColor"></path>
               <circle cx="7" cy="25" r="1" fill="currentColor"></circle>
             </svg>
           </div>
@@ -27,21 +25,20 @@
         <div class="ml-3 flex-1 min-w-0">
           <!-- 第一行：容器名与运行状态 -->
           <div class="flex items-center justify-between min-w-0">
-            <div class="text-[16px] font-bold text-slate-800 tracking-tight truncate select-all" :title="container.name">
+            <div class="text-[16px] font-bold text-slate-800 tracking-tight truncate select-all"
+              :title="container.name">
               {{ container.name }}
             </div>
             <!-- 运行状态 -->
             <div class="shrink-0 ml-2">
-              <div 
-                class="flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-medium border"
-                :class="[
-                  container.running 
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
-                    : 'bg-slate-50 text-slate-500 border-slate-200'
-                ]"
-              >
+              <div class="flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-medium border" :class="[
+                container.running
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                  : 'bg-slate-50 text-slate-500 border-slate-200'
+              ]">
                 <span v-if="container.running" class="relative flex h-1.5 w-1.5">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span
+                    class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
                 </span>
                 <span v-else class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
@@ -53,11 +50,9 @@
           <!-- 第二行：镜像名与 Compose 徽章（放置于下方，可延伸至右侧） -->
           <div class="flex items-center gap-1.5 mt-1.5 min-w-0">
             <!-- 镜像名徽章 -->
-            <div 
+            <div
               class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-semibold text-slate-500 border border-slate-200/40 max-w-60 min-w-0 truncate cursor-pointer hover:bg-slate-200/60 hover:text-slate-700 transition-colors"
-              :title="'点击复制完整镜像: ' + container.image"
-              @click="copyText(container.image)"
-            >
+              :title="'点击复制完整镜像: ' + container.image" @click="copyText(container.image)">
               <svg class="w-2.5 h-2.5 mr-1 shrink-0 text-slate-400" viewBox="0 0 24 24">
                 <g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3"></path>
@@ -70,16 +65,15 @@
             </div>
 
             <!-- Compose 项目徽章 -->
-            <div 
-              v-if="container.compose_project" 
+            <div v-if="container.compose_project"
               class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-semibold text-slate-500 border border-slate-200/40 max-w-37.5 shrink-0 truncate"
-              :title="container.compose_project"
-            >
-              <svg class="w-2.5 h-2.5 mr-1 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="18" cy="5" r="3"/>
-                <circle cx="6" cy="12" r="3"/>
-                <circle cx="18" cy="19" r="3"/>
-                <path d="M9 10.5l6-3.5M9 13.5l6 3.5"/>
+              :title="container.compose_project">
+              <svg class="w-2.5 h-2.5 mr-1 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="18" cy="5" r="3" />
+                <circle cx="6" cy="12" r="3" />
+                <circle cx="18" cy="19" r="3" />
+                <path d="M9 10.5l6-3.5M9 13.5l6 3.5" />
               </svg>
               <span class="truncate">{{ container.compose_project }}</span>
             </div>
@@ -89,225 +83,193 @@
 
       <!-- 详细镜像元数据及比对 -->
       <div class="mt-4 space-y-2.5">
-        <!-- 有更新状态：本地与最新镜像 SHA 比对 -->
-        <div v-if="container.status === 'update'" class="bg-blue-50/40 border border-blue-100/50 rounded-xl p-3 h-19 flex flex-col justify-between">
-          <div class="flex items-center justify-between text-[11px] font-semibold text-slate-500">
-            <span>版本摘要比对</span>
-            <span class="text-[10px] font-normal text-slate-400" v-if="container.checked_at">检测于: {{ container.checked_at }}</span>
+        <!-- 版本摘要比对 -->
+        <div class="rounded-xl p-3 h-19 flex flex-col justify-between transition-colors duration-200" :class="[
+          container.status === 'update'
+            ? 'bg-blue-50/40 border border-blue-100/50'
+            : container.status === 'deferred'
+              ? 'bg-amber-50/40 border border-amber-100/50'
+              : 'bg-emerald-50/15 border border-emerald-100/40'
+        ]">
+          <!-- 标题与检测时间 -->
+          <div class="flex items-center justify-between text-[11px] font-semibold">
+            <span :class="[
+              container.status === 'update'
+                ? 'text-slate-500'
+                : container.status === 'deferred'
+                  ? 'text-amber-800'
+                  : 'text-emerald-800'
+            ]">版本摘要比对</span>
+            <span class="text-[10px] font-normal text-slate-400" v-if="container.checked_at">检测于: {{ formatCheckedAt(container.checked_at) }}</span>
           </div>
-          
-          <div class="flex items-center space-x-2 text-[11px] font-mono justify-between">
-            <div class="bg-white border border-slate-200 px-2.5 py-1 rounded-md text-slate-600 truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center" :title="'本地 Hash: ' + (container.local_digest || '无')">
+
+          <!-- 比对内容 -->
+          <div class="flex items-center justify-between text-[11px]">
+            <!-- 本地版本 -->
+            <div
+              class="bg-white border border-slate-200 px-2.5 py-1 rounded-md text-slate-600 font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center shadow-2xs"
+              :title="'本地 ' + (container.local_digest || '无')">
               <span class="text-[10px] text-slate-400 font-sans font-semibold mr-1.5 shrink-0">本地</span>
-              <span class="font-bold">{{ container.local_version || shortDigest(container.local_digest) || '未知' }}</span>
+              <span class="font-bold">{{ container.local_version || shortDigest(container.local_digest) || '未知'
+                }}</span>
             </div>
-            
-            <svg class="w-3.5 h-3.5 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M5 12h14M12 5l7 7-7 7"/>
-            </svg>
-            
-            <div class="bg-blue-500 text-white px-2.5 py-1 rounded-md truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center" :title="'最新 Hash: ' + (container.remote_digest || '无')">
-              <span class="text-[10px] text-blue-200 font-sans font-semibold mr-1.5 shrink-0">最新</span>
-              <span class="font-bold">{{ container.remote_version || shortDigest(container.remote_digest) || '未知' }}</span>
-            </div>
-          </div>
-        </div>
 
-        <!-- 已暂挂状态：仅显示暂挂时间提示 -->
-        <div v-else-if="container.status === 'deferred'" class="bg-amber-50/40 border border-amber-100/50 rounded-xl p-3 h-19 flex flex-col justify-between">
-          <div class="flex items-center justify-between text-[11px] font-semibold text-amber-700">
-            <span>版本摘要比对</span>
-            <span class="text-[10px] font-normal text-amber-500/80" v-if="container.checked_at">检测于: {{ container.checked_at }}</span>
-          </div>
-          
-          <div class="text-[11px] text-amber-700 flex items-center justify-center py-1 mt-1">
-            <svg class="w-3.5 h-3.5 mr-1.5 text-amber-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M12 6v6l4 2"/>
-            </svg>
-            <span class="font-medium">检测已暂挂至: {{ container.defer_until === 'forever' ? '无限期' : (container.defer_until || '无限期') }}</span>
-          </div>
-        </div>
+            <!-- 有更新 -->
+            <template v-if="container.status === 'update'">
+              <svg class="w-3.5 h-3.5 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
 
-        <!-- 当前已是最新状态展示 -->
-        <div v-else class="bg-emerald-50/10 border border-emerald-100/30 rounded-xl p-3 h-19 flex flex-col justify-between">
-          <div class="flex items-center justify-between text-[11px] font-semibold text-emerald-700">
-            <span>版本摘要比对</span>
-            <span class="text-[10px] font-normal text-slate-400" v-if="container.checked_at">检测于: {{ container.checked_at }}</span>
-          </div>
-          
-          <div class="text-[11px] text-emerald-700 flex items-center justify-center py-1 mt-1">
-            <svg class="w-3.5 h-3.5 mr-1.5 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-              <path d="M22 4L12 14.01l-3-3"/>
-            </svg>
-            <span class="font-medium">当前镜像已是最新版本</span>
+              <div
+                class="bg-blue-500 text-white px-2.5 py-1 rounded-md font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center shadow-2xs"
+                :title="'最新 ' + (container.remote_digest || '无')">
+                <span class="text-[10px] text-blue-200 font-sans font-semibold mr-1.5 shrink-0">最新</span>
+                <span class="font-bold">{{ container.remote_version || shortDigest(container.remote_digest) || '未知'
+                  }}</span>
+              </div>
+            </template>
+
+            <!-- 已暂挂 -->
+            <template v-else-if="container.status === 'deferred'">
+              <div class="text-[11px] text-amber-700 flex items-center shrink-0">
+                <svg class="w-3.5 h-3.5 mr-1.5 text-amber-600 shrink-0" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 6v6l4 2" />
+                </svg>
+                <span class="font-medium">暂挂至: {{ container.defer_until === 'forever' ? '无限期' :
+                  (container.defer_until || '无限期') }}</span>
+              </div>
+            </template>
+
+            <!-- 已是最新 -->
+            <template v-else>
+              <div class="text-[11px] text-emerald-700 flex items-center shrink-0">
+                <svg class="w-3.5 h-3.5 mr-1.5 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <path d="M22 4L12 14.01l-3-3" />
+                </svg>
+                <span class="font-medium">当前镜像已是最新</span>
+              </div>
+            </template>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 底部操作按钮区域（利用 actionsContainerRef 实时测量宽度防换行） -->
-    <div 
-      ref="actionsContainerRef"
-      class="mt-4 pt-3.5 border-t border-slate-100 flex flex-wrap gap-2 items-center min-w-0"
-    >
-      <!-- 循环渲染物理平铺的按钮，确保物理显示顺序始终符合规定 -->
+    <!-- 底部操作按钮 -->
+    <div ref="actionsContainerRef"
+      class="mt-4 pt-3.5 border-t border-slate-100 flex flex-wrap gap-2 items-center min-w-0">
       <template v-for="act in layoutResult.flatActions" :key="act.key">
         <!-- 升级 -->
-        <n-button 
-          v-if="act.key === 'update'"
-          type="primary"
-          size="small"
-          round
-          class="active-scale shadow-xs font-semibold shrink-0"
-          @click="emit('update')"
-        >
+        <n-button v-if="act.key === 'update'" type="primary" size="small" round
+          class="active-scale shadow-xs font-semibold shrink-0" @click="emit('update')">
           升级
         </n-button>
 
         <!-- 启动 -->
-        <n-button 
-          v-else-if="act.key === 'start'"
-          size="small"
-          round
-          secondary
-          type="success"
+        <n-button v-else-if="act.key === 'start'" size="small" round secondary type="success"
           class="active-scale font-medium animate-none shrink-0"
-          :disabled="operatingContainers?.has(container.name + ':start')"
-          @click="emit('lifecycle', 'start')"
-        >
+          :disabled="operatingContainers?.has(container.name + ':start')" @click="emit('lifecycle', 'start')">
           启动
         </n-button>
 
         <!-- 停止 -->
-        <n-button 
-          v-else-if="act.key === 'stop'"
-          size="small"
-          round
-          secondary
-          type="error"
+        <n-button v-else-if="act.key === 'stop'" size="small" round secondary type="error"
           class="active-scale font-medium animate-none shrink-0"
           :disabled="operatingContainers?.has(container.name + ':stop') || operatingContainers?.has(container.name + ':restart')"
-          @click="emit('lifecycle', 'stop')"
-        >
+          @click="emit('lifecycle', 'stop')">
           停止
         </n-button>
 
         <!-- 重启 -->
-        <n-button 
-          v-else-if="act.key === 'restart'"
-          size="small"
-          round
-          secondary
+        <n-button v-else-if="act.key === 'restart'" size="small" round secondary
           class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale font-medium animate-none shrink-0"
           :disabled="operatingContainers?.has(container.name + ':stop') || operatingContainers?.has(container.name + ':restart')"
-          @click="emit('lifecycle', 'restart')"
-        >
+          @click="emit('lifecycle', 'restart')">
           重启
         </n-button>
 
         <!-- 日志 -->
-        <n-button 
-          v-else-if="act.key === 'show-logs'"
-          size="small"
-          round
-          secondary
+        <n-button v-else-if="act.key === 'show-logs'" size="small" round secondary
           class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale font-medium animate-none shrink-0"
-          @click="emit('show-logs')"
-        >
+          @click="emit('show-logs')">
           日志
         </n-button>
 
-        <!-- 暂挂 -->
-        <n-button 
-          v-else-if="act.key === 'defer'"
-          size="small"
-          round
-          secondary
+        <!-- 检查更新 -->
+        <n-button v-else-if="act.key === 'check'" size="small" round secondary
           class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale font-medium animate-none shrink-0"
-          @click="emit('defer')"
-        >
+          :loading="operatingContainers?.has(container.name + ':check')"
+          :disabled="operatingContainers?.has(container.name + ':check')"
+          @click="emit('check')">
+          检查更新
+        </n-button>
+
+        <!-- 暂挂 -->
+        <n-button v-else-if="act.key === 'defer'" size="small" round secondary
+          class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale font-medium animate-none shrink-0"
+          @click="emit('defer')">
           暂挂
         </n-button>
 
         <!-- 恢复检测 -->
-        <n-button 
-          v-else-if="act.key === 'undefer'"
-          size="small"
-          round
-          secondary
+        <n-button v-else-if="act.key === 'undefer'" size="small" round secondary
           class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale font-medium animate-none shrink-0"
-          @click="emit('undefer')"
-        >
+          @click="emit('undefer')">
           恢复检测
         </n-button>
 
         <!-- 回滚 -->
-        <n-button 
-          v-else-if="act.key === 'rollback'"
-          size="small"
-          round
-          secondary
+        <n-button v-else-if="act.key === 'rollback'" size="small" round secondary
           class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale font-medium animate-none shrink-0"
-          @click="emit('rollback')"
-        >
+          @click="emit('rollback')">
           回滚
         </n-button>
 
         <!-- 清除备份 -->
-        <n-button 
-          v-else-if="act.key === 'delete-backup'"
-          size="small"
-          round
-          secondary
+        <n-button v-else-if="act.key === 'delete-backup'" size="small" round secondary
           class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale font-medium animate-none shrink-0"
-          title="删除回滚备份镜像释放空间"
-          @click="emit('delete-backup')"
-        >
+          title="删除回滚备份镜像释放空间" @click="emit('delete-backup')">
           清除备份
         </n-button>
 
         <!-- 指定版本升级 -->
-        <n-button 
-          v-else-if="act.key === 'update-to-version'"
-          size="small"
-          round
-          secondary
+        <n-button v-else-if="act.key === 'update-to-version'" size="small" round secondary
           class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale font-medium animate-none shrink-0"
-          @click="emit('update-to-version')"
-        >
+          @click="emit('update-to-version')">
           修改版本
         </n-button>
       </template>
 
       <!-- 更多操作下拉菜单 (固定渲染在末尾) -->
-      <n-dropdown 
-        v-if="layoutResult.dropdownItems.length > 0"
-        trigger="click" 
-        :options="layoutResult.dropdownItems" 
-        @select="handleMoreSelect"
-      >
-        <n-button 
-          size="small" 
-          round 
-          secondary 
-          class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale font-medium animate-none shrink-0"
-        >
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+      <n-dropdown v-if="layoutResult.dropdownItems.length > 0" trigger="click" :options="layoutResult.dropdownItems"
+        @select="handleMoreSelect">
+        <n-button size="small" round secondary
+          class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale font-medium animate-none shrink-0">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="1" />
+            <circle cx="19" cy="12" r="1" />
+            <circle cx="5" cy="12" r="1" />
           </svg>
         </n-button>
       </n-dropdown>
     </div>
 
     <!-- 隐藏测宽影子 DOM 容器：仅限 ResizeObserver 静态测量实际字号/字体的按钮物理边框 -->
-    <div class="absolute opacity-0 pointer-events-none select-none -z-50 flex items-center gap-2" style="top: -9999px; left: -9999px;">
+    <div class="absolute opacity-0 pointer-events-none select-none -z-50 flex items-center gap-2"
+      style="top: -9999px; left: -9999px;">
       <n-button :id="container.name + '-m2'" size="small" round secondary>测试</n-button>
       <n-button :id="container.name + '-m4'" size="small" round secondary>恢复检测</n-button>
       <n-button :id="container.name + '-mmore'" size="small" round secondary>
-        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+          <circle cx="5" cy="12" r="1" />
         </svg>
       </n-button>
     </div>
@@ -338,6 +300,7 @@ const emit = defineEmits<{
   (e: 'delete-backup'): void
   (e: 'show-logs'): void
   (e: 'update-to-version'): void
+  (e: 'check'): void
   (e: 'lifecycle', action: 'start' | 'stop' | 'restart'): void
 }>()
 
@@ -386,9 +349,14 @@ const allAvailableActions = computed(() => {
     list.push({ key: 'restart', label: '重启', width: realWidths.value.char2, priority: 3 })
   }
 
-  // 4. 日志 (优先级 4)
+  // 4. 日志
   if (props.mode === 'full') {
     list.push({ key: 'show-logs', label: '日志', width: realWidths.value.char2, priority: 4 })
+  }
+
+  // 4.5. 检查更新 (紧跟日志后面)
+  if (props.mode === 'full') {
+    list.push({ key: 'check', label: '检查更新', width: realWidths.value.char4, priority: 4.5 })
   }
 
   // 5. 暂挂 (优先级 5)
@@ -398,17 +366,17 @@ const allAvailableActions = computed(() => {
     list.push({ key: 'undefer', label: '恢复检测', width: realWidths.value.char4, priority: 5 })
   }
 
-  // 6. 回滚 (优先级 6)
+  // 6. 回滚
   if (props.mode === 'full' && props.container.has_rollback) {
     list.push({ key: 'rollback', label: '回滚', width: realWidths.value.char2, priority: 6 })
   }
 
-  // 7. 清除备份 (优先级 7)
+  // 7. 清除备份
   if (props.mode === 'full' && props.container.has_rollback) {
     list.push({ key: 'delete-backup', label: '清除备份', width: realWidths.value.char4, priority: 7 })
   }
 
-  // 8. 指定版本升级 (优先级 8)
+  // 8. 修改版本
   if (props.mode === 'full') {
     list.push({ key: 'update-to-version', label: '修改版本', width: realWidths.value.char4, priority: 8 })
   }
@@ -416,18 +384,16 @@ const allAvailableActions = computed(() => {
   return list.sort((a, b) => a.priority - b.priority)
 })
 
-// 物理宽度剪裁决策
+// 按钮裁剪决策
 const layoutResult = computed(() => {
   const list = allAvailableActions.value
   const limit = containerWidth.value
-  
-  // 计算全放开需要的宽度之和
+
   let totalWidthNeeded = 0
   for (let i = 0; i < list.length; i++) {
-    totalWidthNeeded += list[i].width + (i > 0 ? 8 : 0) // gap 为 8px
+    totalWidthNeeded += list[i].width + (i > 0 ? 8 : 0)
   }
 
-  // 状况一：当前可用空间完全能在一行塞下所有按钮
   if (totalWidthNeeded <= limit) {
     return {
       flatActions: list,
@@ -435,14 +401,13 @@ const layoutResult = computed(() => {
     }
   }
 
-  // 状况二：空间不足，需扣减出 更多下拉按钮宽度 和 8px (间距) 预留，依优先级裁剪
   const maxFlatWidth = limit - realWidths.value.more - 8
   const flatActions: ActionItem[] = []
   const dropdownItems: any[] = []
-  
+
   let currentWidth = 0
   let isFirst = true
-  
+
   for (let item of list) {
     const itemWidthWithGap = item.width + (isFirst ? 0 : 8)
     if (currentWidth + itemWidthWithGap <= maxFlatWidth) {
@@ -478,6 +443,8 @@ const handleMoreSelect = (key: string) => {
     emit('delete-backup')
   } else if (key === 'update-to-version') {
     emit('update-to-version')
+  } else if (key === 'check') {
+    emit('check')
   }
 }
 
@@ -489,6 +456,24 @@ const shortDigest = (digest: string) => {
     clean = clean.slice(7)
   }
   return clean.slice(0, 12)
+}
+
+// 格式化检测时间至本地时区
+const formatCheckedAt = (timeStr: string) => {
+  if (!timeStr) return ''
+  try {
+    const d = new Date(timeStr)
+    if (isNaN(d.getTime())) return timeStr
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const hours = String(d.getHours()).padStart(2, '0')
+    const minutes = String(d.getMinutes()).padStart(2, '0')
+    const seconds = String(d.getSeconds()).padStart(2, '0')
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+  } catch {
+    return timeStr
+  }
 }
 
 // 复制镜像名称到剪贴板
@@ -519,7 +504,7 @@ onMounted(() => {
     const m2 = document.getElementById(props.container.name + '-m2')
     const m4 = document.getElementById(props.container.name + '-m4')
     const mmore = document.getElementById(props.container.name + '-mmore')
-    
+
     if (m2 && m2.offsetWidth > 0) realWidths.value.char2 = m2.offsetWidth
     if (m4 && m4.offsetWidth > 0) realWidths.value.char4 = m4.offsetWidth
     if (mmore && mmore.offsetWidth > 0) realWidths.value.more = mmore.offsetWidth

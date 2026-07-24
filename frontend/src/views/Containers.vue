@@ -35,6 +35,7 @@
             @delete-backup="actions.deleteBackup(c.name)"
             @show-logs="actions.showLogs(c.name)"
             @update-to-version="actions.openUpdateVersionModal(c.name, c.image)"
+            @check="actions.checkContainer(c.name)"
           />
         </div>
       </div>

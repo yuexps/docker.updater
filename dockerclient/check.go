@@ -503,6 +503,14 @@ func ScanLocalHostForUpdates(ctx context.Context) ([]UpdateCheckResult, error) {
 
 	nowStr := time.Now().UTC().Format(time.RFC3339)
 
+	var deferList []db.DeferredUpdate
+	db.DB.Find(&deferList)
+	deferMap := make(map[string]db.DeferredUpdate)
+	today := time.Now().Format("2006-01-02")
+	for _, d := range deferList {
+		deferMap[d.ContainerName] = d
+	}
+
 	var items []checkItem
 	for _, c := range containers {
 		name := ""
@@ -510,6 +518,11 @@ func ScanLocalHostForUpdates(ctx context.Context) ([]UpdateCheckResult, error) {
 			name = strings.TrimPrefix(c.Names[0], "/")
 		}
 		if name == "" || strings.HasSuffix(name, "_backup_docker_updater") {
+			continue
+		}
+
+		if d, isDeferred := deferMap[name]; isDeferred && (d.Until == "forever" || d.Until > today) {
+			utils.LogInfo("容器 %s 当前处于暂挂检测状态 (暂挂至: %s)，自动跳过扫描", name, d.Until)
 			continue
 		}
 
@@ -719,4 +732,90 @@ func GetRemoteTags(imageName string) ([]string, error) {
 		filtered = filtered[:20]
 	}
 	return filtered, nil
+}
+
+// ScanSingleContainer 单独对指定容器进行版本比对检查。
+func ScanSingleContainer(ctx context.Context, targetName string) (*UpdateCheckResult, error) {
+	cli, err := NewLocalClient()
+	if err != nil {
+		return nil, err
+	}
+	defer cli.Close()
+
+	inspect, err := cli.ContainerInspect(ctx, targetName)
+	if err != nil {
+		return nil, fmt.Errorf("无法获取容器 %s 详情: %w", targetName, err)
+	}
+
+	imageName := inspect.Config.Image
+	imageInspect, _, err := cli.ImageInspectWithRaw(ctx, inspect.Image)
+	if err != nil {
+		return nil, fmt.Errorf("无法获取镜像 %s 详情: %w", imageName, err)
+	}
+
+	rawLocalDigest := ""
+	if len(imageInspect.RepoDigests) > 0 {
+		rawLocalDigest = getLocalDigestFromImage(imageInspect.RepoDigests, imageName)
+	}
+
+	displayLocalDigest := rawLocalDigest
+	if displayLocalDigest == "" && imageInspect.ID != "" {
+		displayLocalDigest = imageInspect.ID
+	}
+
+	localVersion := ExtractSemanticVersion(imageInspect.Config.Labels, imageInspect.Config.Env, imageName)
+	localPlatform := map[string]string{
+		"os":           imageInspect.Os,
+		"architecture": imageInspect.Architecture,
+		"variant":      imageInspect.Variant,
+	}
+
+	remoteDigest, remoteConfigDigest, err := getRemoteDigest(imageName, displayLocalDigest, imageInspect.ID, localPlatform)
+	if err != nil {
+		return nil, fmt.Errorf("获取远程 Registry 镜像 Digest 失败: %w", err)
+	}
+
+	hasUpdate := false
+	if remoteDigest != "" {
+		if displayLocalDigest != "" && displayLocalDigest != imageInspect.ID {
+			hasUpdate = displayLocalDigest != remoteDigest
+		} else {
+			if remoteConfigDigest != "" && imageInspect.ID != "" {
+				localID := imageInspect.ID
+				remoteID := remoteConfigDigest
+				if !strings.HasPrefix(localID, "sha256:") {
+					localID = "sha256:" + localID
+				}
+				if !strings.HasPrefix(remoteID, "sha256:") {
+					remoteID = "sha256:" + remoteID
+				}
+				hasUpdate = localID != remoteID
+			} else {
+				_, _, err = cli.ImageInspectWithRaw(ctx, remoteDigest)
+				if err != nil {
+					hasUpdate = true
+				}
+			}
+		}
+	}
+
+	remoteVersion := ExtractSemanticVersion(nil, nil, imageName)
+	nowStr := time.Now().UTC().Format(time.RFC3339)
+
+	composeProject := ""
+	if inspect.Config.Labels != nil {
+		composeProject = inspect.Config.Labels["com.docker.compose.project"]
+	}
+
+	return &UpdateCheckResult{
+		ContainerName:  targetName,
+		Image:          imageName,
+		LocalDigest:    displayLocalDigest,
+		RemoteDigest:   remoteDigest,
+		LocalVersion:   localVersion,
+		RemoteVersion:  remoteVersion,
+		CheckedAt:      nowStr,
+		ComposeProject: composeProject,
+		HasUpdate:      hasUpdate,
+	}, nil
 }

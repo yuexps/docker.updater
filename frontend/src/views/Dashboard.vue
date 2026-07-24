@@ -136,6 +136,7 @@
             @defer="actions.openDeferModal(c.name)"
             @undefer="actions.undeferContainer(c.name)"
             @update-to-version="actions.openUpdateVersionModal(c.name, c.image)"
+            @check="actions.checkContainer(c.name)"
           />
         </div>
       </div>

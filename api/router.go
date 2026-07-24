@@ -97,6 +97,7 @@ func InitRoutes(r *gin.Engine) {
 		api.GET("/ws", HandleWebSocket)
 		api.GET("/status", apiStatus)
 		api.POST("/check", apiCheck)
+		api.POST("/check/:name", apiCheckSingle)
 		api.GET("/update/:name", apiUpdate)
 		api.GET("/rollback/:name", apiRollback)
 		api.DELETE("/backup/:name", apiBackupDelete)
@@ -195,6 +196,44 @@ func apiCheck(c *gin.Context) {
 		_ = db.SetSetting("last_check_time", time.Now().UTC().Format(time.RFC3339))
 	}()
 	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// apiCheckSingle 针对单容器单独发起版本比对检查
+func apiCheckSingle(c *gin.Context) {
+	name := c.Param("name")
+	res, err := dockerclient.ScanSingleContainer(c.Request.Context(), name)
+	if err != nil {
+		utils.LogError("针对单容器 %s 发起版本比对检查失败: %s", name, err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if res.HasUpdate {
+		updateEntry := db.AvailableUpdate{
+			ContainerName:  res.ContainerName,
+			Image:          res.Image,
+			LocalDigest:    res.LocalDigest,
+			RemoteDigest:   res.RemoteDigest,
+			LocalVersion:   res.LocalVersion,
+			RemoteVersion:  res.RemoteVersion,
+			CheckedAt:      res.CheckedAt,
+			ComposeProject: res.ComposeProject,
+		}
+		db.DB.Save(&updateEntry)
+	} else {
+		db.DB.Delete(&db.AvailableUpdate{ContainerName: res.ContainerName})
+	}
+
+	if service.GlobalObserver != nil {
+		service.GlobalObserver.OnStatusChange()
+	}
+
+	utils.LogSuccess("针对单容器 %s 完成独立版本检查 (有更新: %t)", name, res.HasUpdate)
+	c.JSON(http.StatusOK, gin.H{
+		"ok":         true,
+		"has_update": res.HasUpdate,
+		"checked_at": res.CheckedAt,
+	})
 }
 
 // apiUpdate 升级容器，加入任务队列并输出流式日志进度
@@ -306,6 +345,9 @@ func apiBackupDelete(c *gin.Context) {
 
 	db.DB.Delete(&db.RollbackMetadata{ContainerName: name})
 	utils.LogSuccess("手动删除备份容器 %s 成功", backupName)
+	if service.GlobalObserver != nil {
+		service.GlobalObserver.OnStatusChange()
+	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -477,11 +519,14 @@ func apiDefer(c *gin.Context) {
 		Until:         untilDate,
 	}
 	if err := db.DB.Save(&d).Error; err != nil {
-			utils.LogError("延迟更新容器 %s 失败: %s", name, err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
+		utils.LogError("延迟更新容器 %s 失败: %s", name, err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	utils.LogSuccess("手动延迟更新容器 %s 成功 (延迟至: %s)", name, untilDate)
+	if service.GlobalObserver != nil {
+		service.GlobalObserver.OnStatusChange()
+	}
 	c.JSON(http.StatusOK, gin.H{"ok": true, "until": untilDate})
 }
 
@@ -494,6 +539,9 @@ func apiUndefer(c *gin.Context) {
 		return
 	}
 	utils.LogSuccess("撤销容器 %s 延迟更新设置成功", name)
+	if service.GlobalObserver != nil {
+		service.GlobalObserver.OnStatusChange()
+	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 

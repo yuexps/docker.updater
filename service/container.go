@@ -135,14 +135,15 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 		var checkedAt string
 		var deferUntil *string
 
+		if d, isDeferred := deferMap[name]; isDeferred && (d.Until == "forever" || d.Until > today) {
+			status = "deferred"
+			val := d.Until
+			deferUntil = &val
+		}
+
 		info, hasUpdate := availMap[name]
 		if hasUpdate {
 			checkedAt = info.CheckedAt
-			if d, isDeferred := deferMap[name]; isDeferred && (d.Until == "forever" || d.Until > today) {
-				status = "deferred"
-				val := d.Until
-				deferUntil = &val
-			}
 			if status != "deferred" {
 				status = "update"
 			}
@@ -171,6 +172,14 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 			remoteDigest = info.RemoteDigest
 			localVersion = info.LocalVersion
 			remoteVersion = info.RemoteVersion
+		} else {
+			if inspect.Image != "" {
+				localDigest = inspect.Image
+			}
+			localVersion = dockerclient.ExtractSemanticVersion(inspect.Config.Labels, inspect.Config.Env, imageName)
+			if status != "deferred" && checkedAt == "" {
+				checkedAt = db.GetSetting("last_check_time", "")
+			}
 		}
 
 		result = append(result, map[string]interface{}{

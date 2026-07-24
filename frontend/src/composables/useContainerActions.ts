@@ -259,6 +259,24 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     }
   }
 
+  // 检查单个容器更新
+  const checkContainer = async (name: string) => {
+    const actionKey = `${name}:check`
+    operatingContainers.value.add(actionKey)
+    try {
+      const res = await axios.post(`${apiBase}/check/${name}`)
+      if (res.data?.has_update) {
+        message?.success(`检测完毕: 容器 ${name} 发现新版本镜像`)
+      } else {
+        message?.success(`检测完毕: 容器 ${name} 当前镜像已是最新`)
+      }
+    } catch {
+      message?.error(`检测容器 ${name} 版本失败`)
+    } finally {
+      operatingContainers.value.delete(actionKey)
+    }
+  }
+
   const closeLogModal = () => {
     if (activeUnsubscribeLogs) {
       activeUnsubscribeLogs()
@@ -348,6 +366,7 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     scrollTerminal,
     cleanup,
     openUpdateVersionModal,
-    submitUpdateVersion
+    submitUpdateVersion,
+    checkContainer
   }
 }
