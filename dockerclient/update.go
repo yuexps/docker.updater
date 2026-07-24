@@ -259,12 +259,27 @@ func ApplyUpdate(ctx context.Context, name string, targetImage string, opts Upda
 		return "", err
 	}
 
-	time.Sleep(2 * time.Second)
-	newInspect, err := cli.ContainerInspect(ctx, name)
-	if err != nil || !newInspect.State.Running {
-		reason := "容器未持续运行或已退出"
+	logChan <- "[INFO] 正在观察新容器运行稳定性 (3s)..."
+	stayUp := true
+	var checkErr error
+	for i := 1; i <= 3; i++ {
+		time.Sleep(1 * time.Second)
+		newInspect, err := cli.ContainerInspect(ctx, name)
 		if err != nil {
-			reason = err.Error()
+			checkErr = err
+			stayUp = false
+			break
+		}
+		if !newInspect.State.Running {
+			checkErr = fmt.Errorf("容器未持续运行或已退出")
+			stayUp = false
+			break
+		}
+	}
+	if !stayUp {
+		reason := "容器未持续运行或已退出"
+		if checkErr != nil {
+			reason = checkErr.Error()
 		}
 		logChan <- fmt.Sprintf("[ERROR] 新容器健康检查失败: %s, 正在自动回滚...", reason)
 		_ = cli.ContainerRemove(ctx, newContainer.ID, types.ContainerRemoveOptions{Force: true})

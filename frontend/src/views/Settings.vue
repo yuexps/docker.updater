@@ -569,7 +569,8 @@ const hoursOptions = [
   { label: '保留 1 天', value: 24 },
   { label: '保留 3 天', value: 72 },
   { label: '保留 7 天', value: 168 },
-  { label: '保留 1 个月', value: 720 }
+  { label: '保留 1 个月', value: 720 },
+  { label: '永久保留', value: -1 }
 ]
 
 const checkTypeOptions = [

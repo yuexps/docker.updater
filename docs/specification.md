@@ -28,7 +28,7 @@ type Setting struct {
 }
 // 键映射:
 // - backup_enabled: 是否开启更新前备份 ("true"/"false")
-// - backup_hours: 备份保留时长 (整型，默认 "24")
+// - backup_hours: 备份保留时长 (整型小时数，-1 表示永久保留/无限期，默认 24)
 // - restart_stack: 升级后是否重启同一 Compose 栈的其他容器 ("true"/"false")
 // - auto_update_enabled: 是否开启定时自动升级 ("true"/"false")
 // - temp_mirrors: 临时镜像加速源列表 (JSON 数组，如 ["https://mirror.com"])
@@ -115,7 +115,7 @@ type RegistryCredential struct {
 | GET | `/update/:name` | 无 | SSE 日志流 (分块传输) | 异步将容器升级任务注册至全局队列。SSE 从日志缓冲区推流 |
 | GET | `/rollback/:name` | 无 | SSE 日志流 (分块传输) | 异步将容器回滚任务注册至全局队列 |
 | DELETE| `/backup/:name` | 无 | `{"ok": true}` | 物理删除指定的 `{name}_backup_docker_updater` 备份容器，清除相关数据库元数据 |
-| POST | `/defer/:name` | `{"days": int}` | `{"ok": true, "until": "YYYY-MM-DD"}` | 写入延迟截止日期约束 |
+| POST | `/defer/:name` | `{"days": int}` | `{"ok": true, "until": "YYYY-MM-DD"}` | 写入延迟截止日期约束（`days: -1` 表示永久暂挂/无限期，对应返回 `"until": "forever"`） |
 | POST | `/undefer/:name`| 无 | `{"ok": true}` | 移除延迟更新约束 |
 | GET | `/container/:name/logs`| 无 | `{"logs": string}` | 从 Docker 引擎获取容器的末尾 200 行标准输出与标准错误日志 |
 | GET | `/update-log/:name`| 无 | `{"found": bool, "logs": []string}` | `name` 参数必须符合正则 `^[a-zA-Z0-9][a-zA-Z0-9_.-]*$` 路径穿越过滤 |
@@ -124,7 +124,7 @@ type RegistryCredential struct {
 | DELETE| `/image` | 无 | `{"ok": true}` | Query 参数: `id` (镜像ID), `force` (是否强制删除)。校验运行状态与容器绑定关系 |
 | POST | `/images/prune` | 无 | `{"ok": true, "space_reclaimed": uint64, "deleted_count": int}` | 物理清理满足 `dangling=true` 且 `until=24h` 的虚悬无用镜像 |
 | GET | `/settings` | 无 | 系统配置 JSON | 动态对敏感 SMTP 凭据进行解密返回 |
-| POST | `/settings` | 系统配置 JSON | `{"ok": true}` | 对敏感 SMTP 密码加密存储；保存后自动触发热重载定时任务调度器 |
+| POST | `/settings` | 系统配置 JSON | `{"ok": true}` | 对敏感 SMTP 密码加密存储；对比保存前后配置差异并仅记录修改项增量日志，随后触发热重载定时任务调度器 |
 | POST | `/settings/test-email`| 测试邮件配置 | `{"ok": true}` | 建立临时协议信道发送联通性测试邮件 |
 | GET | `/settings/system-mirrors`| 无 | `[]string` | 只读解析宿主机 `/etc/docker/daemon.json` 中的 `registry-mirrors` |
 | GET | `/tasks` | 无 | `{"queued": [], "active": {}}` | 获取排队队列的当前待执行及活动任务详情 |

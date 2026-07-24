@@ -1,13 +1,6 @@
 <template>
-  <n-modal 
-    v-model:show="showModel" 
-    preset="dialog" 
-    title="暂挂升级检测"
-    positive-text="确认暂挂"
-    negative-text="取消"
-    class="rounded-lg"
-    @positive-click="emit('submit')"
-  >
+  <n-modal v-model:show="showModel" preset="dialog" title="暂挂升级检测" positive-text="确认暂挂" negative-text="取消"
+    class="rounded-lg" @positive-click="emit('submit')">
     <div class="py-4 select-none">
       <label class="text-[12px] font-semibold uppercase tracking-wider text-body-muted block mb-2">搁置升级比对时长</label>
       <n-select v-model:value="daysModel" :options="deferOptions" />
@@ -45,6 +38,6 @@ const deferOptions = [
   { label: '暂挂 14 天', value: 14 },
   { label: '暂挂 30 天', value: 30 },
   { label: '暂挂 90 天', value: 90 },
-  { label: '永久暂挂', value: 0 }
+  { label: '永久暂挂', value: -1 }
 ]
 </script>

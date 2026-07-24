@@ -265,7 +265,12 @@ func (q *QueueManager) worker() {
 				db.DB.Create(&history)
 
 				if opts.BackupEnabled && policyStr != "" {
-					expiresAt := time.Now().Add(time.Duration(backupHours) * time.Hour).UTC().Format(time.RFC3339)
+					var expiresAt string
+					if backupHours < 0 {
+						expiresAt = "forever"
+					} else {
+						expiresAt = time.Now().Add(time.Duration(backupHours) * time.Hour).UTC().Format(time.RFC3339)
+					}
 					rollbackMeta := db.RollbackMetadata{
 						ContainerName: task.ContainerName,
 						BackedUpAt:    time.Now().UTC().Format(time.RFC3339),

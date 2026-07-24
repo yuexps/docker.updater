@@ -65,7 +65,7 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     logModalVisible.value = true
     logRunning.value = true
 
-    const url = targetImage 
+    const url = targetImage
       ? `${apiBase}/update/${name}?target_image=${encodeURIComponent(targetImage)}`
       : `${apiBase}/update/${name}`
 
@@ -99,7 +99,7 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
       logLines.value.push(`========================================`)
       logLines.value.push(`[INFO] 正在升级当前服务 (${i + 1}/${targets.length}): ${name}`)
       scrollTerminal()
-      
+
       await new Promise<void>((resolve) => {
         axios.get(`${apiBase}/update/${name}`).catch(() => {
           logLines.value.push(`[ERROR] 触发容器 ${name} 升级失败`)
@@ -127,7 +127,7 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
   const rollbackContainer = (name: string) => {
     dialog?.warning({
       title: '确认回滚容器',
-      content: `你是否确定要将 ${name} 重建还原为上一次升级前的备份镜像？该过程会造成容器短暂中断重启。`,
+      content: `你是否确定要将 ${name} 重建还原为上一次升级前的备份镜像？该过程会造成容器短暂中断重启。并且旧版本应用可能无法兼容新数据结构。`,
       positiveText: '确认还原',
       negativeText: '取消',
       onPositiveClick: () => {
@@ -348,7 +348,7 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     updateVersionTarget,
     updateVersionCurrentImage,
     updateVersionValue,
-    
+
     shortDigest,
     copyToClipboard,
     updateContainer,
