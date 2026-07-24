@@ -178,6 +178,8 @@ func apiCheck(c *gin.Context) {
 						Image:          res.Image,
 						LocalDigest:    res.LocalDigest,
 						RemoteDigest:   res.RemoteDigest,
+						LocalVersion:   res.LocalVersion,
+						RemoteVersion:  res.RemoteVersion,
 						CheckedAt:      res.CheckedAt,
 						ComposeProject: res.ComposeProject,
 					}
@@ -644,12 +646,18 @@ func apiImagesGet(c *gin.Context) {
 		}
 
 		arch := ""
+		ver := ""
 		inspect, _, err := cli.ImageInspectWithRaw(c, item.ID)
 		if err == nil {
 			arch = inspect.Architecture
 			if inspect.Variant != "" {
 				arch = arch + "/" + inspect.Variant
 			}
+			tagStr := ""
+			if len(tags) > 0 && tags[0] != "<none>:<none>" {
+				tagStr = tags[0]
+			}
+			ver = dockerclient.ExtractSemanticVersion(inspect.Config.Labels, inspect.Config.Env, tagStr)
 		}
 
 		result = append(result, gin.H{
@@ -659,6 +667,7 @@ func apiImagesGet(c *gin.Context) {
 			"created":      item.Created,
 			"containers":   associated,
 			"architecture": arch,
+			"version":      ver,
 		})
 	}
 

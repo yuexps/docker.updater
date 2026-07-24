@@ -4,7 +4,7 @@
         "items": [
             {
                 "type": "tips",
-                "helpText": "您即将卸载 Lucky 应用。请选择如何处理应用数据："
+                "helpText": "您即将卸载 Docker Updater 应用。请选择如何处理应用数据："
             },
             {
                 "type": "radio",
@@ -30,7 +30,7 @@
             },
             {
                 "type": "tips",
-                "helpText": "<strong>警告：</strong> 选择删除数据后，Lucky 所有配置和数据将永久丢失，无法恢复。"
+                "helpText": "<strong>警告：</strong> 选择删除数据后，Docker Updater 所有配置和数据将永久丢失，无法恢复。"
             }
         ]
     }

@@ -16,6 +16,8 @@ type AvailableUpdate struct {
 	Image          string
 	LocalDigest    string
 	RemoteDigest   string
+	LocalVersion   string
+	RemoteVersion  string
 	CheckedAt      string
 	ComposeProject string
 }

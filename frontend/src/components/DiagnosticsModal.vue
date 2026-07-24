@@ -17,7 +17,7 @@
       </div>
     </template>
     
-    <div class="bg-black text-slate-300 p-4 rounded-xl font-mono text-[12px] h-[300px] sm:h-[400px] overflow-y-auto border border-slate-850">
+    <div class="bg-black text-slate-300 p-4 rounded-xl font-mono text-[12px] h-75 sm:h-100 overflow-y-auto border border-slate-850">
       <pre class="whitespace-pre-wrap font-sans text-[12px] leading-relaxed select-all">{{ logs }}</pre>
     </div>
     

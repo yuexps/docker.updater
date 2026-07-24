@@ -19,7 +19,6 @@ import (
 	"github.com/docker/docker/api/types"
 )
 
-
 // CredentialsProvider 凭证获取接口。
 type CredentialsProvider interface {
 	GetCredential(ctx context.Context, registry string) (username, password string, ok bool)
@@ -402,6 +401,56 @@ func getLocalDigestFromImage(repoDigests []string, imageName string) string {
 	return ""
 }
 
+// semverRegexp 提取严格的语义化版本。
+var semverRegexp = regexp.MustCompile(`^v?(\d+(?:\.\d+)+(?:-[a-zA-Z0-9._-]+)?)`)
+
+// ExtractSemanticVersion 解析镜像标签、Tag 或环境变量中的版本号。
+func ExtractSemanticVersion(labels map[string]string, env []string, imageName string) string {
+	// 1. OCI Labels
+	if labels != nil {
+		labelKeys := []string{
+			"org.opencontainers.image.version",
+			"org.label-schema.version",
+			"version",
+			"app.kubernetes.io/version",
+		}
+		for _, key := range labelKeys {
+			if val, ok := labels[key]; ok && strings.TrimSpace(val) != "" {
+				val = strings.TrimSpace(val)
+				if semverRegexp.MatchString(val) {
+					return val
+				}
+			}
+		}
+	}
+
+	// 2. Tag
+	if imageName != "" {
+		_, _, tag := parseImage(imageName)
+		if tag != "" && tag != "latest" && tag != "main" && tag != "master" && tag != "dev" && tag != "test" && tag != "stable" {
+			match := semverRegexp.FindString(tag)
+			if match != "" {
+				return match
+			}
+		}
+	}
+
+	// 3. Env
+	for _, e := range env {
+		parts := strings.SplitN(e, "=", 2)
+		if len(parts) == 2 {
+			k, v := parts[0], strings.TrimSpace(parts[1])
+			if (k == "VERSION" || k == "APP_VERSION" || k == "RELEASE_VERSION" || k == "BUILD_VERSION") && v != "" {
+				if semverRegexp.MatchString(v) || len(v) <= 15 {
+					return v
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
 // checkItem 待检查容器项结构体。
 type checkItem struct {
 	containerName  string
@@ -409,6 +458,7 @@ type checkItem struct {
 	imageName      string
 	imageID        string
 	localDigest    string
+	localVersion   string
 	localPlatform  map[string]string
 }
 
@@ -417,6 +467,7 @@ type checkResult struct {
 	item               checkItem
 	remoteDigest       string
 	remoteConfigDigest string
+	remoteVersion      string
 	err                error
 }
 
@@ -426,6 +477,8 @@ type UpdateCheckResult struct {
 	Image          string
 	LocalDigest    string
 	RemoteDigest   string
+	LocalVersion   string
+	RemoteVersion  string
 	CheckedAt      string
 	ComposeProject string
 	HasUpdate      bool
@@ -473,17 +526,26 @@ func ScanLocalHostForUpdates(ctx context.Context) ([]UpdateCheckResult, error) {
 			continue
 		}
 
-		localDigest := ""
+		rawLocalDigest := ""
 		if len(imageInspect.RepoDigests) > 0 {
-			localDigest = getLocalDigestFromImage(imageInspect.RepoDigests, imageName)
+			rawLocalDigest = getLocalDigestFromImage(imageInspect.RepoDigests, imageName)
 		}
+
+		// 若 RepoDigests 缺失，以镜像 ID 作为回退摘要
+		displayLocalDigest := rawLocalDigest
+		if displayLocalDigest == "" && imageInspect.ID != "" {
+			displayLocalDigest = imageInspect.ID
+		}
+
+		localVersion := ExtractSemanticVersion(imageInspect.Config.Labels, imageInspect.Config.Env, imageName)
 
 		items = append(items, checkItem{
 			containerName:  name,
 			composeProject: c.Labels["com.docker.compose.project"],
 			imageName:      imageName,
 			imageID:        imageInspect.ID,
-			localDigest:    localDigest,
+			localDigest:    displayLocalDigest,
+			localVersion:   localVersion,
 			localPlatform: map[string]string{
 				"os":           imageInspect.Os,
 				"architecture": imageInspect.Architecture,
@@ -534,10 +596,11 @@ func ScanLocalHostForUpdates(ctx context.Context) ([]UpdateCheckResult, error) {
 
 		hasUpdate := false
 		if res.remoteDigest != "" {
-			if res.item.localDigest != "" {
+			// 优先使用镜像规范 RepoDigest 比对
+			if res.item.localDigest != "" && res.item.localDigest != res.item.imageID {
 				hasUpdate = res.item.localDigest != res.remoteDigest
 			} else {
-				// 优先比对远程 Config.Digest 与本地 Image ID
+				// 无 RepoDigest 时优先比对远程 Config.Digest 与本地 Image ID
 				if res.remoteConfigDigest != "" && res.item.imageID != "" {
 					localID := res.item.imageID
 					remoteID := res.remoteConfigDigest
@@ -558,9 +621,22 @@ func ScanLocalHostForUpdates(ctx context.Context) ([]UpdateCheckResult, error) {
 			}
 		}
 
+		remoteVersion := ExtractSemanticVersion(nil, nil, res.item.imageName)
+
 		if hasUpdate {
-			utils.LogInfo("服务 %s 存在可用升级 (本地: %s, 远端: %s)",
-				res.item.containerName, res.item.localDigest, res.remoteDigest)
+			localVerPart := ""
+			if res.item.localVersion != "" {
+				localVerPart = "version:" + res.item.localVersion + " "
+			}
+			remoteVerPart := ""
+			if remoteVersion != "" {
+				remoteVerPart = "version:" + remoteVersion + " "
+			}
+			localHash := strings.TrimPrefix(res.item.localDigest, "sha256:")
+			remoteHash := strings.TrimPrefix(res.remoteDigest, "sha256:")
+
+			utils.LogInfo("服务 %s 存在可用升级 (本地: %ssha256:%s, 远端: %ssha256:%s)",
+				res.item.containerName, localVerPart, localHash, remoteVerPart, remoteHash)
 			updateCount++
 		}
 
@@ -569,6 +645,8 @@ func ScanLocalHostForUpdates(ctx context.Context) ([]UpdateCheckResult, error) {
 			Image:          res.item.imageName,
 			LocalDigest:    res.item.localDigest,
 			RemoteDigest:   res.remoteDigest,
+			LocalVersion:   res.item.localVersion,
+			RemoteVersion:  remoteVersion,
 			CheckedAt:      nowStr,
 			ComposeProject: res.item.composeProject,
 			HasUpdate:      hasUpdate,

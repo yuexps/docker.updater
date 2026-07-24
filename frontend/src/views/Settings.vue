@@ -38,7 +38,7 @@
               <div class="text-[14px] font-bold text-slate-700 leading-snug">备份自动清除周期</div>
               <div class="text-[12px] text-body-muted mt-1 leading-relaxed">超出保留期后，系统会自动物理清除旧容器备份以释放磁盘空间。</div>
             </div>
-            <div class="w-full sm:w-[180px] shrink-0">
+            <div class="w-full sm:w-45 shrink-0">
               <n-select v-model:value="settings.backup_hours" :options="hoursOptions"
                 @update:value="autoSaveSettings" />
             </div>
@@ -357,7 +357,7 @@
 
     <!-- Registry Credentials Modal -->
     <n-modal v-model:show="registryModalVisible" transform-origin="center">
-      <div class="w-[90vw] max-w-[460px] bg-white rounded-lg border border-hairline p-6 shadow-xl relative select-none">
+      <div class="w-[90vw] max-w-115 bg-white rounded-lg border border-hairline p-6 shadow-xl relative select-none">
         <div class="text-[18px] font-bold text-slate-800 tracking-tight mb-4">
           {{ editingRegistryId ? '编辑仓库凭据' : '添加仓库凭据' }}
         </div>
@@ -393,7 +393,7 @@
 
     <!-- Add Mirror Modal -->
     <n-modal v-model:show="mirrorModalVisible" transform-origin="center">
-      <div class="w-[90vw] max-w-[460px] bg-white rounded-lg border border-hairline p-6 shadow-xl relative select-none">
+      <div class="w-[90vw] max-w-115 bg-white rounded-lg border border-hairline p-6 shadow-xl relative select-none">
         <div class="text-[18px] font-bold text-slate-800 tracking-tight mb-4">
           添加镜像加速源
         </div>

@@ -71,7 +71,7 @@
                 </span>
               </div>
               <div class="flex items-center space-x-1.5 text-body-muted text-[12px] font-mono break-all pr-2">
-                <span class="truncate max-w-[280px] sm:max-w-md md:max-w-lg lg:max-w-xl select-all" :title="h.Image">{{ h.Image }}</span>
+                <span class="truncate max-w-70 sm:max-w-md md:max-w-lg lg:max-w-xl select-all" :title="h.Image">{{ h.Image }}</span>
                 <button 
                   class="text-slate-400 hover:text-primary transition-colors p-0.5 rounded hover:bg-slate-100 cursor-pointer shrink-0"
                   title="复制镜像名称"

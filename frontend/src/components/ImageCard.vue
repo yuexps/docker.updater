@@ -1,6 +1,6 @@
 <template>
   <div 
-    class="apple-card rounded-lg p-4.5 flex flex-col justify-between min-h-[175px] hover:border-primary hover:shadow-[0_12px_28px_rgba(0,0,0,0.04)] transition-all duration-300 bg-white"
+    class="apple-card rounded-lg p-4.5 flex flex-col justify-between min-h-43.75 hover:border-primary hover:shadow-[0_12px_28px_rgba(0,0,0,0.04)] transition-all duration-300 bg-white"
     :class="{'border-amber-400/60 bg-amber-50/10': isDangling}"
   >
     <!-- 顶部主要信息 -->
@@ -36,7 +36,7 @@
                     +{{ image.tags.length - 1 }}
                   </span>
                 </template>
-                <div class="space-y-1 font-mono text-[11px] p-1 max-w-[280px]">
+                <div class="space-y-1 font-mono text-[11px] p-1 max-w-70">
                   <div class="font-semibold text-slate-300 border-b border-slate-700 pb-1 mb-1">所有关联标签:</div>
                   <div v-for="tag in image.tags" :key="tag" class="text-white break-all">{{ tag }}</div>
                 </div>
@@ -46,7 +46,7 @@
             <!-- 主 Tag 显示 -->
             <div class="mt-1 flex items-center space-x-1.5">
               <span 
-                class="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50/80 text-[10px] font-bold text-primary border border-blue-100/50 truncate max-w-[150px]"
+                class="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50/80 text-[10px] font-bold text-primary border border-blue-100/50 truncate max-w-37.5"
                 :class="{'bg-amber-50 text-amber-600 border-amber-200/50': isDangling}"
                 :title="parsedInfo.tag"
               >
@@ -104,15 +104,15 @@
         <!-- 第二行属性：容器占用 与 架构 -->
         <div class="grid grid-cols-2 gap-4">
           <!-- 容器占用（左侧） -->
-          <div class="flex flex-col">
+          <div class="flex flex-col min-w-0">
             <span class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">容器占用</span>
-            <div class="mt-1 flex flex-wrap gap-1.5 min-h-[22px]">
+            <div class="mt-1 flex flex-wrap gap-1.5 min-h-5.5 items-center min-w-0">
               <template v-if="isInUse">
                 <!-- 最多渲染前2个引用容器 -->
                 <span 
                   v-for="c in visibleContainers" 
                   :key="c"
-                  class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-50 text-[11px] text-slate-600 border border-slate-200/40 font-mono select-all truncate max-w-[85px] xs:max-w-[100px]"
+                  class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-50 text-[11px] text-slate-600 border border-slate-200/40 font-mono select-all truncate max-w-full"
                   :title="c"
                 >
                   {{ c }}
@@ -124,7 +124,7 @@
                       +{{ image.containers.length - 2 }}
                     </span>
                   </template>
-                  <div class="space-y-1 font-mono text-[11px] p-1 max-w-[240px]">
+                  <div class="space-y-1 font-mono text-[11px] p-1 max-w-60">
                     <div class="font-semibold text-slate-300 border-b border-slate-700 pb-1 mb-1">正在使用该镜像的容器:</div>
                     <div v-for="c in image.containers" :key="c" class="text-white break-all">{{ c }}</div>
                   </div>
@@ -134,7 +134,7 @@
             </div>
           </div>
 
-          <!-- 架构（右侧） -->
+          <!-- 架构（右侧对齐 50% 网格线） -->
           <div class="flex flex-col min-w-0">
             <span class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">架构</span>
             <span 
@@ -150,7 +150,7 @@
 
     <!-- 底部操作区域 -->
     <div class="mt-4 pt-3.5 border-t border-slate-100 flex justify-between items-center">
-      <!-- 镜像 ID -->
+      <!-- 镜像 ID 与独立版本徽章 -->
       <div class="flex items-center space-x-1.5 min-w-0">
         <span class="text-[11px] text-slate-400 font-mono tracking-tight truncate">ID: {{ shortID }}</span>
         <button 
@@ -163,6 +163,14 @@
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
           </svg>
         </button>
+        <!-- 独立语义版本徽章 -->
+        <span 
+          v-if="image.version" 
+          class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-[10px] font-mono font-semibold text-slate-600 border border-slate-200/60 shrink-0 select-all"
+          :title="'语义化版本: ' + image.version"
+        >
+          {{ formattedVersion }}
+        </span>
       </div>
 
       <!-- 操作按钮 -->
@@ -182,7 +190,7 @@
               </n-button>
             </span>
           </template>
-          <div class="text-[11px] p-1 max-w-[240px] leading-relaxed">
+          <div class="text-[11px] p-1 max-w-60 leading-relaxed">
             该镜像正被以下容器使用，无法删除：
             <div class="font-semibold text-amber-400 mt-1 font-mono break-all">{{ image.containers?.join(', ') }}</div>
           </div>
@@ -214,11 +222,16 @@ interface ImageItem {
   created: number;
   containers?: string[];
   architecture?: string;
+  version?: string;
 }
 
 const props = defineProps<{
   image: ImageItem
 }>()
+
+const formattedVersion = computed(() => {
+  return props.image?.version || ''
+})
 
 const emit = defineEmits<{
   (e: 'delete', id: string): void

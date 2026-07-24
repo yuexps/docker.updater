@@ -161,9 +161,16 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 
 		localDigest := ""
 		remoteDigest := ""
+		localVersion := ""
+		remoteVersion := ""
 		if hasUpdate && !res.imageMissing {
 			localDigest = info.LocalDigest
+			if localDigest == "" && inspect.Image != "" {
+				localDigest = inspect.Image
+			}
 			remoteDigest = info.RemoteDigest
+			localVersion = info.LocalVersion
+			remoteVersion = info.RemoteVersion
 		}
 
 		result = append(result, map[string]interface{}{
@@ -178,6 +185,8 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 			"running":          containerItem.State == "running",
 			"local_digest":     localDigest,
 			"remote_digest":    remoteDigest,
+			"local_version":    localVersion,
+			"remote_version":   remoteVersion,
 			"image_missing":    res.imageMissing,
 		})
 	}

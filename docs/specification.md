@@ -16,6 +16,7 @@
   - 全局日志文件: `${TRIM_PKGVAR}/info.log`（只写追加，通过守护进程启动脚本 `fnpack/cmd/main` 的标准输出重定向实现落盘，支持 O_TRUNC 截断清空。后端仅在启动时检测该文件大小，若超过 10MB，则自动截断前半部分，保留后半部分完整行日志）。
   - 任务日志文件: `${TRIM_PKGVAR}/logs/${container_name}.log`（动态按需创建）。
   - 日志前缀: 统一使用 `[INFO]`、`[WARNING]`、`[ERROR]`、`[SUCCESS]`。禁止包含任何 emoji 表情。
+  - 访问日志过滤: 高频 WebSocket `/api/ws` 及 `favicon.png`/`favicon.ico` 访问请求予以静默过滤，避免日志污染。
 
 ## 2. 数据库结构定义 (SQLite)
 
@@ -46,6 +47,8 @@ type AvailableUpdate struct {
     Image          string
     LocalDigest    string
     RemoteDigest   string
+    LocalVersion   string // 提取的语义化版本号 (如 v1.2.0)
+    RemoteVersion  string // 提取的远端语义化版本号 (如 v1.3.0)
     CheckedAt      string
     ComposeProject string
 }
@@ -91,7 +94,13 @@ type RegistryCredential struct {
 }
 ```
 
-## 3. 加密与安全策略
+## 3. 升级检测机制与分层回退规范
+* **分层回退摘要解析 (Layered Fallback Digest Parsing)**:
+  - **首选算法**: 当镜像从 Registry 规范拉取时，使用 Docker 引擎中的 `RepoDigests` SHA256 摘要进行精确判定。
+  - **回退算法**: 当镜像由于本地 `docker build`、`docker load` 或离线导入导致 `RepoDigests` 为空时，系统自动提取镜像本身的 `Image ID`（即 Config SHA）作为 `LocalDigest` 的可靠替代，彻底消除系统中的“未知”误导。
+  - **比对精确性**: 在执行 `ScanLocalHostForUpdates` 时，当本地缺乏 `RepoDigest` 时，系统自动触发 `remoteConfigDigest vs localImageID` 双重校验，确保更新检测结果 100% 精确。
+
+## 4. 加密与安全策略
 * **对称加密**: 使用 AES-256-GCM 算法。
 * **密钥文件**: 存放于 `${TRIM_PKGVAR}/secret.key`（文件权限 `0600`）。
 * **解密异常控制**: Base64 解码失败、密文长度不足、校验失败均直接向上层传播并返回 error，彻底禁止明文自动降级兼容逻辑。
@@ -111,7 +120,7 @@ type RegistryCredential struct {
 | GET | `/container/:name/logs`| 无 | `{"logs": string}` | 从 Docker 引擎获取容器的末尾 200 行标准输出与标准错误日志 |
 | GET | `/update-log/:name`| 无 | `{"found": bool, "logs": []string}` | `name` 参数必须符合正则 `^[a-zA-Z0-9][a-zA-Z0-9_.-]*$` 路径穿越过滤 |
 | DELETE| `/update-log/:name`| 无 | `{"ok": true}` | `name` 参数必须符合正则 `^[a-zA-Z0-9][a-zA-Z0-9_.-]*$` 路径穿越过滤。删除任务日志 |
-| GET | `/images` | 无 | `[{"id": string, "tags": []string, "size": int64, "created": int64, "containers": []string, "architecture": string}]` | 获取本地已下载镜像列表 |
+| GET | `/images` | 无 | `[{"id": string, "tags": []string, "size": int64, "created": int64, "containers": []string, "architecture": string, "version": string}]` | 获取本地已下载镜像列表 |
 | DELETE| `/image` | 无 | `{"ok": true}` | Query 参数: `id` (镜像ID), `force` (是否强制删除)。校验运行状态与容器绑定关系 |
 | POST | `/images/prune` | 无 | `{"ok": true, "space_reclaimed": uint64, "deleted_count": int}` | 物理清理满足 `dangling=true` 且 `until=24h` 的虚悬无用镜像 |
 | GET | `/settings` | 无 | 系统配置 JSON | 动态对敏感 SMTP 凭据进行解密返回 |

@@ -83,6 +83,8 @@ func StartScheduler() {
 						Image:          res.Image,
 						LocalDigest:    res.LocalDigest,
 						RemoteDigest:   res.RemoteDigest,
+						LocalVersion:   res.LocalVersion,
+						RemoteVersion:  res.RemoteVersion,
 						CheckedAt:      res.CheckedAt,
 						ComposeProject: res.ComposeProject,
 					}
@@ -106,7 +108,23 @@ func StartScheduler() {
 				var details []string
 				for _, item := range list {
 					names = append(names, item.ContainerName)
-					details = append(details, fmt.Sprintf("- %s (远程最新镜像 Digest: %s)", item.ContainerName, item.RemoteDigest))
+					locVerPart := ""
+					if item.LocalVersion != "" {
+						locVerPart = "version:" + item.LocalVersion + " "
+					}
+					remVerPart := ""
+					if item.RemoteVersion != "" {
+						remVerPart = "version:" + item.RemoteVersion + " "
+					}
+					locHash := strings.TrimPrefix(item.LocalDigest, "sha256:")
+					remHash := strings.TrimPrefix(item.RemoteDigest, "sha256:")
+					if len(locHash) > 12 {
+						locHash = locHash[:12]
+					}
+					if len(remHash) > 12 {
+						remHash = remHash[:12]
+					}
+					details = append(details, fmt.Sprintf("- %s (本地: %ssha256:%s, 远端: %ssha256:%s)", item.ContainerName, locVerPart, locHash, remVerPart, remHash))
 				}
 				utils.LogInfo("检测到有 %d 个服务需要升级更新: %s", len(names), strings.Join(names, ", "))
 

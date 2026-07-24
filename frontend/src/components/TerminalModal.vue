@@ -19,7 +19,7 @@
       </div>
     </template>
     
-    <div class="bg-black p-4 rounded-xl font-mono text-[12px] h-[300px] sm:h-[400px] overflow-y-auto border border-slate-850" ref="terminalLog">
+    <div class="bg-black p-4 rounded-xl font-mono text-[12px] h-75 sm:h-100 overflow-y-auto border border-slate-850" ref="terminalLog">
       <div v-for="(line, idx) in logLines" :key="idx" class="py-1 px-1.5 rounded-sm break-all leading-relaxed">
         <div v-if="line.includes('[SUCCESS]')" class="text-[#27c93f] bg-green-500/10 px-2 py-0.5 rounded border border-green-500/10 font-semibold">{{ line }}</div>
         <div v-else-if="line.includes('[ERROR]')" class="text-[#ff5f56] bg-red-500/10 px-2 py-0.5 rounded border border-red-500/10 font-semibold">{{ line }}</div>
@@ -65,7 +65,7 @@ const emit = defineEmits<{
 
 const terminalLog = ref<HTMLDivElement | null>(null)
 
-watch(() => props.logLines.length, () => {
+watch([() => props.logLines.length, () => props.show], () => {
   nextTick(() => {
     if (terminalLog.value) {
       terminalLog.value.scrollTop = terminalLog.value.scrollHeight

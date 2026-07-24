@@ -1,6 +1,6 @@
 <template>
   <div 
-    class="apple-card rounded-lg p-4.5 flex flex-col justify-between min-h-[200px] hover:border-primary hover:shadow-[0_12px_28px_rgba(0,0,0,0.04)] transition-all duration-300 bg-white"
+    class="apple-card rounded-lg p-4.5 flex flex-col justify-between min-h-50 hover:border-primary hover:shadow-[0_12px_28px_rgba(0,0,0,0.04)] transition-all duration-300 bg-white"
   >
     <!-- 顶部主要信息展示 -->
     <div>
@@ -54,7 +54,7 @@
           <div class="flex items-center gap-1.5 mt-1.5 min-w-0">
             <!-- 镜像名徽章 -->
             <div 
-              class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-semibold text-slate-500 border border-slate-200/40 max-w-[240px] min-w-0 truncate cursor-pointer hover:bg-slate-200/60 hover:text-slate-700 transition-colors"
+              class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-semibold text-slate-500 border border-slate-200/40 max-w-60 min-w-0 truncate cursor-pointer hover:bg-slate-200/60 hover:text-slate-700 transition-colors"
               :title="'点击复制完整镜像: ' + container.image"
               @click="copyText(container.image)"
             >
@@ -72,7 +72,7 @@
             <!-- Compose 项目徽章 -->
             <div 
               v-if="container.compose_project" 
-              class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-semibold text-slate-500 border border-slate-200/40 max-w-[150px] shrink-0 truncate"
+              class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-semibold text-slate-500 border border-slate-200/40 max-w-37.5 shrink-0 truncate"
               :title="container.compose_project"
             >
               <svg class="w-2.5 h-2.5 mr-1 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -90,31 +90,31 @@
       <!-- 详细镜像元数据及比对 -->
       <div class="mt-4 space-y-2.5">
         <!-- 有更新状态：本地与最新镜像 SHA 比对 -->
-        <div v-if="container.status === 'update'" class="bg-blue-50/40 border border-blue-100/50 rounded-xl p-3 h-[76px] flex flex-col justify-between">
+        <div v-if="container.status === 'update'" class="bg-blue-50/40 border border-blue-100/50 rounded-xl p-3 h-19 flex flex-col justify-between">
           <div class="flex items-center justify-between text-[11px] font-semibold text-slate-500">
             <span>版本摘要比对</span>
             <span class="text-[10px] font-normal text-slate-400" v-if="container.checked_at">检测于: {{ container.checked_at }}</span>
           </div>
           
           <div class="flex items-center space-x-2 text-[11px] font-mono justify-between">
-            <div class="bg-white border border-slate-200 px-2.5 py-1 rounded-md text-slate-600 truncate max-w-[120px] xs:max-w-[140px] sm:max-w-[160px] flex items-center" :title="container.local_digest">
+            <div class="bg-white border border-slate-200 px-2.5 py-1 rounded-md text-slate-600 truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center" :title="'本地 Hash: ' + (container.local_digest || '无')">
               <span class="text-[10px] text-slate-400 font-sans font-semibold mr-1.5 shrink-0">本地</span>
-              <span>{{ shortDigest(container.local_digest) || '未知' }}</span>
+              <span class="font-bold">{{ container.local_version || shortDigest(container.local_digest) || '未知' }}</span>
             </div>
             
             <svg class="w-3.5 h-3.5 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M5 12h14M12 5l7 7-7 7"/>
             </svg>
             
-            <div class="bg-blue-500 text-white px-2.5 py-1 rounded-md truncate max-w-[120px] xs:max-w-[140px] sm:max-w-[160px] flex items-center" :title="container.remote_digest">
+            <div class="bg-blue-500 text-white px-2.5 py-1 rounded-md truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center" :title="'最新 Hash: ' + (container.remote_digest || '无')">
               <span class="text-[10px] text-blue-200 font-sans font-semibold mr-1.5 shrink-0">最新</span>
-              <span class="font-bold">{{ shortDigest(container.remote_digest) || '获取中' }}</span>
+              <span class="font-bold">{{ container.remote_version || shortDigest(container.remote_digest) || '未知' }}</span>
             </div>
           </div>
         </div>
 
         <!-- 已暂挂状态：仅显示暂挂时间提示 -->
-        <div v-else-if="container.status === 'deferred'" class="bg-amber-50/40 border border-amber-100/50 rounded-xl p-3 h-[76px] flex flex-col justify-between">
+        <div v-else-if="container.status === 'deferred'" class="bg-amber-50/40 border border-amber-100/50 rounded-xl p-3 h-19 flex flex-col justify-between">
           <div class="flex items-center justify-between text-[11px] font-semibold text-amber-700">
             <span>版本摘要比对</span>
             <span class="text-[10px] font-normal text-amber-500/80" v-if="container.checked_at">检测于: {{ container.checked_at }}</span>
@@ -130,7 +130,7 @@
         </div>
 
         <!-- 当前已是最新状态展示 -->
-        <div v-else class="bg-emerald-50/10 border border-emerald-100/30 rounded-xl p-3 h-[76px] flex flex-col justify-between">
+        <div v-else class="bg-emerald-50/10 border border-emerald-100/30 rounded-xl p-3 h-19 flex flex-col justify-between">
           <div class="flex items-center justify-between text-[11px] font-semibold text-emerald-700">
             <span>版本摘要比对</span>
             <span class="text-[10px] font-normal text-slate-400" v-if="container.checked_at">检测于: {{ container.checked_at }}</span>
@@ -484,10 +484,11 @@ const handleMoreSelect = (key: string) => {
 // 镜像摘要哈希缩略展示
 const shortDigest = (digest: string) => {
   if (!digest) return ''
-  if (digest.startsWith('sha256:')) {
-    return digest.slice(7, 19)
+  let clean = digest
+  if (clean.startsWith('sha256:')) {
+    clean = clean.slice(7)
   }
-  return digest.slice(0, 12)
+  return clean.slice(0, 12)
 }
 
 // 复制镜像名称到剪贴板

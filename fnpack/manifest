@@ -1,5 +1,5 @@
 appname               = docker.updater
-version               = 1.1.0
+version               = 1.1.1
 display_name          = Docker Updater
 desc                  = Docker 容器更新检测与升级管理器，支持版本升级、备份回滚及消息通知。
 platform              = x86

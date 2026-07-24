@@ -6,7 +6,7 @@
 
           <!-- Left Sidebar Navigation -->
           <div
-            class="hidden md:flex w-[135px] shrink-0 bg-white border-r border-hairline flex-col justify-between p-3 select-none">
+            class="hidden md:flex w-33.75 shrink-0 bg-white border-r border-hairline flex-col justify-between p-3 select-none">
             <div class="space-y-6">
               <!-- Sidebar Header -->
               <div class="pb-3 border-b border-hairline whitespace-nowrap text-center">

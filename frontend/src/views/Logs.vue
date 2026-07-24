@@ -96,7 +96,7 @@
                       <!-- 级别气泡徽章 -->
                       <span 
                         :class="parsed.badgeClass" 
-                        class="inline-block px-1 py-0.25 rounded text-[9.5px] font-bold uppercase tracking-wide select-none text-center lg:w-full shrink-0"
+                        class="inline-block px-1 py-px rounded text-[9.5px] font-bold uppercase tracking-wide select-none text-center lg:w-full shrink-0"
                       >
                         {{ parsed.level }}
                       </span>
@@ -252,11 +252,13 @@ const fetchSystemLogs = async () => {
   try {
     const res = await axios.get(`${apiBase}/system/logs`)
     logLines.value = res.data.logs || []
-    scrollToBottom()
   } catch {
     message.error('加载系统运行日志失败')
   } finally {
     loading.value = false
+    nextTick(() => {
+      scrollToBottom()
+    })
   }
 }
 

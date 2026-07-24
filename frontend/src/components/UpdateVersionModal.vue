@@ -1,6 +1,6 @@
 <template>
   <n-modal v-model:show="showModel" preset="dialog" title="修改容器版本" positive-text="确认修改" negative-text="取消"
-    class="rounded-lg max-w-[420px]" @positive-click="emit('submit')">
+    class="rounded-lg max-w-105" @positive-click="emit('submit')">
     <div class="py-4 select-none space-y-4">
       <div>
         <label class="text-[12px] font-semibold uppercase tracking-wider text-body-muted block mb-1.5">当前镜像</label>
