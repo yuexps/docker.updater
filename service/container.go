@@ -15,17 +15,17 @@ import (
 
 var isScanning atomic.Bool
 
-// TryStartScan 尝试抢占更新扫描任务状态锁，抢占成功返回 true，否则返回 false。
+// TryStartScan 尝试抢占更新扫描任务状态锁
 func TryStartScan() bool {
 	return isScanning.CompareAndSwap(false, true)
 }
 
-// EndScan 释放扫描状态锁。
+// EndScan 释放扫描状态锁
 func EndScan() {
 	isScanning.Store(false)
 }
 
-// GetContainerStatusData 获取容器状态数据。
+// GetContainerStatusData 获取容器状态数据
 func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error) {
 	cli, err := dockerclient.NewLocalClient()
 	if err != nil {

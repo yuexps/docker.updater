@@ -13,7 +13,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 )
 
-// SelfHealInterruptedOperations 执行启动时容器状态恢复。
+// SelfHealInterruptedOperations 执行启动时容器状态恢复
 func SelfHealInterruptedOperations() {
 	cli, err := dockerclient.NewLocalClient()
 	if err != nil {

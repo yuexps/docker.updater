@@ -107,7 +107,7 @@
           <div class="flex items-center justify-between text-[11px]">
             <!-- 本地版本 -->
             <div
-              class="bg-white border border-slate-200 px-2.5 py-1 rounded-md text-slate-600 font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center shadow-2xs"
+              class="bg-white border border-slate-200 px-2.5 py-1 rounded-md text-slate-600 font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center"
               :title="'本地 ' + (container.local_digest || '无')">
               <span class="text-[10px] text-slate-400 font-sans font-semibold mr-1.5 shrink-0">本地</span>
               <span class="font-bold">{{ container.local_version || shortDigest(container.local_digest) || '未知'
@@ -122,7 +122,7 @@
               </svg>
 
               <div
-                class="bg-blue-500 text-white px-2.5 py-1 rounded-md font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center shadow-2xs"
+                class="bg-blue-500 text-white px-2.5 py-1 rounded-md font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center"
                 :title="'最新 ' + (container.remote_digest || '无')">
                 <span class="text-[10px] text-blue-200 font-sans font-semibold mr-1.5 shrink-0">最新</span>
                 <span class="font-bold">{{ container.remote_version || shortDigest(container.remote_digest) || '未知'
@@ -205,7 +205,7 @@
           :loading="operatingContainers?.has(container.name + ':check')"
           :disabled="operatingContainers?.has(container.name + ':check')"
           @click="emit('check')">
-          检查更新
+          {{ operatingContainers?.has(container.name + ':check') ? '检查' : '检查更新' }}
         </n-button>
 
         <!-- 暂挂 -->

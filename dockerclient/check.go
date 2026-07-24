@@ -17,14 +17,15 @@ import (
 	"docker-updater/utils"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/client"
 )
 
-// CredentialsProvider 凭证获取接口。
+// CredentialsProvider 凭证获取接口
 type CredentialsProvider interface {
 	GetCredential(ctx context.Context, registry string) (username, password string, ok bool)
 }
 
-// GlobalCredentialsProvider 全局凭证提供者。
+// GlobalCredentialsProvider 全局凭证提供者
 var GlobalCredentialsProvider CredentialsProvider
 
 const manifestAccept = "application/vnd.docker.distribution.manifest.list.v2+json, " +
@@ -32,13 +33,13 @@ const manifestAccept = "application/vnd.docker.distribution.manifest.list.v2+jso
 	"application/vnd.oci.image.index.v1+json, " +
 	"application/vnd.oci.image.manifest.v1+json"
 
-// parseImage 解析镜像名称。
-func parseImage(imageName string) (string, string, string) {
-	tag := "latest"
+// parseImage 解析镜像名称
+func parseImage(imageName string) (registry string, repo string, tag string) {
+	tag = "latest"
 	name := imageName
 
-	if idx := strings.Index(imageName, "@"); idx != -1 {
-		name = imageName[:idx]
+	if idx := strings.Index(name, "@"); idx != -1 {
+		name = name[:idx]
 	}
 
 	lastSlash := strings.LastIndex(name, "/")
@@ -52,30 +53,37 @@ func parseImage(imageName string) (string, string, string) {
 	first := parts[0]
 
 	if strings.Contains(first, ".") || strings.Contains(first, ":") || first == "localhost" {
-		return first, strings.Join(parts[1:], "/"), tag
+		registry = first
+		repo = strings.Join(parts[1:], "/")
+	} else {
+		registry = "docker.io"
+		repo = name
 	}
 
-	repo := name
-	if !strings.Contains(name, "/") {
-		repo = "library/" + name
+	if registry == "docker.io" || registry == "index.docker.io" || registry == "registry.docker.io" {
+		registry = "registry-1.docker.io"
+		if !strings.Contains(repo, "/") {
+			repo = "library/" + repo
+		}
 	}
-	return "registry-1.docker.io", repo, tag
+
+	return registry, repo, tag
 }
 
-// getDockerRepoCandidates 获取匹配的仓库别名候选列表。
+// getDockerRepoCandidates 获取仓库候选别名列表
 func getDockerRepoCandidates(registry, repo string) []string {
 	candidates := []string{repo, registry + "/" + repo}
 	if registry == "registry-1.docker.io" {
-		candidates = append(candidates, "docker.io/"+repo)
+		candidates = append(candidates, "docker.io/"+repo, "index.docker.io/"+repo)
 		if strings.HasPrefix(repo, "library/") {
 			short := repo[8:]
-			candidates = append(candidates, short, "docker.io/"+short, "registry-1.docker.io/"+short)
+			candidates = append(candidates, short, "docker.io/"+short, "index.docker.io/"+short, "registry-1.docker.io/"+short)
 		}
 	}
 	return candidates
 }
 
-// parseChallengeHeader 解析 WWW-Authenticate 响应头。
+// parseChallengeHeader 解析 WWW-Authenticate 响应头
 func parseChallengeHeader(authHeader string) (string, map[string]string) {
 	params := make(map[string]string)
 	re := regexp.MustCompile(`(\w+)="([^"]*)"`)
@@ -94,7 +102,27 @@ func parseChallengeHeader(authHeader string) (string, map[string]string) {
 	return realm, params
 }
 
-// getBearerToken 获取 Bearer Token。
+// handleAuthChallenge 处理 401 认证挑战
+func handleAuthChallenge(authHeader string, registry string) (string, string, error) {
+	authHeaderTrim := strings.TrimSpace(authHeader)
+	if strings.HasPrefix(strings.ToLower(authHeaderTrim), "basic") {
+		if GlobalCredentialsProvider != nil {
+			if username, password, ok := GlobalCredentialsProvider.GetCredential(context.Background(), registry); ok {
+				authVal := username + ":" + password
+				return "Authorization", "Basic " + base64.StdEncoding.EncodeToString([]byte(authVal)), nil
+			}
+		}
+		return "", "", fmt.Errorf("received basic auth challenge but credentials for %s not configured", registry)
+	}
+
+	token, err := getBearerToken(authHeader, registry)
+	if err == nil {
+		return "Authorization", "Bearer " + token, nil
+	}
+	return "", "", err
+}
+
+// getBearerToken 获取 Bearer Token
 func getBearerToken(authHeader string, registry string) (string, error) {
 	realm, params := parseChallengeHeader(authHeader)
 	if realm == "" {
@@ -102,8 +130,8 @@ func getBearerToken(authHeader string, registry string) (string, error) {
 	}
 
 	u, err := url.Parse(realm)
-	if err != nil {
-		return "", err
+	if err != nil || u.Scheme == "" {
+		return "", fmt.Errorf("invalid or non-http realm URL in auth header: %s", realm)
 	}
 
 	q := u.Query()
@@ -149,155 +177,94 @@ func getBearerToken(authHeader string, registry string) (string, error) {
 	return "", fmt.Errorf("token not found in response")
 }
 
-// getRemoteDigest 获取远程镜像 Manifest 摘要与 Config 摘要。
-func getRemoteDigest(imageName string, localDigest string, localImageID string, localPlatform map[string]string) (string, string, error) {
-	registry, repo, tag := parseImage(imageName)
-
-	var hosts []string
-	if registry == "registry-1.docker.io" {
-		var appMirrors []string
-		tempMirrorsStr := db.GetSetting("temp_mirrors", "[]")
-		_ = json.Unmarshal([]byte(tempMirrorsStr), &appMirrors)
-
-		// 融合应用级配置的镜像加速器并进行去重
-		seen := make(map[string]bool)
-		var mirrors []string
-		for _, m := range appMirrors {
-			m = strings.TrimSpace(m)
-			if m == "" {
-				continue
-			}
-			if !seen[m] {
-				seen[m] = true
-				mirrors = append(mirrors, m)
-			}
-		}
-
-		// 提取出各个加速器的 Host
-		for _, m := range mirrors {
-			u, err := url.Parse(m)
-			if err == nil && u.Host != "" {
-				hosts = append(hosts, u.Host)
-			} else {
-				mClean := strings.TrimPrefix(m, "https://")
-				mClean = strings.TrimPrefix(mClean, "http://")
-				mClean = strings.TrimSuffix(mClean, "/")
-				if mClean != "" {
-					hosts = append(hosts, mClean)
-				}
+// isPlatformMatch 比对 Manifest 平台架构
+func isPlatformMatch(subPlatform, localPlatform map[string]string) bool {
+	if subPlatform == nil || localPlatform == nil {
+		return false
+	}
+	if subPlatform["os"] != localPlatform["os"] || subPlatform["architecture"] != localPlatform["architecture"] {
+		return false
+	}
+	if localVariant, ok := localPlatform["variant"]; ok && localVariant != "" {
+		if subVariant, subOk := subPlatform["variant"]; subOk && subVariant != "" {
+			if subVariant != localVariant {
+				return false
 			}
 		}
 	}
-	hosts = append(hosts, registry) // 官方或第三方原始注册表作为兜底
+	return true
+}
+
+// DistributionInspectResult 镜像 DistributionInspect 检查结果
+type DistributionInspectResult struct {
+	RemoteDigest       string
+	RemoteConfigDigest string
+}
+
+// inspectRemoteDistribution 获取远端 DistributionInspect 镜像元数据
+func inspectRemoteDistribution(imageName string, localPlatform map[string]string) (*DistributionInspectResult, error) {
+	registry, repo, tag := parseImage(imageName)
+	hosts := getRegistryHosts(registry)
 
 	var lastErr error
 	for _, host := range hosts {
-		digest, configDigest, err := getRemoteDigestWithHost(host, registry, repo, tag, localDigest, localImageID, localPlatform)
+		res, err := inspectRemoteDistributionWithHost(host, registry, repo, tag, localPlatform)
 		if err == nil {
-			return digest, configDigest, nil
+			return res, nil
 		}
 		lastErr = err
-		utils.LogWarning("使用镜像服务器 %s 获取 %s 的 Digest 失败: %s，正在尝试下一个...", host, imageName, err.Error())
 	}
-	return "", "", lastErr
+	return nil, lastErr
 }
 
-// getRemoteDigestWithHost 获取指定镜像源的 Manifest 摘要与 Config 摘要。
-func getRemoteDigestWithHost(host, registry, repo, tag, localDigest, localImageID string, localPlatform map[string]string) (string, string, error) {
+// inspectRemoteDistributionWithHost 从指定 Host 获取 Manifest
+func inspectRemoteDistributionWithHost(host, registry, repo, tag string, localPlatform map[string]string) (*DistributionInspectResult, error) {
 	endpoint := fmt.Sprintf("https://%s/v2/%s/manifests/%s", host, repo, tag)
-	client := &http.Client{Timeout: 8 * time.Second}
+	client := &http.Client{Timeout: 10 * time.Second}
 
-	// 本地 Digest 为空时强制使用 GET 请求以解析 config.digest
-	forceGet := localDigest == "" && localImageID != ""
-	method := "HEAD"
-	if forceGet {
-		method = "GET"
-	}
-
-	req, err := http.NewRequest(method, endpoint, nil)
+	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 	req.Header.Set("Accept", manifestAccept)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 
-	var token string
-	// 401 认证失败则获取 Token 重试
+	var authHeaderName, authHeaderVal string
 	if resp.StatusCode == http.StatusUnauthorized {
-		authHeader := resp.Header.Get("WWW-Authenticate")
-		token, err = getBearerToken(authHeader, registry)
-		if err == nil {
+		authChallenge := resp.Header.Get("WWW-Authenticate")
+		headerName, headerVal, authErr := handleAuthChallenge(authChallenge, registry)
+		if authErr == nil {
 			resp.Body.Close()
+			authHeaderName = headerName
+			authHeaderVal = headerVal
 
-			req, err = http.NewRequest(method, endpoint, nil)
+			req, err = http.NewRequest("GET", endpoint, nil)
 			if err != nil {
-				return "", "", err
+				return nil, err
 			}
 			req.Header.Set("Accept", manifestAccept)
-			req.Header.Set("Authorization", "Bearer "+token)
+			req.Header.Set(authHeaderName, authHeaderVal)
 			resp, err = client.Do(req)
 			if err != nil {
-				return "", "", err
+				return nil, err
 			}
 		} else {
 			resp.Body.Close()
-			return "", "", err
-		}
-	}
-
-	// HEAD 失败时降级为 GET 请求
-	if resp.StatusCode != http.StatusOK && method == "HEAD" {
-		resp.Body.Close()
-		method = "GET"
-
-		req, err = http.NewRequest("GET", endpoint, nil)
-		if err != nil {
-			return "", "", err
-		}
-		req.Header.Set("Accept", manifestAccept)
-		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
-		}
-		resp, err = client.Do(req)
-		if err != nil {
-			return "", "", err
+			return nil, authErr
 		}
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("unexpected status code: %s", resp.Status)
+		return nil, fmt.Errorf("unexpected status code: %s", resp.Status)
 	}
 
-	remoteDigest := resp.Header.Get("Docker-Content-Digest")
-
-	// 获取指定架构的 Manifest Body
-	getManifestBody := func(ref string) (io.ReadCloser, string, error) {
-		subURL := fmt.Sprintf("https://%s/v2/%s/manifests/%s", host, repo, ref)
-		subReq, subErr := http.NewRequest("GET", subURL, nil)
-		if subErr != nil {
-			return nil, "", subErr
-		}
-		subReq.Header.Set("Accept", manifestAccept)
-		if token != "" {
-			subReq.Header.Set("Authorization", "Bearer "+token)
-		}
-		subResp, subErr := client.Do(subReq)
-		if subErr != nil {
-			return nil, "", subErr
-		}
-		if subResp.StatusCode != http.StatusOK {
-			subResp.Body.Close()
-			return nil, "", fmt.Errorf("unexpected status: %s", subResp.Status)
-		}
-		subDigest := subResp.Header.Get("Docker-Content-Digest")
-		return subResp.Body, subDigest, nil
-	}
+	headerDigest := resp.Header.Get("Docker-Content-Digest")
 
 	type manifestResponse struct {
 		Manifests []struct {
@@ -309,71 +276,56 @@ func getRemoteDigestWithHost(host, registry, repo, tag, localDigest, localImageI
 		} `json:"config"`
 	}
 
-	// 解析 GET 响应的 Body
-	if method == "GET" {
-		var m manifestResponse
-		if json.NewDecoder(resp.Body).Decode(&m) == nil {
-			if len(m.Manifests) > 0 {
-				for _, sub := range m.Manifests {
-					if sub.Digest == localDigest {
-						return localDigest, "", nil
-					}
-				}
-				if localImageID != "" && localPlatform != nil {
-					for _, sub := range m.Manifests {
-						if sub.Platform != nil && sub.Platform["os"] == localPlatform["os"] &&
-							sub.Platform["architecture"] == localPlatform["architecture"] {
-							// 获取子架构的 config.digest
-							var subConfigDigest string
-							if localDigest == "" {
-								subBody, _, subErr := getManifestBody(sub.Digest)
-								if subErr == nil {
-									defer subBody.Close()
-									var subM manifestResponse
-									if json.NewDecoder(subBody).Decode(&subM) == nil {
-										subConfigDigest = subM.Config.Digest
-									}
+	var m manifestResponse
+	bodyBytes, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return nil, readErr
+	}
+
+	if json.Unmarshal(bodyBytes, &m) == nil {
+		if len(m.Manifests) > 0 {
+			for _, sub := range m.Manifests {
+				if isPlatformMatch(sub.Platform, localPlatform) {
+					subURL := fmt.Sprintf("https://%s/v2/%s/manifests/%s", host, repo, sub.Digest)
+					subReq, subErr := http.NewRequest("GET", subURL, nil)
+					if subErr == nil {
+						subReq.Header.Set("Accept", manifestAccept)
+						if authHeaderName != "" {
+							subReq.Header.Set(authHeaderName, authHeaderVal)
+						}
+						subResp, subErr := client.Do(subReq)
+						if subErr == nil {
+							defer subResp.Body.Close()
+							if subResp.StatusCode == http.StatusOK {
+								var subM manifestResponse
+								if json.NewDecoder(subResp.Body).Decode(&subM) == nil {
+									return &DistributionInspectResult{
+										RemoteDigest:       sub.Digest,
+										RemoteConfigDigest: subM.Config.Digest,
+									}, nil
 								}
 							}
-							return sub.Digest, subConfigDigest, nil
 						}
 					}
-				}
-			} else if m.Config.Digest != "" {
-				// 单架构镜像
-				return remoteDigest, m.Config.Digest, nil
-			}
-		}
-	} else {
-		// HEAD 响应且摘要不匹配时解析多架构列表
-		if remoteDigest != "" && localDigest != "" && remoteDigest != localDigest {
-			body, _, getErr := getManifestBody(tag)
-			if getErr == nil {
-				defer body.Close()
-				var m manifestResponse
-				if json.NewDecoder(body).Decode(&m) == nil && len(m.Manifests) > 0 {
-					for _, sub := range m.Manifests {
-						if sub.Digest == localDigest {
-							return localDigest, "", nil
-						}
-					}
-					if localImageID != "" && localPlatform != nil {
-						for _, sub := range m.Manifests {
-							if sub.Platform != nil && sub.Platform["os"] == localPlatform["os"] &&
-								sub.Platform["architecture"] == localPlatform["architecture"] {
-								return sub.Digest, "", nil
-							}
-						}
-					}
+					return &DistributionInspectResult{
+						RemoteDigest: sub.Digest,
+					}, nil
 				}
 			}
+		} else if m.Config.Digest != "" {
+			return &DistributionInspectResult{
+				RemoteDigest:       headerDigest,
+				RemoteConfigDigest: m.Config.Digest,
+			}, nil
 		}
 	}
 
-	return remoteDigest, "", nil
+	return &DistributionInspectResult{
+		RemoteDigest: headerDigest,
+	}, nil
 }
 
-// getLocalDigestFromImage 获取本地镜像 Digest。
+// getLocalDigestFromImage 获取本地镜像 Digest
 func getLocalDigestFromImage(repoDigests []string, imageName string) string {
 	if len(repoDigests) == 0 {
 		return ""
@@ -401,12 +353,11 @@ func getLocalDigestFromImage(repoDigests []string, imageName string) string {
 	return ""
 }
 
-// semverRegexp 提取严格的语义化版本。
+// semverRegexp 提取语义化版本
 var semverRegexp = regexp.MustCompile(`^v?(\d+(?:\.\d+)+(?:-[a-zA-Z0-9._-]+)?)`)
 
-// ExtractSemanticVersion 解析镜像标签、Tag 或环境变量中的版本号。
+// ExtractSemanticVersion 解析镜像或环境变量中的版本号
 func ExtractSemanticVersion(labels map[string]string, env []string, imageName string) string {
-	// 1. OCI Labels
 	if labels != nil {
 		labelKeys := []string{
 			"org.opencontainers.image.version",
@@ -424,7 +375,6 @@ func ExtractSemanticVersion(labels map[string]string, env []string, imageName st
 		}
 	}
 
-	// 2. Tag
 	if imageName != "" {
 		_, _, tag := parseImage(imageName)
 		if tag != "" && tag != "latest" && tag != "main" && tag != "master" && tag != "dev" && tag != "test" && tag != "stable" {
@@ -435,7 +385,6 @@ func ExtractSemanticVersion(labels map[string]string, env []string, imageName st
 		}
 	}
 
-	// 3. Env
 	for _, e := range env {
 		parts := strings.SplitN(e, "=", 2)
 		if len(parts) == 2 {
@@ -451,19 +400,20 @@ func ExtractSemanticVersion(labels map[string]string, env []string, imageName st
 	return ""
 }
 
-// checkItem 待检查容器项结构体。
+// checkItem 待检测容器结构体
 type checkItem struct {
 	containerName  string
 	composeProject string
 	imageName      string
 	imageID        string
 	rawRepoDigest  string
+	repoDigests    []string
 	localDigest    string
 	localVersion   string
 	localPlatform  map[string]string
 }
 
-// checkResult 镜像检测结果。
+// checkResult 镜像检测结果
 type checkResult struct {
 	item               checkItem
 	remoteDigest       string
@@ -472,7 +422,7 @@ type checkResult struct {
 	err                error
 }
 
-// UpdateCheckResult 容器版本检测结果。
+// UpdateCheckResult 容器版本检测结果
 type UpdateCheckResult struct {
 	ContainerName  string
 	Image          string
@@ -485,9 +435,86 @@ type UpdateCheckResult struct {
 	HasUpdate      bool
 }
 
-// ScanLocalHostForUpdates 扫描本地容器版本。
+// buildCheckItem 构造 checkItem 结构体
+func buildCheckItem(containerName string, composeProject string, inspect types.ContainerJSON, imageInspect types.ImageInspect) checkItem {
+	imageName := inspect.Config.Image
+	rawLocalDigest := ""
+	if len(imageInspect.RepoDigests) > 0 {
+		rawLocalDigest = getLocalDigestFromImage(imageInspect.RepoDigests, imageName)
+	}
+
+	displayLocalDigest := rawLocalDigest
+	if displayLocalDigest == "" && imageInspect.ID != "" {
+		displayLocalDigest = imageInspect.ID
+	}
+
+	localVersion := ExtractSemanticVersion(imageInspect.Config.Labels, imageInspect.Config.Env, imageName)
+
+	return checkItem{
+		containerName:  containerName,
+		composeProject: composeProject,
+		imageName:      imageName,
+		imageID:        imageInspect.ID,
+		rawRepoDigest:  rawLocalDigest,
+		repoDigests:    imageInspect.RepoDigests,
+		localDigest:    displayLocalDigest,
+		localVersion:   localVersion,
+		localPlatform: map[string]string{
+			"os":           imageInspect.Os,
+			"architecture": imageInspect.Architecture,
+			"variant":      imageInspect.Variant,
+		},
+	}
+}
+
+// evaluatePassiveUpdateStatus 校验镜像摘要更新状态
+func evaluatePassiveUpdateStatus(ctx context.Context, cli *client.Client, item checkItem, remoteDigest, remoteConfigDigest string) bool {
+	if remoteDigest == "" && remoteConfigDigest == "" {
+		return false
+	}
+
+	if remoteDigest != "" {
+		if item.rawRepoDigest != "" && item.rawRepoDigest == remoteDigest {
+			return false
+		}
+		for _, rd := range item.repoDigests {
+			if strings.Contains(rd, "@"+remoteDigest) {
+				return false
+			}
+		}
+	}
+
+	if remoteConfigDigest != "" && item.imageID != "" {
+		localID := item.imageID
+		remoteID := remoteConfigDigest
+		if !strings.HasPrefix(localID, "sha256:") {
+			localID = "sha256:" + localID
+		}
+		if !strings.HasPrefix(remoteID, "sha256:") {
+			remoteID = "sha256:" + remoteID
+		}
+		if localID == remoteID {
+			return false
+		}
+	}
+
+	if remoteDigest != "" {
+		if _, _, err := cli.ImageInspectWithRaw(ctx, remoteDigest); err == nil {
+			return false
+		}
+	}
+	if remoteConfigDigest != "" {
+		if _, _, errCfg := cli.ImageInspectWithRaw(ctx, remoteConfigDigest); errCfg == nil {
+			return false
+		}
+	}
+
+	return true
+}
+
+// ScanLocalHostForUpdates 扫描本地活动容器镜像版本
 func ScanLocalHostForUpdates(ctx context.Context) ([]UpdateCheckResult, error) {
-	utils.LogInfo("开始扫描本地活动容器进行版本比对检查...")
+	utils.LogInfo("开始全量扫描本地活动容器...")
 
 	cli, err := NewLocalClient()
 	if err != nil {
@@ -533,40 +560,13 @@ func ScanLocalHostForUpdates(ctx context.Context) ([]UpdateCheckResult, error) {
 			continue
 		}
 
-		imageName := inspect.Config.Image
 		imageInspect, _, err := cli.ImageInspectWithRaw(ctx, inspect.Image)
 		if err != nil {
-			utils.LogWarning("无法获取镜像 %s 的 inspect 详情: %s", imageName, err.Error())
+			utils.LogWarning("无法获取镜像 %s 的 inspect 详情: %s", inspect.Config.Image, err.Error())
 			continue
 		}
 
-		rawLocalDigest := ""
-		if len(imageInspect.RepoDigests) > 0 {
-			rawLocalDigest = getLocalDigestFromImage(imageInspect.RepoDigests, imageName)
-		}
-
-		// 若 RepoDigests 缺失，以镜像 ID 作为回退摘要
-		displayLocalDigest := rawLocalDigest
-		if displayLocalDigest == "" && imageInspect.ID != "" {
-			displayLocalDigest = imageInspect.ID
-		}
-
-		localVersion := ExtractSemanticVersion(imageInspect.Config.Labels, imageInspect.Config.Env, imageName)
-
-		items = append(items, checkItem{
-			containerName:  name,
-			composeProject: c.Labels["com.docker.compose.project"],
-			imageName:      imageName,
-			imageID:        imageInspect.ID,
-			rawRepoDigest:  rawLocalDigest,
-			localDigest:    displayLocalDigest,
-			localVersion:   localVersion,
-			localPlatform: map[string]string{
-				"os":           imageInspect.Os,
-				"architecture": imageInspect.Architecture,
-				"variant":      imageInspect.Variant,
-			},
-		})
+		items = append(items, buildCheckItem(name, c.Labels["com.docker.compose.project"], inspect, imageInspect))
 	}
 
 	if len(items) == 0 {
@@ -574,7 +574,7 @@ func ScanLocalHostForUpdates(ctx context.Context) ([]UpdateCheckResult, error) {
 		return nil, nil
 	}
 
-	const maxConcurrent = 5
+	const maxConcurrent = 3
 	sem := make(chan struct{}, maxConcurrent)
 	resultCh := make(chan checkResult, len(items))
 
@@ -586,7 +586,14 @@ func ScanLocalHostForUpdates(ctx context.Context) ([]UpdateCheckResult, error) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			remoteDigest, remoteConfigDigest, err := getRemoteDigest(it.imageName, it.rawRepoDigest, it.imageID, it.localPlatform)
+			inspectRes, err := inspectRemoteDistribution(it.imageName, it.localPlatform)
+			remoteDigest := ""
+			remoteConfigDigest := ""
+			if inspectRes != nil {
+				remoteDigest = inspectRes.RemoteDigest
+				remoteConfigDigest = inspectRes.RemoteConfigDigest
+			}
+
 			resultCh <- checkResult{
 				item:               it,
 				remoteDigest:       remoteDigest,
@@ -605,57 +612,15 @@ func ScanLocalHostForUpdates(ctx context.Context) ([]UpdateCheckResult, error) {
 	var updateCount int
 	for res := range resultCh {
 		if res.err != nil {
-			utils.LogWarning("获取服务 %s 的远程 Registry 镜像 Digest 失败: %s", res.item.containerName, res.err.Error())
+			utils.LogWarning("获取容器 %s 的远程 Registry 镜像 Digest 失败: %s", res.item.containerName, res.err.Error())
 			continue
 		}
 
-		hasUpdate := false
-		if res.remoteDigest != "" {
-			if res.item.rawRepoDigest != "" {
-				hasUpdate = res.item.rawRepoDigest != res.remoteDigest
-			} else if res.remoteConfigDigest != "" && res.item.imageID != "" {
-				// 无 RepoDigest 时对比 remoteConfigDigest 与本地 Image ID
-				localID := res.item.imageID
-				remoteID := res.remoteConfigDigest
-				if !strings.HasPrefix(localID, "sha256:") {
-					localID = "sha256:" + localID
-				}
-				if !strings.HasPrefix(remoteID, "sha256:") {
-					remoteID = "sha256:" + remoteID
-				}
-				hasUpdate = localID != remoteID
-			} else {
-				// 本地 Docker 物理存储兜底校验
-				_, _, err = cli.ImageInspectWithRaw(ctx, res.remoteDigest)
-				if err != nil {
-					if res.remoteConfigDigest != "" {
-						_, _, errCfg := cli.ImageInspectWithRaw(ctx, res.remoteConfigDigest)
-						if errCfg != nil {
-							hasUpdate = true
-						}
-					} else {
-						hasUpdate = true
-					}
-				}
-			}
-		}
-
+		hasUpdate := evaluatePassiveUpdateStatus(ctx, cli, res.item, res.remoteDigest, res.remoteConfigDigest)
 		remoteVersion := ExtractSemanticVersion(nil, nil, res.item.imageName)
 
 		if hasUpdate {
-			localVerPart := ""
-			if res.item.localVersion != "" {
-				localVerPart = "version:" + res.item.localVersion + " "
-			}
-			remoteVerPart := ""
-			if remoteVersion != "" {
-				remoteVerPart = "version:" + remoteVersion + " "
-			}
-			localHash := strings.TrimPrefix(res.item.localDigest, "sha256:")
-			remoteHash := strings.TrimPrefix(res.remoteDigest, "sha256:")
-
-			utils.LogInfo("服务 %s 存在可用升级 (本地: %ssha256:%s, 远端: %ssha256:%s)",
-				res.item.containerName, localVerPart, localHash, remoteVerPart, remoteHash)
+			logCheckResult(res.item.containerName, res.item, res.remoteDigest, remoteVersion, true)
 			updateCount++
 		}
 
@@ -672,16 +637,53 @@ func ScanLocalHostForUpdates(ctx context.Context) ([]UpdateCheckResult, error) {
 		})
 	}
 
-	utils.LogInfo("容器扫描比对检查结束。当前共发现 %d 个待升级服务。", updateCount)
+	utils.LogInfo("容器扫描比对检查结束。当前共发现 %d 个待升级容器。", updateCount)
 	return results, nil
 }
 
-// GetRemoteTags 获取远程 Registry 的镜像标签列表。
+// logCheckResult 统一记录容器版本比对结果日志
+func logCheckResult(containerName string, item checkItem, remoteDigest string, remoteVersion string, hasUpdate bool) {
+	if hasUpdate {
+		localVerPart := ""
+		if item.localVersion != "" {
+			localVerPart = "version:" + item.localVersion + " "
+		}
+		remoteVerPart := ""
+		if remoteVersion != "" {
+			remoteVerPart = "version:" + remoteVersion + " "
+		}
+		localHash := strings.TrimPrefix(item.localDigest, "sha256:")
+		remoteHash := strings.TrimPrefix(remoteDigest, "sha256:")
+
+		utils.LogInfo("容器 %s 存在可用升级 (本地: %ssha256:%s, 远端: %ssha256:%s)",
+			containerName, localVerPart, localHash, remoteVerPart, remoteHash)
+	} else {
+		utils.LogInfo("容器 %s 检查完成，已是最新版本", containerName)
+	}
+}
+
+// GetRemoteTags 获取远端 Registry 镜像标签列表
 func GetRemoteTags(imageName string) ([]string, error) {
 	registry, repo, _ := parseImage(imageName)
-	endpoint := fmt.Sprintf("https://%s/v2/%s/tags/list", registry, repo)
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	hosts := getRegistryHosts(registry)
+
+	var lastErr error
+	for _, host := range hosts {
+		tags, err := getRemoteTagsWithHost(host, registry, repo)
+		if err == nil {
+			return tags, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
+// getRemoteTagsWithHost 从指定 Host 获取标签列表
+func getRemoteTagsWithHost(host, registry, repo string) ([]string, error) {
+	endpoint := fmt.Sprintf("https://%s/v2/%s/tags/list", host, repo)
+	client := &http.Client{Timeout: 10 * time.Second}
+
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -691,25 +693,29 @@ func GetRemoteTags(imageName string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		authHeader := resp.Header.Get("WWW-Authenticate")
-		token, err := getBearerToken(authHeader, registry)
-		if err == nil {
+		authChallenge := resp.Header.Get("WWW-Authenticate")
+		headerName, headerVal, authErr := handleAuthChallenge(authChallenge, registry)
+		if authErr == nil {
 			resp.Body.Close()
 
 			req, err = http.NewRequest("GET", endpoint, nil)
 			if err != nil {
 				return nil, err
 			}
-			req.Header.Set("Authorization", "Bearer "+token)
+			req.Header.Set(headerName, headerVal)
 			resp, err = client.Do(req)
 			if err != nil {
 				return nil, err
 			}
+		} else {
+			resp.Body.Close()
+			return nil, authErr
 		}
 	}
+
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %s", resp.Status)
@@ -740,7 +746,7 @@ func GetRemoteTags(imageName string) ([]string, error) {
 	return filtered, nil
 }
 
-// ScanSingleContainer 单独对指定容器进行版本比对检查。
+// ScanSingleContainer 扫描单个指定容器版本
 func ScanSingleContainer(ctx context.Context, targetName string) (*UpdateCheckResult, error) {
 	cli, err := NewLocalClient()
 	if err != nil {
@@ -753,75 +759,103 @@ func ScanSingleContainer(ctx context.Context, targetName string) (*UpdateCheckRe
 		return nil, fmt.Errorf("无法获取容器 %s 详情: %w", targetName, err)
 	}
 
-	imageName := inspect.Config.Image
 	imageInspect, _, err := cli.ImageInspectWithRaw(ctx, inspect.Image)
 	if err != nil {
-		return nil, fmt.Errorf("无法获取镜像 %s 详情: %w", imageName, err)
+		return nil, fmt.Errorf("无法获取镜像 %s 详情: %w", inspect.Config.Image, err)
 	}
-
-	rawLocalDigest := ""
-	if len(imageInspect.RepoDigests) > 0 {
-		rawLocalDigest = getLocalDigestFromImage(imageInspect.RepoDigests, imageName)
-	}
-
-	displayLocalDigest := rawLocalDigest
-	if displayLocalDigest == "" && imageInspect.ID != "" {
-		displayLocalDigest = imageInspect.ID
-	}
-
-	localVersion := ExtractSemanticVersion(imageInspect.Config.Labels, imageInspect.Config.Env, imageName)
-	localPlatform := map[string]string{
-		"os":           imageInspect.Os,
-		"architecture": imageInspect.Architecture,
-		"variant":      imageInspect.Variant,
-	}
-
-	remoteDigest, remoteConfigDigest, err := getRemoteDigest(imageName, displayLocalDigest, imageInspect.ID, localPlatform)
-	if err != nil {
-		return nil, fmt.Errorf("获取远程 Registry 镜像 Digest 失败: %w", err)
-	}
-
-	hasUpdate := false
-	if remoteDigest != "" {
-		if displayLocalDigest != "" && displayLocalDigest != imageInspect.ID {
-			hasUpdate = displayLocalDigest != remoteDigest
-		} else {
-			if remoteConfigDigest != "" && imageInspect.ID != "" {
-				localID := imageInspect.ID
-				remoteID := remoteConfigDigest
-				if !strings.HasPrefix(localID, "sha256:") {
-					localID = "sha256:" + localID
-				}
-				if !strings.HasPrefix(remoteID, "sha256:") {
-					remoteID = "sha256:" + remoteID
-				}
-				hasUpdate = localID != remoteID
-			} else {
-				_, _, err = cli.ImageInspectWithRaw(ctx, remoteDigest)
-				if err != nil {
-					hasUpdate = true
-				}
-			}
-		}
-	}
-
-	remoteVersion := ExtractSemanticVersion(nil, nil, imageName)
-	nowStr := time.Now().UTC().Format(time.RFC3339)
 
 	composeProject := ""
 	if inspect.Config.Labels != nil {
 		composeProject = inspect.Config.Labels["com.docker.compose.project"]
 	}
 
+	item := buildCheckItem(targetName, composeProject, inspect, imageInspect)
+
+	inspectRes, err := inspectRemoteDistribution(item.imageName, item.localPlatform)
+	if err == nil && inspectRes != nil {
+		hasUpdate := evaluatePassiveUpdateStatus(ctx, cli, item, inspectRes.RemoteDigest, inspectRes.RemoteConfigDigest)
+		if !hasUpdate || item.rawRepoDigest != "" {
+			remoteVersion := ExtractSemanticVersion(nil, nil, item.imageName)
+			nowStr := time.Now().UTC().Format(time.RFC3339)
+			logCheckResult(targetName, item, inspectRes.RemoteDigest, remoteVersion, hasUpdate)
+			return &UpdateCheckResult{
+				ContainerName:  targetName,
+				Image:          item.imageName,
+				LocalDigest:    item.localDigest,
+				RemoteDigest:   inspectRes.RemoteDigest,
+				LocalVersion:   item.localVersion,
+				RemoteVersion:  remoteVersion,
+				CheckedAt:      nowStr,
+				ComposeProject: item.composeProject,
+				HasUpdate:      hasUpdate,
+			}, nil
+		}
+	}
+
+	utils.LogInfo("单容器 %s 被动校验存疑，发起主动校验...", targetName)
+	var tempMirrors []string
+	tempMirrorsStr := db.GetSetting("temp_mirrors", "[]")
+	_ = json.Unmarshal([]byte(tempMirrorsStr), &tempMirrors)
+
+	reader, pullErr := pullImageWithMirrors(ctx, cli, item.imageName, tempMirrors, make(chan string, 100))
+	if pullErr != nil {
+		return nil, fmt.Errorf("主动检查 ImagePull 失败: %w", pullErr)
+	}
+	_ = reader.Close()
+
+	newImageInspect, _, inspectErr := cli.ImageInspectWithRaw(ctx, item.imageName)
+	if inspectErr != nil {
+		return nil, fmt.Errorf("无法获取 Pull 后的最新镜像详情: %w", inspectErr)
+	}
+
+	hasUpdate := newImageInspect.ID != item.imageID
+	remoteVersion := ExtractSemanticVersion(nil, nil, item.imageName)
+	nowStr := time.Now().UTC().Format(time.RFC3339)
+	logCheckResult(targetName, item, newImageInspect.ID, remoteVersion, hasUpdate)
+
 	return &UpdateCheckResult{
 		ContainerName:  targetName,
-		Image:          imageName,
-		LocalDigest:    displayLocalDigest,
-		RemoteDigest:   remoteDigest,
-		LocalVersion:   localVersion,
+		Image:          item.imageName,
+		LocalDigest:    item.localDigest,
+		RemoteDigest:   newImageInspect.ID,
+		LocalVersion:   item.localVersion,
 		RemoteVersion:  remoteVersion,
 		CheckedAt:      nowStr,
-		ComposeProject: composeProject,
+		ComposeProject: item.composeProject,
 		HasUpdate:      hasUpdate,
 	}, nil
+}
+
+// getRegistryHosts 获取目标 Registry 极其对应的镜像加速源 Host 列表
+func getRegistryHosts(registry string) []string {
+	var hosts []string
+	if registry == "registry-1.docker.io" {
+		var appMirrors []string
+		tempMirrorsStr := db.GetSetting("temp_mirrors", "[]")
+		_ = json.Unmarshal([]byte(tempMirrorsStr), &appMirrors)
+
+		seen := make(map[string]bool)
+		for _, m := range appMirrors {
+			m = strings.TrimSpace(m)
+			if m == "" {
+				continue
+			}
+			if !seen[m] {
+				seen[m] = true
+				u, err := url.Parse(m)
+				if err == nil && u.Host != "" {
+					hosts = append(hosts, u.Host)
+				} else {
+					mClean := strings.TrimPrefix(m, "https://")
+					mClean = strings.TrimPrefix(mClean, "http://")
+					mClean = strings.TrimSuffix(mClean, "/")
+					if mClean != "" {
+						hosts = append(hosts, mClean)
+					}
+				}
+			}
+		}
+	}
+	hosts = append(hosts, registry)
+	return hosts
 }

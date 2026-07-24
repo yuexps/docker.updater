@@ -22,7 +22,7 @@ var (
 	initialCheckOnce sync.Once
 )
 
-// StartScheduler 初始化并启动定时任务调度器。
+// StartScheduler 初始化并启动定时任务调度器
 func StartScheduler() {
 	schedulerMu.Lock()
 	defer schedulerMu.Unlock()
@@ -54,8 +54,7 @@ func StartScheduler() {
 	case "day":
 		cronExpr = fmt.Sprintf("0 3 */%d * *", checkValue)
 	case "week":
-		days := checkValue * 7
-		cronExpr = fmt.Sprintf("0 3 */%d * *", days)
+		cronExpr = "0 3 * * 0"
 	case "month":
 		cronExpr = fmt.Sprintf("0 3 1 */%d *", checkValue)
 	default:
@@ -79,15 +78,22 @@ func StartScheduler() {
 		defer cancel()
 
 		// 1. 清理物理过期备份容器及其元数据
-		var expired []db.RollbackMetadata
-		nowStr := time.Now().UTC().Format(time.RFC3339)
-		if dbErr := db.DB.Find(&expired, "expires_at != '' AND expires_at != 'forever' AND expires_at <= ?", nowStr).Error; dbErr == nil && len(expired) > 0 {
+		var allRollbacks []db.RollbackMetadata
+		now := time.Now().UTC()
+		if dbErr := db.DB.Find(&allRollbacks, "expires_at != '' AND expires_at != 'forever'").Error; dbErr == nil && len(allRollbacks) > 0 {
+			var expiredMetas []db.RollbackMetadata
 			var backupNames []string
-			for _, meta := range expired {
-				backupNames = append(backupNames, meta.ContainerName+"_backup_docker_updater")
+			for _, meta := range allRollbacks {
+				t, err := time.Parse(time.RFC3339, meta.ExpiresAt)
+				if err == nil && !t.After(now) {
+					expiredMetas = append(expiredMetas, meta)
+					backupNames = append(backupNames, meta.ContainerName+"_backup_docker_updater")
+				}
 			}
-			dockerclient.CleanExpiredBackups(ctx, backupNames)
-			db.DB.Delete(&expired)
+			if len(backupNames) > 0 {
+				dockerclient.CleanExpiredBackups(ctx, backupNames)
+				db.DB.Delete(&expiredMetas)
+			}
 		}
 
 		// 2. 清理失效的延迟更新保护配置
@@ -256,7 +262,7 @@ func RunScheduledCheck(isInitial bool) {
 	}
 }
 
-// ReloadScheduler 热重载定时任务调度器。
+// ReloadScheduler 热重载定时任务调度器
 func ReloadScheduler() {
 	StartScheduler()
 }

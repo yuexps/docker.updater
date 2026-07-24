@@ -40,6 +40,7 @@
 8. **无 CLI 依赖**: 所有 Docker 操作均通过 Docker SDK 交互，禁止调用命令行 `docker` 进程。
 9. **文档优先**: 变更代码前，优先同步更新 [AGENTS.md](AGENTS.md) 及 [specification.md](docs/specification.md)。
 10. **禁止自动构建**: AI 代理禁止自行运行构建或打包脚本（如 `build.cmd` 或 `build.sh`），如有构建需求应引导并交由用户手动执行。
+11. **代码注释规范**: 代码注释必须严肃，禁止虚空名词；简洁高效、直击核心，无废话无多余赘述（例如：`// InitDB 初始化 SQLite 数据库`）。
 
 ## 构建命令
 * **Windows 平台**:

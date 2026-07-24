@@ -201,9 +201,11 @@ func apiCheck(c *gin.Context) {
 // apiCheckSingle 针对单容器单独发起版本比对检查
 func apiCheckSingle(c *gin.Context) {
 	name := c.Param("name")
+	utils.LogInfo("开始对比检查容器 %s 的镜像版本...", name)
+
 	res, err := dockerclient.ScanSingleContainer(c.Request.Context(), name)
 	if err != nil {
-		utils.LogError("针对单容器 %s 发起版本比对检查失败: %s", name, err.Error())
+		utils.LogError("容器 %s 版本检查失败: %s", name, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -228,7 +230,6 @@ func apiCheckSingle(c *gin.Context) {
 		service.GlobalObserver.OnStatusChange()
 	}
 
-	utils.LogSuccess("针对单容器 %s 完成独立版本检查 (有更新: %t)", name, res.HasUpdate)
 	c.JSON(http.StatusOK, gin.H{
 		"ok":         true,
 		"has_update": res.HasUpdate,
@@ -236,34 +237,28 @@ func apiCheckSingle(c *gin.Context) {
 	})
 }
 
-// apiUpdate 升级容器，加入任务队列并输出流式日志进度
-func apiUpdate(c *gin.Context) {
+// serveTaskLogSSE 统一处理任务加入队列并分发 SSE 流式日志
+func serveTaskLogSSE(c *gin.Context, taskType service.TaskType, targetImage string) {
 	name := c.Param("name")
-	targetImage := c.Query("target_image")
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 	c.Header("Transfer-Encoding", "chunked")
 
-	// 1. 将任务添加至全局队列。若已存在，则返回已有的 Task 实例。
-	task := service.GlobalQueue.AddTask(name, service.TaskUpdate, targetImage, false)
+	task := service.GlobalQueue.AddTask(name, taskType, targetImage, false)
 
-	// 2. 初始化通道并注册监听器
 	logChan := make(chan string, 50)
 	task.AddListener(logChan)
 	defer task.RemoveListener(logChan)
 
-	// 3. 发送当前任务已有的全部历史日志，以支持重连后的回显。
 	historicalLogs := task.GetLogs()
 	for _, line := range historicalLogs {
 		c.SSEvent("message", line)
 	}
 
-	// 4. 定时发送周期心跳包以维持连接活性，防范代理超时中断。
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
-	// 5. 订阅并分发实时日志流
 	c.Stream(func(w io.Writer) bool {
 		select {
 		case msg, ok := <-logChan:
@@ -281,48 +276,15 @@ func apiUpdate(c *gin.Context) {
 	})
 }
 
+// apiUpdate 升级容器，加入任务队列并输出流式日志进度
+func apiUpdate(c *gin.Context) {
+	targetImage := c.Query("target_image")
+	serveTaskLogSSE(c, service.TaskUpdate, targetImage)
+}
+
 // apiRollback 容器一键回滚，加入任务队列并以 SSE 输出日志流
 func apiRollback(c *gin.Context) {
-	name := c.Param("name")
-	c.Header("Content-Type", "text/event-stream")
-	c.Header("Cache-Control", "no-cache")
-	c.Header("Connection", "keep-alive")
-	c.Header("Transfer-Encoding", "chunked")
-
-	// 1. 将任务添加至全局队列。
-	task := service.GlobalQueue.AddTask(name, service.TaskRollback, "", false)
-
-	// 2. 初始化通道并注册监听器
-	logChan := make(chan string, 50)
-	task.AddListener(logChan)
-	defer task.RemoveListener(logChan)
-
-	// 3. 发送当前任务已有的全部历史日志，以支持重连后的回显。
-	historicalLogs := task.GetLogs()
-	for _, line := range historicalLogs {
-		c.SSEvent("message", line)
-	}
-
-	// 4. 定时发送周期心跳包以维持连接活性，防范代理超时中断。
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	// 5. 订阅并分发实时日志流
-	c.Stream(func(w io.Writer) bool {
-		select {
-		case msg, ok := <-logChan:
-			if ok {
-				c.SSEvent("message", msg)
-				return true
-			}
-			return false
-		case <-ticker.C:
-			c.SSEvent("ping", "keepalive")
-			return true
-		case <-c.Request.Context().Done():
-			return false
-		}
-	})
+	serveTaskLogSSE(c, service.TaskRollback, "")
 }
 
 // apiBackupDelete 删除旧备份释放存储
@@ -592,11 +554,7 @@ func apiUpdateLogGet(c *gin.Context) {
 		return
 	}
 
-	pkgVar := os.Getenv("TRIM_PKGVAR")
-	if pkgVar == "" {
-		pkgVar = "./data"
-	}
-	logFilePath := filepath.Join(pkgVar, "logs", fmt.Sprintf("%s.log", name))
+	logFilePath := utils.GetLogFilePath(name)
 	if _, err := os.Stat(logFilePath); os.IsNotExist(err) {
 		c.JSON(http.StatusOK, gin.H{"found": false, "logs": []string{}})
 		return
@@ -611,18 +569,14 @@ func apiUpdateLogGet(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"found": true, "logs": lines})
 }
 
-// apiUpdateLogDelete 物理清除指定容器的升级日志文件。
+// apiUpdateLogDelete 物理清除指定容器的升级日志文件
 func apiUpdateLogDelete(c *gin.Context) {
 	name := c.Param("name")
 	if matched, _ := regexp.MatchString(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`, name); !matched {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid container name format"})
 		return
 	}
-	pkgVar := os.Getenv("TRIM_PKGVAR")
-	if pkgVar == "" {
-		pkgVar = "./data"
-	}
-	logFilePath := filepath.Join(pkgVar, "logs", fmt.Sprintf("%s.log", name))
+	logFilePath := utils.GetLogFilePath(name)
 	if err := os.Remove(logFilePath); err != nil && !os.IsNotExist(err) {
 		utils.LogError("物理删除指定容器升级日志文件失败: %s", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -829,11 +783,7 @@ func apiTaskCancel(c *gin.Context) {
 
 // apiSystemLogsGet 获取守护进程自身的 info.log 运行日志（最末 400 行）
 func apiSystemLogsGet(c *gin.Context) {
-	pkgVar := os.Getenv("TRIM_PKGVAR")
-	if pkgVar == "" {
-		pkgVar = "./data"
-	}
-	logFilePath := filepath.Join(pkgVar, "info.log")
+	logFilePath := filepath.Join(utils.GetPkgVarDir(), "info.log")
 	if _, err := os.Stat(logFilePath); os.IsNotExist(err) {
 		c.JSON(http.StatusOK, gin.H{"logs": []string{}})
 		return
@@ -868,11 +818,7 @@ func apiSystemLogsGet(c *gin.Context) {
 
 // apiSystemLogsDelete 物理清空全局 info.log 日志内容
 func apiSystemLogsDelete(c *gin.Context) {
-	pkgVar := os.Getenv("TRIM_PKGVAR")
-	if pkgVar == "" {
-		pkgVar = "./data"
-	}
-	logFilePath := filepath.Join(pkgVar, "info.log")
+	logFilePath := filepath.Join(utils.GetPkgVarDir(), "info.log")
 	// 使用 O_TRUNC 打开以截断清空内容，防止文件写句柄失效
 	err := os.WriteFile(logFilePath, []byte(""), 0644)
 	if err != nil {
@@ -1062,11 +1008,7 @@ func apiHistoryClear(c *gin.Context) {
 	}
 
 	// 2. 遍历删除 logs 目录下的所有本地升级日志文件
-	pkgVar := os.Getenv("TRIM_PKGVAR")
-	if pkgVar == "" {
-		pkgVar = "./data"
-	}
-	logsDir := filepath.Join(pkgVar, "logs")
+	logsDir := filepath.Join(utils.GetPkgVarDir(), "logs")
 	_ = filepath.Walk(logsDir, func(path string, info os.FileInfo, err error) error {
 		if err == nil && !info.IsDir() && strings.HasSuffix(info.Name(), ".log") {
 			_ = os.Remove(path)
@@ -1105,11 +1047,7 @@ func apiHistoryDelete(c *gin.Context) {
 	}
 
 	// 3. 删除对应的物理日志文件
-	pkgVar := os.Getenv("TRIM_PKGVAR")
-	if pkgVar == "" {
-		pkgVar = "./data"
-	}
-	logFilePath := filepath.Join(pkgVar, "logs", fmt.Sprintf("%s.log", hist.ContainerName))
+	logFilePath := utils.GetLogFilePath(hist.ContainerName)
 	_ = os.Remove(logFilePath)
 
 	utils.LogSuccess("手动删除容器 %s 的升级历史记录成功", hist.ContainerName)

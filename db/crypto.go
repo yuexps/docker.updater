@@ -14,7 +14,7 @@ import (
 
 var secretKey = []byte("fnos-docker-updater-secret-key32")
 
-// initCryptoKey 初始化本地对称密钥。
+// initCryptoKey 初始化本地对称密钥
 func initCryptoKey(pkgVar string) error {
 	keyPath := filepath.Join(pkgVar, "secret.key")
 	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
@@ -42,7 +42,7 @@ func initCryptoKey(pkgVar string) error {
 	}
 }
 
-// encrypt 使用 AES-GCM 加密并进行 Base64 编码。
+// encrypt 使用 AES-GCM 加密并输出 Base64 字符串
 func encrypt(text string) (string, error) {
 	block, err := aes.NewCipher(secretKey)
 	if err != nil {
@@ -60,7 +60,7 @@ func encrypt(text string) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-// decrypt 使用 AES-GCM 解密 Base64 密文。
+// decrypt 使用 AES-GCM 解密 Base64 密文
 func decrypt(cryptoText string) (string, error) {
 	ciphertext, err := base64.StdEncoding.DecodeString(cryptoText)
 	if err != nil {

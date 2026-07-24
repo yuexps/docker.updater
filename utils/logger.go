@@ -306,3 +306,17 @@ func LogTaskWarning(container string, format string, v ...interface{}) {
 func LogTaskError(container string, format string, v ...interface{}) {
 	Log(LevelError, container, format, v...)
 }
+
+// GetPkgVarDir 获取应用数据根路径
+func GetPkgVarDir() string {
+	pkgVar := os.Getenv("TRIM_PKGVAR")
+	if pkgVar == "" {
+		return "./data"
+	}
+	return pkgVar
+}
+
+// GetLogFilePath 获取指定容器的日志文件绝对路径
+func GetLogFilePath(containerName string) string {
+	return filepath.Join(GetPkgVarDir(), "logs", fmt.Sprintf("%s.log", containerName))
+}

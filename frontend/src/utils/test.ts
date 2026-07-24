@@ -21,6 +21,8 @@ interface MockImage {
   size: number
   created: number
   containers?: string[]
+  architecture?: string
+  version?: string
 }
 
 interface RegistryItem {
@@ -93,7 +95,7 @@ class SimulationDatabase {
       },
       {
         name: 'redis-cache',
-        image: 'redis:7.2-alpine',
+        image: 'redis:7.2-alpine_20260708_c93e00f1_luckydocker_super_long_tag_name_test',
         status: 'ok',
         defer_until: null,
         checked_at: '2026-07-09 12:00',
@@ -105,28 +107,28 @@ class SimulationDatabase {
         remote_digest: 'sha256:8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e'
       },
       {
-        name: 'node-api',
+        name: 'node-service',
         image: 'node:20-alpine',
         status: 'deferred',
-        defer_until: '2026-07-16',
-        checked_at: '2026-07-09 09:45',
+        defer_until: '2026-08-01',
+        checked_at: '2026-07-09 09:00',
         has_rollback: false,
         rollback_expires: null,
-        compose_project: 'web-cluster',
-        running: true,
+        compose_project: null,
+        running: false,
         local_digest: 'sha256:1a84f3c0eb51b14a601859c402130386cfb8109bfcf9446d3e4f082ec15d862f',
-        remote_digest: 'sha256:f6e5d4c3b2a1a0b9c8d7e6f5a4b3c2d1e0f9a8b8c7d6e5f4a3b2c1d0c9b8a7f'
+        remote_digest: 'sha256:1a84f3c0eb51b14a601859c402130386cfb8109bfcf9446d3e4f082ec15d862f'
       },
       {
         name: 'python-worker',
         image: 'python:3.11-slim',
         status: 'update',
         defer_until: null,
-        checked_at: '2026-07-09 08:20',
+        checked_at: '2026-07-09 08:30',
         has_rollback: true,
-        rollback_expires: '2026-07-15 08:20',
-        compose_project: null,
-        running: false,
+        rollback_expires: '2026-07-16 08:30',
+        compose_project: 'data-pipeline',
+        running: true,
         local_digest: 'sha256:7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6',
         remote_digest: 'sha256:e0f9a8b8c7d6e5f4a3b2c1d0c9b8a7f6e5d4c3b2a1a0b9c8d7e6f5a4b3c2d1e'
       }
@@ -137,43 +139,55 @@ class SimulationDatabase {
         id: 'sha256:4f082ec15d862f1c84f3c0eb51b14a601859c402130386cfb8109bfcf9446d3e',
         tags: ['nginx:alpine'],
         size: 45000000,
-        created: 1783515000
+        created: 1783515000,
+        architecture: 'amd64',
+        version: '1.25.3'
       },
       {
         id: 'sha256:5a4b3c2d1e0f9a8b8c7d6e5f4a3b2c1d0c9b8a7f6e5d4c3b2a1a0b9c8d7e6f5a',
-        tags: ['postgres:15-alpine'],
+        tags: ['postgres:15-alpine_20260708_c93e00f1_luckydocker_super_long_tag_name_test'],
         size: 280000000,
-        created: 1783500000
+        created: 1783500000,
+        architecture: 'amd64',
+        version: '15.4'
       },
       {
         id: 'sha256:8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e',
-        tags: ['redis:7.2-alpine'],
+        tags: ['redis:7.2-alpine_20260708_c93e00f1_luckydocker_super_long_tag_name_test'],
         size: 38000000,
-        created: 1783450000
+        created: 1783450000,
+        architecture: 'arm64',
+        version: '7.2.4'
       },
       {
         id: 'sha256:1a84f3c0eb51b14a601859c402130386cfb8109bfcf9446d3e4f082ec15d862f',
         tags: ['node:20-alpine'],
         size: 180000000,
-        created: 1783400000
+        created: 1783400000,
+        architecture: 'amd64',
+        version: '20.11.0'
       },
       {
         id: 'sha256:7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6',
         tags: ['python:3.11-slim'],
         size: 120000000,
-        created: 1783300000
+        created: 1783300000,
+        architecture: 'amd64',
+        version: '3.11.7'
       },
       {
         id: 'sha256:9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1a0b9c8d7e6f5a4b3c2d1e0f9a8b',
         tags: ['<none>:<none>'],
         size: 55000000,
-        created: 1783100000
+        created: 1783100000,
+        architecture: 'amd64'
       },
       {
         id: 'sha256:e0f9a8b8c7d6e5f4a3b2c1d0c9b8a7f6e5d4c3b2a1a0b9c8d7e6f5a4b3c2d1e',
         tags: ['<none>:<none>'],
         size: 110000000,
-        created: 1783000000
+        created: 1783000000,
+        architecture: 'amd64'
       }
     ]
 

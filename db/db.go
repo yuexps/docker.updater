@@ -19,14 +19,11 @@ var (
 	once sync.Once
 )
 
-// InitDB 初始化 SQLite 数据库。
+// InitDB 初始化 SQLite 数据库
 func InitDB() error {
 	var err error
 	once.Do(func() {
-		pkgVar := os.Getenv("TRIM_PKGVAR")
-		if pkgVar == "" {
-			pkgVar = "./data"
-		}
+		pkgVar := utils.GetPkgVarDir()
 		if err = os.MkdirAll(pkgVar, 0755); err != nil {
 			return
 		}
@@ -70,7 +67,7 @@ func InitDB() error {
 	return err
 }
 
-// GetSetting 获取配置。
+// GetSetting 获取配置项
 func GetSetting(key string, defaultVal string) string {
 	var s Setting
 	if err := DB.First(&s, "key = ?", key).Error; err != nil {
@@ -79,7 +76,7 @@ func GetSetting(key string, defaultVal string) string {
 	return s.Value
 }
 
-// SetSetting 保存配置。
+// SetSetting 保存配置项
 func SetSetting(key string, value string) error {
 	s := Setting{Key: key, Value: value}
 	return DB.Save(&s).Error

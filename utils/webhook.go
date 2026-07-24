@@ -131,7 +131,7 @@ func GetDefaultWebhookTemplate(webhookType string, isCheck bool) string {
 	}
 }
 
-// SendWebhookNotification 发送 Webhook 通知。
+// SendWebhookNotification 发送 Webhook 通知
 func SendWebhookNotification(url string, method string, payload string, webhookType string) (string, error) {
 	if url == "" {
 		LogWarning("Webhook 通知发送取消: URL 为空")

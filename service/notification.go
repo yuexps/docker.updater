@@ -84,7 +84,7 @@ func SendNotification(containerName, actionType, statusName, logContent string) 
 	}
 }
 
-// escapeJSONString 转义 JSON 中的特殊字符与换行符。
+// escapeJSONString 转义 JSON 中的特殊字符与换行符
 func escapeJSONString(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, `"`, `\"`)
@@ -94,7 +94,7 @@ func escapeJSONString(s string) string {
 	return s
 }
 
-// renderTemplate 渲染通知模板。
+// renderTemplate 渲染通知模板
 func renderTemplate(tpl, containerName, actionType, statusName, logContent string, escapeJSON bool) string {
 	logs := logContent
 	if escapeJSON {

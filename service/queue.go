@@ -24,7 +24,7 @@ const (
 	TaskRollback TaskType = "rollback"
 )
 
-// QueueObserver 队列状态观察接口。
+// QueueObserver 队列状态观察接口
 type QueueObserver interface {
 	OnLog(containerName string, taskType string, message string)
 	OnStatusChange()
@@ -124,7 +124,7 @@ type QueueManager struct {
 
 var GlobalQueue *QueueManager
 
-// InitQueueManager 初始化任务队列管理器。
+// InitQueueManager 初始化任务队列管理器
 func InitQueueManager() {
 	GlobalQueue = &QueueManager{
 		tasks:   make([]*Task, 0),
@@ -376,13 +376,8 @@ func (q *QueueManager) worker() {
 			}(task.ContainerName, task.Type, task.GetStatus(), task.GetLogs())
 		}
 
-		pkgVar := os.Getenv("TRIM_PKGVAR")
-		if pkgVar == "" {
-			pkgVar = "./data"
-		}
-		logDir := filepath.Join(pkgVar, "logs")
-		_ = os.MkdirAll(logDir, 0755)
-		logFilePath := filepath.Join(logDir, fmt.Sprintf("%s.log", task.ContainerName))
+		logFilePath := utils.GetLogFilePath(task.ContainerName)
+		_ = os.MkdirAll(filepath.Dir(logFilePath), 0755)
 		_ = os.WriteFile(logFilePath, []byte(strings.Join(task.GetLogs(), "\n")), 0644)
 		utils.LogInfo("任务队列: 容器 %s 升级流日志已持久化保存 (%d 行)", task.ContainerName, len(task.Logs))
 	}

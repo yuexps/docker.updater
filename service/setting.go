@@ -12,10 +12,10 @@ import (
 	"docker-updater/utils"
 )
 
-// OnSettingsReload 配置重载回调函数。
+// OnSettingsReload 配置重载回调函数
 var OnSettingsReload func()
 
-// GlobalSettings 全局配置结构体。
+// GlobalSettings 全局配置结构体
 type GlobalSettings struct {
 	BackupEnabled            bool     `json:"backup_enabled"`
 	BackupHours              int      `json:"backup_hours"`
@@ -50,7 +50,7 @@ type GlobalSettings struct {
 	WebhookTemplateCheckFeishu   string   `json:"webhook_template_check_feishu"`
 }
 
-// TestNotificationSettings 通知配置测试结构体。
+// TestNotificationSettings 通知配置测试结构体
 type TestNotificationSettings struct {
 	NotifyType              string `json:"notify_type"`
 	SMTPHost                string `json:"smtp_host"`
@@ -70,7 +70,7 @@ type TestNotificationSettings struct {
 	WebhookTemplateFeishu    string `json:"webhook_template_feishu"`
 }
 
-// SaveGlobalSettings 保存全局配置。
+// SaveGlobalSettings 保存全局配置
 func SaveGlobalSettings(body GlobalSettings) error {
 	// 1. 读取保存前的旧配置以进行增量变动对比
 	oldBackupEnabled := db.GetSetting("backup_enabled", "false") == "true"
@@ -198,7 +198,7 @@ func SaveGlobalSettings(body GlobalSettings) error {
 	return nil
 }
 
-// SendTestNotification 发送测试通知。
+// SendTestNotification 发送测试通知
 func SendTestNotification(body TestNotificationSettings) (string, error) {
 	if body.NotifyType == "webhook" {
 		// 动态解析 Webhook 的网络参数

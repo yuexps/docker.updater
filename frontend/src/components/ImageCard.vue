@@ -1,38 +1,33 @@
 <template>
-  <div 
+  <div
     class="apple-card rounded-lg p-4.5 flex flex-col justify-between min-h-43.75 hover:border-primary hover:shadow-[0_12px_28px_rgba(0,0,0,0.04)] transition-all duration-300 bg-white"
-    :class="{'border-amber-400/60 bg-amber-50/10': isDangling}"
-  >
-    <!-- 顶部主要信息 -->
+    :class="{ 'border-amber-400/60 bg-amber-50/10': isDangling }">
     <div>
-      <div class="flex items-start justify-between">
-        <div class="flex items-center min-w-0 flex-1">
-          <!-- 镜像图标 -->
-          <div class="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-500 shadow-xs shrink-0">
-            <svg class="w-5 h-5 text-slate-500" viewBox="0 0 24 24">
-              <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3"></path>
-                <path d="M12 12l8-4.5"></path>
-                <path d="M12 12v9"></path>
-                <path d="M12 12L4 7.5"></path>
-              </g>
-            </svg>
-          </div>
+      <div class="flex items-start">
+        <div
+          class="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-500 shadow-xs shrink-0">
+          <svg class="w-5 h-5 text-slate-500" viewBox="0 0 24 24">
+            <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3"></path>
+              <path d="M12 12l8-4.5"></path>
+              <path d="M12 12v9"></path>
+              <path d="M12 12L4 7.5"></path>
+            </g>
+          </svg>
+        </div>
 
-          <!-- 解析后的 Repository 与 Tag 信息 -->
-          <div class="ml-3 min-w-0 flex-1">
+        <div class="ml-3 flex-1 min-w-0">
+          <!-- 第一行：Repository 与 状态指示徽章 -->
+          <div class="flex items-center justify-between min-w-0">
             <div class="flex items-center space-x-1.5 min-w-0">
-              <div 
-                class="text-[16px] font-bold text-slate-800 tracking-tight truncate select-all"
-                :class="{'text-slate-400': isDangling}"
-                :title="parsedInfo.fullRepo"
-              >
+              <div class="text-[16px] font-bold text-slate-800 tracking-tight truncate select-all"
+                :class="{ 'text-slate-400': isDangling }" :title="parsedInfo.fullRepo">
                 {{ parsedInfo.repo }}
               </div>
-              <!-- 如果有多个 Tag，显示 +N 药丸 -->
               <n-tooltip v-if="image.tags.length > 1" trigger="hover" placement="top">
                 <template #trigger>
-                  <span class="cursor-help shrink-0 bg-slate-100 text-[10px] text-slate-500 font-bold px-1 py-0.5 rounded border border-slate-200/50">
+                  <span
+                    class="cursor-help shrink-0 bg-slate-100 text-[10px] text-slate-500 font-bold px-1 py-0.5 rounded border border-slate-200/50">
                     +{{ image.tags.length - 1 }}
                   </span>
                 </template>
@@ -42,47 +37,52 @@
                 </div>
               </n-tooltip>
             </div>
-            
-            <!-- 主 Tag 显示 -->
-            <div class="mt-1 flex items-center space-x-1.5">
-              <span 
-                class="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50/80 text-[10px] font-bold text-primary border border-blue-100/50 truncate max-w-37.5"
-                :class="{'bg-amber-50 text-amber-600 border-amber-200/50': isDangling}"
-                :title="parsedInfo.tag"
-              >
-                {{ parsedInfo.tag }}
-              </span>
-              <button 
-                v-if="!isDangling"
-                class="text-slate-400 hover:text-primary transition-colors p-0.5 rounded hover:bg-slate-50 cursor-pointer shrink-0"
-                title="复制完整镜像名称"
-                @click="copyText(image.tags[0])"
-              >
-                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                </svg>
-              </button>
+
+            <!-- 状态指示徽章 -->
+            <div class="shrink-0 ml-2">
+              <div class="flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium border" :class="[
+                isDangling
+                  ? 'bg-amber-50 text-amber-700 border-amber-100'
+                  : isInUse
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                    : 'bg-slate-50 text-slate-500 border-slate-200'
+              ]">
+                <span v-if="isInUse" class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                <span v-else-if="isDangling" class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                <span v-else class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+                <span>{{ isDangling ? '无标签' : isInUse ? '在用' : '未占用' }}</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- 状态指示徽章 -->
-        <div class="shrink-0 ml-2">
-          <div 
-            class="flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium border"
-            :class="[
-              isDangling
-                ? 'bg-amber-50 text-amber-700 border-amber-100'
-                : isInUse
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                  : 'bg-slate-50 text-slate-500 border-slate-200'
-            ]"
-          >
-            <span v-if="isInUse" class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-            <span v-else-if="isDangling" class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-            <span v-else class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
-            <span>{{ isDangling ? '无标签' : isInUse ? '在用' : '未占用' }}</span>
+          <!-- 第二行：Tag 与 语义化版本徽章 -->
+          <div class="mt-1.5 flex items-center gap-1.5 min-w-0">
+            <span
+              class="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50/80 text-[10px] font-bold text-primary border border-blue-100/50 min-w-0 truncate max-w-64"
+              :class="{ 'bg-amber-50 text-amber-600 border-amber-200/50': isDangling }" :title="parsedInfo.tag">
+              {{ parsedInfo.tag }}
+            </span>
+            <button v-if="!isDangling"
+              class="text-slate-400 hover:text-primary transition-colors p-0.5 rounded hover:bg-slate-50 cursor-pointer shrink-0 -ml-0.5 mr-0.5"
+              title="复制完整镜像名称" @click="copyText(image.tags[0])">
+              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+            </button>
+
+            <!-- 语义化版本徽章 -->
+            <div v-if="formattedVersion"
+              class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-semibold text-slate-600 border border-slate-200/40 max-w-37.5 shrink-0 truncate select-all"
+              :title="'语义化版本: ' + formattedVersion">
+              <svg class="w-2.5 h-2.5 mr-1 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                <circle cx="7" cy="7" r="1.2" fill="currentColor" />
+              </svg>
+              <span class="truncate font-mono">{{ formattedVersion }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -109,18 +109,16 @@
             <div class="mt-1 flex flex-wrap gap-1.5 min-h-5.5 items-center min-w-0">
               <template v-if="isInUse">
                 <!-- 最多渲染前2个引用容器 -->
-                <span 
-                  v-for="c in visibleContainers" 
-                  :key="c"
+                <span v-for="c in visibleContainers" :key="c"
                   class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-50 text-[11px] text-slate-600 border border-slate-200/40 font-mono select-all truncate max-w-full"
-                  :title="c"
-                >
+                  :title="c">
                   {{ c }}
                 </span>
                 <!-- 超出折叠标签 -->
                 <n-tooltip v-if="image.containers && image.containers.length > 2" trigger="hover" placement="top">
                   <template #trigger>
-                    <span class="cursor-help inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-[11px] text-slate-500 font-bold border border-slate-200/50">
+                    <span
+                      class="cursor-help inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-[11px] text-slate-500 font-bold border border-slate-200/50">
                       +{{ image.containers.length - 2 }}
                     </span>
                   </template>
@@ -137,10 +135,8 @@
           <!-- 架构（右侧对齐 50% 网格线） -->
           <div class="flex flex-col min-w-0">
             <span class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">架构</span>
-            <span 
-              class="text-slate-700 font-medium mt-1 font-mono text-[12px] sm:text-[13px] truncate" 
-              :title="image.architecture"
-            >
+            <span class="text-slate-700 font-medium mt-1 font-mono text-[12px] sm:text-[13px] truncate"
+              :title="image.architecture">
               {{ image.architecture || '未知' }}
             </span>
           </div>
@@ -150,27 +146,18 @@
 
     <!-- 底部操作区域 -->
     <div class="mt-4 pt-3.5 border-t border-slate-100 flex justify-between items-center">
-      <!-- 镜像 ID 与独立版本徽章 -->
+      <!-- 镜像 ID -->
       <div class="flex items-center space-x-1.5 min-w-0">
         <span class="text-[11px] text-slate-400 font-mono tracking-tight truncate">ID: {{ shortID }}</span>
-        <button 
+        <button
           class="text-slate-400 hover:text-primary transition-colors p-1 rounded hover:bg-slate-50 cursor-pointer shrink-0"
-          title="复制完整镜像 ID"
-          @click="copyText(image.id)"
-        >
-          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          title="复制完整镜像 ID" @click="copyText(image.id)">
+          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
           </svg>
         </button>
-        <!-- 独立语义版本徽章 -->
-        <span 
-          v-if="image.version" 
-          class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-md bg-slate-100 text-[10px] font-mono font-semibold text-slate-600 border border-slate-200/60 shrink-0 select-all"
-          :title="'语义化版本: ' + image.version"
-        >
-          {{ formattedVersion }}
-        </span>
       </div>
 
       <!-- 操作按钮 -->
@@ -178,14 +165,8 @@
         <n-tooltip v-if="isInUse" trigger="hover" placement="top">
           <template #trigger>
             <span>
-              <n-button 
-                type="error"
-                size="small"
-                round
-                ghost
-                disabled
-                class="text-[12px] font-medium opacity-50 cursor-not-allowed"
-              >
+              <n-button type="error" size="small" round ghost disabled
+                class="text-[12px] font-medium opacity-50 cursor-not-allowed">
                 删除
               </n-button>
             </span>
@@ -195,15 +176,8 @@
             <div class="font-semibold text-amber-400 mt-1 font-mono break-all">{{ image.containers?.join(', ') }}</div>
           </div>
         </n-tooltip>
-        <n-button 
-          v-else
-          type="error"
-          size="small"
-          round
-          ghost
-          class="active-scale text-[12px] font-medium"
-          @click="emit('delete', image.id)"
-        >
+        <n-button v-else type="error" size="small" round ghost class="active-scale text-[12px] font-medium"
+          @click="emit('delete', image.id)">
           删除
         </n-button>
       </div>
@@ -254,10 +228,10 @@ const parsedInfo = computed(() => {
   if (!firstTag || firstTag === '<none>:<none>') {
     return { repo: '<none>', fullRepo: '<none>', tag: '<none>' }
   }
-  
+
   const lastColon = firstTag.lastIndexOf(':')
   const lastSlash = firstTag.lastIndexOf('/')
-  
+
   let repo = firstTag
   let tag = 'latest'
   if (lastColon > lastSlash) {
@@ -274,7 +248,7 @@ const parsedInfo = computed(() => {
       displayRepo = parts.slice(1).join('/')
     }
   }
-  
+
   return { repo: displayRepo, fullRepo: repo, tag: tag }
 })
 

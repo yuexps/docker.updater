@@ -94,11 +94,17 @@ type RegistryCredential struct {
 }
 ```
 
-## 3. 升级检测机制与分层回退规范
-* **分层回退摘要解析与同维度比对引擎 (Layered Fallback Digest Parsing & Hash Alignment)**:
-  - **首选算法 (RepoDigest 比对)**: 当镜像带有 `RepoDigests` 时，优先使用 Docker 引擎中的 `RepoDigests` SHA256 摘要与远端 `Manifest Digest` 进行精确比对。
-  - **回退算法 (同维度 Config ID 比对)**: 当镜像由于本地 `docker build`、`docker load`、离线导入或加速拉取重打标导致 `RepoDigests` 为空时，系统保留真实的空 Digest 状态，强制向 Registry 请求解析远端对应架构的 `config.digest`（Config ID），通过 `remoteConfigDigest vs localImageID` 进行同维度 1:1 比对，消除跨维度 Hash 导致的误判。
-  - **本地存储兜底校验**: 若比对未直接匹配，系统自动检查远端 Manifest Digest 是否已存在于本地 Docker 存储中且与当前容器匹配，从物理存储层面做最终校验，确保比对判定 100% 精确。
+## 3. 升级检测机制规范
+* **更新检测机制与触发场景**:
+  - **被动元数据检查 (DistributionInspect)**:
+    - 用于后台定时扫描（Cron）与服务启动初始化扫描。后台扫描禁止调用 ImagePull 拉取镜像，仅获取元数据。
+    - 请求时带上与容器运行时一致的 `Platform` 平台架构（`os` / `architecture` / `variant`）。遇到多架构 Manifest List 时，解析匹配架构的 `Child Manifest Digest` 以及 `config.digest` (Image ID)。
+    - **比对判定规则**: 只要远端 `Child Manifest Digest` 存在于本地 `RepoDigests` 中、远端 `config.digest` 等于本地镜像 `Image ID`、或本地 Docker `ImageInspectWithRaw` 能检索到此 Digest，即判定为无更新。
+  - **主动镜像拉取检查 (ImagePull + Inspect)**:
+    - 仅在用户手动触发更新检测且镜像属于 `docker commit` / `docker load` 离线镜像（`RepoDigests` 为空）或元数据检查无法判定时调用。
+    - 通过 SDK 的 `ImagePull` 更新 Tag 元数据，比对最新镜像 ID 与运行容器镜像 ID。ID 相同判定无更新，ID 变动判定有更新。
+  - **401 认证多协议兼容**: 自动识别 `WWW-Authenticate` 标头类型，兼容 OCI Bearer Token 机制与 HTTP Basic Auth 挑战标头。
+  - **Tag 列表多源加速轮询**: 远端 Tag 列表获取 (`GetRemoteTags`) 融入应用级 `temp_mirrors` 镜像加速源节点轮询。
 
 ## 4. 加密与安全策略
 * **对称加密**: 使用 AES-256-GCM 算法。
@@ -153,28 +159,34 @@ type RegistryCredential struct {
 
 ## 6. 更新与自动回滚生命周期
 
+* **纯 Docker SDK 克隆升级规范**: 所有容器升级（含带 `com.docker.compose.project` 标签的 Compose 容器）均采用纯 Go Docker SDK 实现，禁止调用外部 `docker` / `docker compose` 命令行进程。
+* **私有仓库鉴权注入**: 镜像拉取阶段（`pullImageWithMirrors`）自动提取 Registry 域名并匹配凭证提供者（`GlobalCredentialsProvider`），将 Base64 编码的 Auth 配置注入 `types.ImagePullOptions{RegistryAuth: ...}`。
+* **静态 IP 与网络解绑防冲突**: 旧容器停止并重命名为 `_backup_docker_updater` 后，立即从其挂载的 Docker 网络中断开端点（`NetworkDisconnect`），彻底释放静态 IP 占用，规避 `IP already in use` 导致的容器创建/启动失败。若发生回滚，自动将旧容器重新连回原网络。
+* **克隆配置清洗**: 基于旧容器 `inspect.Config` 创建新容器时，若 `inspect.Config.Hostname` 为自动生成的 12 位 ID Hash，自动重置为空字符串 `""`，防止主机名污染。
+* **8 秒健康探活与自愈**: 新容器启动后执行 8 秒稳定性观察（8 次 1 秒轮询），全面检测 `State.Running`、`State.Restarting` 及 `State.ExitCode`；若探活失败，自动解绑并移除故障新容器，无缝回滚旧容器。
+
 ```mermaid
 graph TD
     A[启动升级任务] --> B[Docker 探测容器原始 Config 与 HostConfig]
-    B --> C[使用镜像加速源拉取目标镜像]
+    B --> C[解析凭证并使用镜像加速源/私有仓 Auth 拉取目标镜像]
     C --> D[优雅停止旧容器 - 超时30s]
     D --> E[将旧容器重命名备份为 name_backup_docker_updater]
-    E --> F[将 name_backup_docker_updater 重启策略修改为 no]
-    F --> G[使用继承的 Config 创建新容器并绑定网络]
+    E --> F[从原网络解绑旧容器端点, 释放静态 IP 占用]
+    F --> G[清洗 Config 默认主机名, 创建新容器并绑定网络]
     G -->|创建成功| H[启动新容器]
     G -->|创建失败| R[回滚还原分支]
-    H -->|启动成功| I[等待 2 秒探测容器运行状态]
+    H -->|启动成功| I[观察 8 秒探测容器运行与崩溃状态]
     H -->|启动失败| R
-    I -->|探测成功| J[容器升级成功]
-    I -->|探测失败| R
+    I -->|探活通过| J[容器升级成功]
+    I -->|探活失败| R
     J --> K{开启了备份保留?}
     K -->|是| L[保留 name_backup_docker_updater, 并在数据库写入 RollbackMetadata]
     K -->|否| M[物理删除 name_backup_docker_updater 容器并释放空间]
     
     R[回滚还原分支] --> S[物理移除已创建的损坏新容器]
-    S --> T[将 name_backup_docker_updater 重命名还原为原容器名 name]
-    T --> U[恢复原容器重启策略]
-    U --> V[使用绝对不变的旧 ID 启动原容器]
+    S --> T[将 name_backup_docker_updater 重新连回原网络]
+    T --> U[将 name_backup_docker_updater 重命名还原为原容器名 name]
+    U --> V[恢复原容器重启策略并启动原容器]
     V --> W[向日志分发失败错误并结束任务]
 ```
 

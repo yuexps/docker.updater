@@ -14,15 +14,15 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// HubObserver 实现服务层与 WebSocket 广播服务的事件解耦。
+// HubObserver 实现服务层与 WebSocket 广播服务的事件解耦
 type HubObserver struct{}
 
-// OnLog 实现实时日志的广播。
+// OnLog 实现实时日志的广播
 func (HubObserver) OnLog(containerName string, taskType string, message string) {
 	GlobalHub.BroadcastLog(containerName, taskType, message)
 }
 
-// OnStatusChange 实现全局状态更新的广播。
+// OnStatusChange 实现全局状态更新的广播
 func (HubObserver) OnStatusChange() {
 	GlobalHub.BroadcastStatus()
 }
@@ -51,18 +51,18 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-// Client 维护 WebSocket 连接对应的状态数据。
+// Client 维护 WebSocket 连接对应的状态数据
 type Client struct {
 	hub           *WsHub
 	conn          *websocket.Conn
 	send          chan []byte
-	subscriptions map[string]bool // 已订阅的主题映射表。
+	subscriptions map[string]bool // 已订阅的主题映射表
 	mu            sync.Mutex
 	done          chan struct{}
 	closeOnce     sync.Once
 }
 
-// Close 安全地关闭 Client 相关的连接和通道。
+// Close 安全地关闭 Client 相关的连接和通道
 func (c *Client) Close() {
 	c.closeOnce.Do(func() {
 		close(c.done)
@@ -70,7 +70,7 @@ func (c *Client) Close() {
 	})
 }
 
-// WsHub 全局 WebSocket 连接与广播事务控制中心。
+// WsHub 全局 WebSocket 连接与广播事务控制中心
 type WsHub struct {
 	clients    map[*Client]bool
 	register   chan *Client
@@ -78,14 +78,14 @@ type WsHub struct {
 	mu         sync.RWMutex
 }
 
-// GlobalHub 导出全局唯一广播中心实例。
+// GlobalHub 导出全局唯一广播中心实例
 var GlobalHub = &WsHub{
 	clients:    make(map[*Client]bool),
 	register:   make(chan *Client, 256),
 	unregister: make(chan *Client, 256),
 }
 
-// Run 启动广播中心的消息监听循环。
+// Run 启动广播中心的消息监听循环
 func (h *WsHub) Run() {
 	for {
 		select {
@@ -106,7 +106,7 @@ func (h *WsHub) Run() {
 	}
 }
 
-// BroadcastStatus 广播当前最新容器状态和任务历史至所有连接。
+// BroadcastStatus 广播当前最新容器状态和任务历史至所有连接
 func (h *WsHub) BroadcastStatus() {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -137,7 +137,7 @@ func (h *WsHub) BroadcastStatus() {
 	}
 }
 
-// SendInitialState 单播初始状态至指定的客户端。
+// SendInitialState 单播初始状态至指定的客户端
 func (h *WsHub) SendInitialState(client *Client) {
 	data, err := service.GetContainerStatusData(context.Background())
 	if err != nil {
@@ -158,7 +158,7 @@ func (h *WsHub) SendInitialState(client *Client) {
 	}
 }
 
-// BroadcastLog 广播指定容器的任务执行日志至订阅客户端。
+// BroadcastLog 广播指定容器的任务执行日志至订阅客户端
 func (h *WsHub) BroadcastLog(containerName string, taskType string, message string) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -192,7 +192,7 @@ func (h *WsHub) BroadcastLog(containerName string, taskType string, message stri
 	}
 }
 
-// BroadcastSysLog 广播系统日志至所有连接。
+// BroadcastSysLog 广播系统日志至所有连接
 func (h *WsHub) BroadcastSysLog(line string) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -216,7 +216,7 @@ func (h *WsHub) BroadcastSysLog(line string) {
 	}
 }
 
-// readPump 循环读取客户端 data。
+// readPump 循环读取客户端数据
 func (c *Client) readPump() {
 	defer func() {
 		if r := recover(); r != nil {
@@ -266,7 +266,7 @@ func (c *Client) readPump() {
 	}
 }
 
-// writePump 循环向连接发送消息。
+// writePump 循环向连接发送消息
 func (c *Client) writePump() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer func() {
@@ -306,7 +306,7 @@ func (c *Client) writePump() {
 	}
 }
 
-// HandleWebSocket 将 Gin 上下文升级为 WebSocket 协议并初始化客户端长连接。
+// HandleWebSocket 将 Gin 上下文升级为 WebSocket 协议并初始化长连接
 func HandleWebSocket(c *gin.Context) {
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
