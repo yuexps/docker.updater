@@ -45,21 +45,42 @@ type Task struct {
 }
 
 func (t *Task) AddLog(msg string) {
+	rawMsg := strings.TrimSpace(msg)
+	if rawMsg == "" {
+		return
+	}
+
+	level := utils.LevelInfo
+	cleanMsg := rawMsg
+
+	if strings.HasPrefix(rawMsg, "[ERROR]") {
+		level = utils.LevelError
+		cleanMsg = strings.TrimSpace(strings.TrimPrefix(rawMsg, "[ERROR]"))
+	} else if strings.HasPrefix(rawMsg, "[WARN]") {
+		level = utils.LevelWarn
+		cleanMsg = strings.TrimSpace(strings.TrimPrefix(rawMsg, "[WARN]"))
+	} else if strings.HasPrefix(rawMsg, "[INFO]") {
+		level = utils.LevelInfo
+		cleanMsg = strings.TrimSpace(strings.TrimPrefix(rawMsg, "[INFO]"))
+	}
+
+	// 触发 CentralLogger 核心调度分发
+	utils.Log(level, t.ContainerName, "%s", cleanMsg)
+
+	// 记录在内存 Task 实例中供 HTTP API 快照读取
+	taskLogLine := fmt.Sprintf("%s [%s] %s", time.Now().Format("2006-01-02 15:04:05"), level, cleanMsg)
+
 	t.mu.Lock()
-	t.Logs = append(t.Logs, msg)
+	t.Logs = append(t.Logs, taskLogLine)
 	listenersCopy := make([]chan string, len(t.listeners))
 	copy(listenersCopy, t.listeners)
 	t.mu.Unlock()
 
 	for _, ch := range listenersCopy {
 		select {
-		case ch <- msg:
+		case ch <- taskLogLine:
 		default:
 		}
-	}
-
-	if GlobalObserver != nil {
-		GlobalObserver.OnLog(t.ContainerName, string(t.Type), msg)
 	}
 }
 
@@ -316,7 +337,7 @@ func (q *QueueManager) worker() {
 					Until:         "forever",
 				}
 				_ = db.DB.Save(&d).Error
-				task.AddLog("[SYSTEM] 自动升级失败，为了防止后台陷入死循环，已自动将该容器设为 [永久暂挂]")
+				task.AddLog("[ERROR] 自动升级失败，为了防止后台陷入死循环，已自动将该容器设为 [永久暂挂]")
 			}
 		} else {
 			task.SetStatus("success")

@@ -206,7 +206,7 @@ const viewActiveTaskLog = async (name: string) => {
   if (activeUnsubscribeLogs) activeUnsubscribeLogs()
   activeUnsubscribeLogs = wsService.subscribeLogs(name, ({ message: msg }) => {
     logLines.value.push(msg)
-    if (msg.includes('[SUCCESS]') || msg.includes('[ERROR]')) {
+    if (msg.includes('任务全部完成') || msg.includes('已成功') || msg.includes('恢复成功') || msg.includes('[ERROR]')) {
       logRunning.value = false
     }
   })

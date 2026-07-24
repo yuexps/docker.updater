@@ -202,16 +202,16 @@ class SimulationDatabase {
     this.updateLogs.set('nginx-app', [
       `[INFO] 开始对容器 nginx-app 进行升级操作...`,
       `[INFO] 正在分析本地与远端分发凭证...`,
-      `[PULL] 正在从 registry 下载新镜像层: sha256:7f082ec15d86...`,
-      `[PULL] 正在从 registry 下载新镜像层: sha256:1a84f3c0eb51...`,
-      `[PULL] 最新镜像层拉取完毕，已校验校验和`,
+      `[INFO] 正在从 registry 下载新镜像层: sha256:7f082ec15d86...`,
+      `[INFO] 正在从 registry 下载新镜像层: sha256:1a84f3c0eb51...`,
+      `[INFO] 最新镜像层拉取完毕，已校验校验和`,
       `[INFO] 正在创建升级前镜像备份点: nginx-app_backup_docker_updater`,
       `[INFO] 成功记录重启配置策略.`,
       `[INFO] 正在优雅停止运行中的旧容器...`,
       `[INFO] 旧容器实例已清理`,
       `[INFO] 基于新拉取镜像重新组装参数重建中...`,
       `[INFO] 容器 nginx-app 正在唤醒启动...`,
-      `[SUCCESS] 容器 nginx-app 已成功平滑升级至最新版本！`
+      `[INFO] 容器 nginx-app 已成功平滑升级至最新版本！`
     ])
 
     this.activeTask = null
@@ -372,7 +372,7 @@ class SimulationDatabase {
         `[INFO] 重新映射磁盘挂载卷数据...`,
         `[INFO] 将物理备份容器还原并重命名为 ${containerName}`,
         `[INFO] 恢复原有的重启策略和主机名关联...`,
-        `[SUCCESS] 容器 ${containerName} 已成功回滚至升级前备份点！`
+        `[INFO] 容器 ${containerName} 已成功回滚至升级前备份点！`
       ]
     }
 
@@ -381,22 +381,22 @@ class SimulationDatabase {
       return [
         `[INFO] 开始对容器 ${containerName} 进行升级操作...`,
         `[INFO] 正在分析本地与远端分发凭证...`,
-        `[PULL] 正在从 registry 下载新镜像层: sha256:7f082ec15d86...`,
-        `[PULL] 正在从 registry 下载新镜像层: sha256:1a84f3c0eb51...`,
-        `[PULL] 最新镜像层拉取完毕，已校验校验和`,
+        `[INFO] 正在从 registry 下载新镜像层: sha256:7f082ec15d86...`,
+        `[INFO] 正在从 registry 下载新镜像层: sha256:1a84f3c0eb51...`,
+        `[INFO] 最新镜像层拉取完毕，已校验校验和`,
         `[INFO] 正在创建升级前镜像备份点: ${containerName}_backup_docker_updater`,
         `[INFO] 成功记录重启配置策略.`,
         `[INFO] 正在优雅停止运行中的旧容器...`,
         `[INFO] 旧容器实例已清理`,
         `[INFO] 基于新拉取镜像重新组装参数重建中...`,
         `[INFO] 容器 ${containerName} 正在唤醒启动...`,
-        `[SUCCESS] 容器 ${containerName} 已成功平滑升级至最新版本！`
+        `[INFO] 容器 ${containerName} 已成功平滑升级至最新版本！`
       ]
     } else if (this.upgradeMode === 'fail_pull') {
       return [
         `[INFO] 开始对容器 ${containerName} 进行升级操作...`,
         `[INFO] 正在分析本地与远端分发凭证...`,
-        `[PULL] 正在从 registry 下载新镜像层: sha256:7f082ec15d86...`,
+        `[INFO] 正在从 registry 下载新镜像层: sha256:7f082ec15d86...`,
         `[ERROR] 镜像拉取失败: Connection timed out to registry (网络仿真异常)`,
         `[ERROR] 容器 ${containerName} 升级流程中断退出`
       ]
@@ -405,8 +405,8 @@ class SimulationDatabase {
       return [
         `[INFO] 开始对容器 ${containerName} 进行升级操作...`,
         `[INFO] 正在分析本地与远端分发凭证...`,
-        `[PULL] 正在从 registry 下载新镜像层: sha256:7f082ec15d86...`,
-        `[PULL] 最新镜像层拉取完毕，已校验校验和`,
+        `[INFO] 正在从 registry 下载新镜像层: sha256:7f082ec15d86...`,
+        `[INFO] 最新镜像层拉取完毕，已校验校验和`,
         `[INFO] 正在创建升级前镜像备份点: ${containerName}_backup_docker_updater`,
         `[INFO] 成功记录重启配置策略.`,
         `[INFO] 正在优雅停止运行中的旧容器...`,
@@ -418,7 +418,7 @@ class SimulationDatabase {
         `[INFO] 正在物理清除故障新容器实例...`,
         `[INFO] 将备份容器 ${containerName}_backup_docker_updater 重命名还原为 ${containerName}`,
         `[INFO] 恢复原有的重启策略策略和网络网关绑定`,
-        `[SUCCESS] 回滚恢复成功，原容器已上线运行`
+        `[INFO] 回滚恢复成功，原容器已上线运行`
       ]
     }
   }
@@ -689,7 +689,7 @@ axios.defaults.adapter = async function (config) {
         `2026/07/09 21:05:02 [INFO] 服务 nginx-app 存在可用升级 (本地: sha256:old_nginx_digest, 远端: sha256:new_nginx_digest)`,
         `2026/07/09 21:05:03 [INFO] 容器扫描比对检查结束。当前共发现 1 个待升级服务。`,
         `2026/07/09 21:10:00 [INFO] 开始执行定时任务自动清理失效备份点...`,
-        `2026/07/09 21:10:01 [SUCCESS] 清理历史过期备份容器成功 (共清理 0 个容器)`
+        `2026/07/09 21:10:01 [INFO] 清理历史过期备份容器成功 (共清理 0 个容器)`
       ]
       return { data: { logs: mockSysLogs }, status: 200, statusText: 'OK', headers: config.headers || {}, config }
     } else if (method === 'delete') {
@@ -835,7 +835,7 @@ class MockWebSocket {
         return
       }
       if (this.onmessage) {
-        const level = Math.random() > 0.4 ? '[INFO]' : Math.random() > 0.5 ? '[WARNING]' : '[SUCCESS]'
+        const level = Math.random() > 0.3 ? '[INFO]' : '[WARN]'
         const now = new Date()
         const dateStr = now.getFullYear() + '/' + 
           String(now.getMonth() + 1).padStart(2, '0') + '/' + 

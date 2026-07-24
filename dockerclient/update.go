@@ -101,7 +101,7 @@ func ApplyUpdate(ctx context.Context, name string, targetImage string, opts Upda
 
 	if composeFile != "" {
 		if targetImage != "" {
-			logChan <- fmt.Sprintf("[WARNING] 检测到 Compose 项目，但由于指定了目标镜像 %s，将跳过 Compose 联动，降级为常规单容器版本修改...", targetImage)
+			logChan <- fmt.Sprintf("[WARN] 检测到 Compose 项目，但由于指定了目标镜像 %s，将跳过 Compose 联动，降级为常规单容器版本修改...", targetImage)
 		} else {
 			logChan <- fmt.Sprintf("[INFO] 自动探测到 Compose 项目: %s", project)
 			logChan <- fmt.Sprintf("[INFO] 配置文件路径: %s", composeFile)
@@ -114,7 +114,7 @@ func ApplyUpdate(ctx context.Context, name string, targetImage string, opts Upda
 			logChan <- "[INFO] 正在拉取最新的 Compose 镜像..."
 			pullErr := runComposeCommand(ctx, logChan, composeFile, "pull")
 			if pullErr != nil {
-				logChan <- fmt.Sprintf("[WARNING] docker compose pull 失败: %s，尝试直接执行 up 部署...", pullErr.Error())
+				logChan <- fmt.Sprintf("[WARN] docker compose pull 失败: %s，尝试直接执行 up 部署...", pullErr.Error())
 			}
 
 			logChan <- "[INFO] 正在重建并部署 Compose 服务..."
@@ -133,12 +133,12 @@ func ApplyUpdate(ctx context.Context, name string, targetImage string, opts Upda
 				if upErr != nil {
 					logChan <- "[INFO] Docker Compose 命令行已退出并附带警告或异常，但检测到目标服务已使用新镜像成功运行。"
 				}
-				logChan <- "[SUCCESS] Compose 联动部署成功！"
-				logChan <- "[SUCCESS] 容器版本修改任务全部完成"
+				logChan <- "[INFO] Compose 联动部署成功！"
+				logChan <- "[INFO] 容器版本修改任务全部完成"
 				return "", nil
 			}
 
-			logChan <- fmt.Sprintf("[WARNING] docker compose up 部署失败: %s. 降级为常规单容器克隆逻辑升级...", upErr.Error())
+			logChan <- fmt.Sprintf("[WARN] docker compose up 部署失败: %s. 降级为常规单容器克隆逻辑升级...", upErr.Error())
 		}
 	}
 
@@ -163,9 +163,9 @@ func ApplyUpdate(ctx context.Context, name string, targetImage string, opts Upda
 		progressDetail, _ := pullStatus["progress"].(string)
 		if statusMsg != "" {
 			if progressDetail != "" {
-				logChan <- fmt.Sprintf("[PULL] %s %s", statusMsg, progressDetail)
+				logChan <- fmt.Sprintf("[INFO] %s %s", statusMsg, progressDetail)
 			} else {
-				logChan <- fmt.Sprintf("[PULL] %s", statusMsg)
+				logChan <- fmt.Sprintf("[INFO] %s", statusMsg)
 			}
 		}
 	}
@@ -174,7 +174,7 @@ func ApplyUpdate(ctx context.Context, name string, targetImage string, opts Upda
 	stopTimeout := 30
 	err = cli.ContainerStop(ctx, oldID, container.StopOptions{Timeout: &stopTimeout})
 	if err != nil {
-		logChan <- fmt.Sprintf("[WARNING] 停止容器失败: %s", err.Error())
+		logChan <- fmt.Sprintf("[WARN] 停止容器失败: %s", err.Error())
 	}
 
 	oldNameBackup := name + "_backup_docker_updater"
@@ -245,7 +245,7 @@ func ApplyUpdate(ctx context.Context, name string, targetImage string, opts Upda
 				Aliases:    netConfig.Aliases,
 			})
 			if err != nil {
-				logChan <- fmt.Sprintf("[WARNING] 连接附加网络 %s 失败: %s", netName, err.Error())
+				logChan <- fmt.Sprintf("[WARN] 连接附加网络 %s 失败: %s", netName, err.Error())
 			}
 		}
 	}
@@ -287,7 +287,7 @@ func ApplyUpdate(ctx context.Context, name string, targetImage string, opts Upda
 		return "", fmt.Errorf("container failed to stay up")
 	}
 
-	logChan <- "[SUCCESS] 容器版本修改成功并运行中"
+	logChan <- "[INFO] 容器版本修改成功并运行中"
 
 	var policyStr string
 	if opts.BackupEnabled {
@@ -304,7 +304,7 @@ func ApplyUpdate(ctx context.Context, name string, targetImage string, opts Upda
 		scheduleStackRestart(project, name, logChan)
 	}
 
-	logChan <- "[SUCCESS] 容器版本修改任务全部完成"
+	logChan <- "[INFO] 容器版本修改任务全部完成"
 	return policyStr, nil
 }
 
@@ -315,13 +315,13 @@ func _rollback(ctx context.Context, cli *client.Client, oldID, name string, poli
 		logChan <- fmt.Sprintf("[ERROR] 恢复旧容器重命名失败: %s", err.Error())
 	}
 	if _, err := cli.ContainerUpdate(ctx, oldID, container.UpdateConfig{RestartPolicy: policy}); err != nil {
-		logChan <- fmt.Sprintf("[WARNING] 恢复旧容器重启策略失败: %s", err.Error())
+		logChan <- fmt.Sprintf("[WARN] 恢复旧容器重启策略失败: %s", err.Error())
 	}
 	err := cli.ContainerStart(ctx, oldID, types.ContainerStartOptions{})
 	if err != nil {
 		logChan <- fmt.Sprintf("[ERROR] 恢复旧容器启动失败: %s, 需人工介入确认!", err.Error())
 	} else {
-		logChan <- "[SUCCESS] 回滚恢复成功，原容器已上线运行"
+		logChan <- "[INFO] 回滚恢复成功，原容器已上线运行"
 	}
 }
 
@@ -345,13 +345,13 @@ func ApplyRollback(ctx context.Context, name string, originalPolicy container.Re
 	logChan <- "[INFO] 正在停止并删除当前新容器..."
 	stopTimeout := 30
 	if err := cli.ContainerStop(ctx, name, container.StopOptions{Timeout: &stopTimeout}); err != nil {
-		logChan <- fmt.Sprintf("[WARNING] 停止当前容器 %s 失败 (可能容器已停止): %s", name, err.Error())
+		logChan <- fmt.Sprintf("[WARN] 停止当前容器 %s 失败 (可能容器已停止): %s", name, err.Error())
 	}
 	if err := cli.ContainerRemove(ctx, name, types.ContainerRemoveOptions{Force: true}); err != nil {
-		logChan <- fmt.Sprintf("[WARNING] 删除当前容器 %s 失败: %s", name, err.Error())
+		logChan <- fmt.Sprintf("[WARN] 删除当前容器 %s 失败: %s", name, err.Error())
 	}
 
-	logChan <- fmt.Sprintf("正在恢复备份容器名: %s -> %s", oldName, name)
+	logChan <- fmt.Sprintf("[INFO] 正在恢复备份容器名: %s -> %s", oldName, name)
 	err = cli.ContainerRename(ctx, backup.ID, name)
 	if err != nil {
 		logChan <- fmt.Sprintf("[ERROR] 备份重命名还原失败: %s", err.Error())
@@ -359,7 +359,7 @@ func ApplyRollback(ctx context.Context, name string, originalPolicy container.Re
 	}
 
 	if _, err := cli.ContainerUpdate(ctx, backup.ID, container.UpdateConfig{RestartPolicy: originalPolicy}); err != nil {
-		logChan <- fmt.Sprintf("[WARNING] 恢复备份容器重启策略失败: %s", err.Error())
+		logChan <- fmt.Sprintf("[WARN] 恢复备份容器重启策略失败: %s", err.Error())
 	}
 
 	logChan <- "[INFO] 启动备份还原容器..."
@@ -369,8 +369,8 @@ func ApplyRollback(ctx context.Context, name string, originalPolicy container.Re
 		return err
 	}
 
-	logChan <- "[SUCCESS] 容器回滚成功"
-	logChan <- "[SUCCESS] 容器回滚任务全部完成"
+	logChan <- "[INFO] 容器回滚成功"
+	logChan <- "[INFO] 容器回滚任务全部完成"
 	return nil
 }
 
@@ -443,7 +443,7 @@ func CleanExpiredBackups(ctx context.Context, backupNames []string) {
 		if err != nil {
 			utils.LogError("定时自动清理已过期备份容器 %s 失败: %s", backupName, err.Error())
 		} else {
-			utils.LogSuccess("定时自动清理已过期备份容器 %s 成功", backupName)
+			utils.LogInfo("定时自动清理已过期备份容器 %s 成功", backupName)
 		}
 	}
 }
@@ -483,7 +483,7 @@ func runComposeCommand(ctx context.Context, logChan chan<- string, composeFile s
 	}
 
 	go readerFunc(stdout, "[INFO]")
-	go readerFunc(stderr, "[PULL]")
+	go readerFunc(stderr, "[INFO]")
 
 	wg.Wait()
 	return cmd.Wait()
@@ -555,7 +555,7 @@ func pullImageWithMirrors(ctx context.Context, cli *client.Client, imageName str
 
 				reader, err := cli.ImagePull(ctx, tempImageName, types.ImagePullOptions{})
 				if err != nil {
-					logChan <- fmt.Sprintf("[WARNING] 通过加速源 %s 拉取失败: %s. 尝试下一个...", mirrorHost, err.Error())
+					logChan <- fmt.Sprintf("[WARN] 通过加速源 %s 拉取失败: %s. 尝试下一个...", mirrorHost, err.Error())
 					continue
 				}
 
@@ -569,9 +569,9 @@ func pullImageWithMirrors(ctx context.Context, cli *client.Client, imageName str
 					progressDetail, _ := pullStatus["progress"].(string)
 					if statusMsg != "" {
 						if progressDetail != "" {
-							logChan <- fmt.Sprintf("[PULL] %s %s", statusMsg, progressDetail)
+							logChan <- fmt.Sprintf("[INFO] %s %s", statusMsg, progressDetail)
 						} else {
-							logChan <- fmt.Sprintf("[PULL] %s", statusMsg)
+							logChan <- fmt.Sprintf("[INFO] %s", statusMsg)
 						}
 					}
 				}
@@ -579,7 +579,7 @@ func pullImageWithMirrors(ctx context.Context, cli *client.Client, imageName str
 
 				logChan <- fmt.Sprintf("[INFO] 临时加速拉取成功，正在为镜像打标回官方原名: %s", imageName)
 				if err := cli.ImageTag(ctx, tempImageName, imageName); err != nil {
-					logChan <- fmt.Sprintf("[WARNING] 打标回原名失败: %s", err.Error())
+					logChan <- fmt.Sprintf("[WARN] 打标回原名失败: %s", err.Error())
 					_, _ = cli.ImageRemove(ctx, tempImageName, types.ImageRemoveOptions{PruneChildren: true})
 					continue
 				}
@@ -589,7 +589,7 @@ func pullImageWithMirrors(ctx context.Context, cli *client.Client, imageName str
 
 				return io.NopCloser(strings.NewReader(`{"status":"Success"}`)), nil
 			}
-			logChan <- "[WARNING] 所有配置的镜像源均已尝试拉取失败，将降级为官方直接拉取..."
+			logChan <- "[WARN] 所有配置的镜像源均已尝试拉取失败，将降级为官方直接拉取..."
 		}
 	}
 

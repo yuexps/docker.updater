@@ -17,8 +17,8 @@
       </div>
     </template>
     
-    <div class="bg-black text-slate-300 p-4 rounded-xl font-mono text-[12px] h-75 sm:h-100 overflow-y-auto border border-slate-850">
-      <pre class="whitespace-pre-wrap font-sans text-[12px] leading-relaxed select-all">{{ logs }}</pre>
+    <div class="bg-black text-slate-300 p-4 rounded-xl font-mono text-[12px] h-75 sm:h-100 overflow-y-auto border border-slate-850 select-text">
+      <pre class="whitespace-pre-wrap font-mono text-[12px] leading-relaxed select-text" v-html="formattedLogs"></pre>
     </div>
     
     <template #action>
@@ -32,9 +32,11 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { NModal, NButton } from 'naive-ui'
+import { ansiToHtml } from '../utils/ansi'
 
-defineProps<{
+const props = defineProps<{
   show: boolean
   logs: string
 }>()
@@ -42,4 +44,6 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
+
+const formattedLogs = computed(() => ansiToHtml(props.logs || ''))
 </script>

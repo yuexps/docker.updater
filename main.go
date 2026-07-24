@@ -1,12 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"embed"
 	"net"
 	"os"
 	"path/filepath"
-	"sync"
 
 	"docker-updater/api"
 	"docker-updater/db"
@@ -46,10 +44,8 @@ func main() {
 	}
 
 	// 1. 初始化统一日志工具与目录
-	utils.InitLogger(pkgVar)
+	utils.InitLogger(pkgVar, isFnos)
 
-	broadcastWriter := &sysLogBroadcaster{}
-	utils.RegisterExtraWriter(broadcastWriter)
 	gin.DefaultWriter = os.Stdout
 	gin.DefaultErrorWriter = os.Stdout
 
@@ -118,27 +114,5 @@ func main() {
 	}
 }
 
-// sysLogBroadcaster 拦截标准日志流，通过 WebSocket 实时广播给前端。
-type sysLogBroadcaster struct {
-	buf   []byte
-	mu    sync.Mutex
-}
 
-func (w *sysLogBroadcaster) Write(p []byte) (n int, err error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	// 逐字节扫描，提取完整行后广播
-	for _, b := range p {
-		if b == '\n' {
-			line := string(bytes.TrimRight(w.buf, "\r\n"))
-			if line != "" {
-				api.GlobalHub.BroadcastSysLog(line)
-			}
-			w.buf = w.buf[:0]
-		} else {
-			w.buf = append(w.buf, b)
-		}
-	}
-	return len(p), nil
-}
 

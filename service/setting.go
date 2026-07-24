@@ -231,7 +231,7 @@ func SendTestNotification(body TestNotificationSettings) (string, error) {
 		logSb.WriteString(fmt.Sprintf("[INFO] 连接已建立。正在构建 HTTP %s 请求...\n", body.WebhookMethod))
 		logSb.WriteString(fmt.Sprintf("[INFO] 请求目标路径: %s\n", path))
 		logSb.WriteString("[INFO] 正在发送 application/json 数据报文...\n")
-		logSb.WriteString("[SUCCESS] Webhook 测试数据包已成功投递。网络传输已完成。")
+		logSb.WriteString("[INFO] Webhook 测试数据包已成功投递。网络传输已完成。")
 		rawLogs := logSb.String()
 
 		wType := body.WebhookType
@@ -270,7 +270,7 @@ func SendTestNotification(body TestNotificationSettings) (string, error) {
 	logSb.WriteString(fmt.Sprintf("[INFO] 正在验证发件用户账号 %s 的授权凭证...\n", body.SMTPUsername))
 	logSb.WriteString(fmt.Sprintf("[INFO] 正在构建邮件信封: 发件人<%s> -> 收件人<%s>\n", body.SMTPUsername, body.SMTPTo))
 	logSb.WriteString("[INFO] 正在传输邮件 MIME 数据报文...\n")
-	logSb.WriteString("[SUCCESS] 邮件已成功投递至远程邮件传输网关。SMTP 传输已完成。")
+	logSb.WriteString("[INFO] 邮件已成功投递至远程邮件传输网关。SMTP 传输已完成。")
 	rawLogs := logSb.String()
 
 	subjectTpl := body.SMTPSubjectTemplate

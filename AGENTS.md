@@ -35,7 +35,7 @@
 3. **路由统一**: 所有 API 及静态服务统归 `/app/docker-updater/` 组。
 4. **单工排队**: 容器升级、回滚加入单工任务队列，规避并发争抢。
 5. **探活与自愈**: 容器更新后休眠探活，失败则回退至 `{name}_backup_docker_updater` 旧容器并重启。
-6. **无 Emoji与日志落盘**: 统一采用文本前缀禁用 emoji。全局日志由启动脚本重定向落盘，Go 程序仅向标准输出与 WebSocket 广播以防写重；启动时若 `info.log` 超过 10MB 则自动对半截断。
+6. **无 Emoji与统一日志落盘**: 统一采用文本前缀禁用 emoji。后端禁止直接调用原生 log/fmt 打印日志，必须统一使用 `utils` 封装器 (`utils.LogInfo` / `LogWarning` / `LogError` / `LogSuccess` / `LogFatal`)。全局日志文件限制单文件最大 3MB，达到上限自动重命名为 `info_YYYYMMDD_HHMMSS.log` 并重新创建干净的 `info.log`，历史备份文件最多自动保留 3 份。
 7. **CGO-free**: 禁止引入 CGO，采用纯 Go SQLite 驱动，支持交叉编译。
 8. **无 CLI 依赖**: 所有 Docker 操作均通过 Docker SDK 交互，禁止调用命令行 `docker` 进程。
 9. **文档优先**: 变更代码前，优先同步更新 [AGENTS.md](AGENTS.md) 及 [specification.md](docs/specification.md)。

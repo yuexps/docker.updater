@@ -29,6 +29,18 @@ func (HubObserver) OnStatusChange() {
 
 func init() {
 	service.GlobalObserver = HubObserver{}
+	utils.RegisterLogListener(func(event utils.LogEvent) {
+		if GlobalHub == nil {
+			return
+		}
+		// 广播系统运行日志
+		GlobalHub.BroadcastSysLog(event.Format())
+
+		// 广播容器任务日志至订阅窗口
+		if event.Container != "" {
+			GlobalHub.BroadcastLog(event.Container, "task", event.TaskLogFormat())
+		}
+	})
 }
 
 var upgrader = websocket.Upgrader{

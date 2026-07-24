@@ -13,9 +13,9 @@
     - 数据/日志目录：强制设置为可执行文件同级目录。程序会在启动时将环境变量 `TRIM_PKGVAR` 设置为该同级目录，以确保数据库及日志文件等数据都保存在该目录下。
 * **路由根路径**: 所有请求及静态资源统一路由在 `/app/docker-updater/` 路径下。不匹配此路径的请求直接返回 HTTP 404。
 * **日志系统**:
-  - 全局日志文件: `${TRIM_PKGVAR}/info.log`（只写追加，通过守护进程启动脚本 `fnpack/cmd/main` 的标准输出重定向实现落盘，支持 O_TRUNC 截断清空。后端仅在启动时检测该文件大小，若超过 10MB，则自动截断前半部分，保留后半部分完整行日志）。
+  - 全局日志文件: `${TRIM_PKGVAR}/info.log`（最大单文件限制 3MB，达到上限后自动重命名为 `info_YYYYMMDD_HHMMSS.log` 格式，并自动创建全新 `info.log`。历史 `info_时间.log` 备份自动保持最多保留 3 份，过期自动清理）。
   - 任务日志文件: `${TRIM_PKGVAR}/logs/${container_name}.log`（动态按需创建）。
-  - 日志前缀: 统一使用 `[INFO]`、`[WARNING]`、`[ERROR]`、`[SUCCESS]`。禁止包含任何 emoji 表情。
+  - 日志前缀: 严格限制全系统仅使用 `[INFO]`、`[WARN]`、`[ERROR]` 三种标准日志前缀。禁止包含任何 emoji 表情或任何非标 Level 标签。
   - 访问日志过滤: 高频 WebSocket `/api/ws` 及 `favicon.png`/`favicon.ico` 访问请求予以静默过滤，避免日志污染。
 
 ## 2. 数据库结构定义 (SQLite)

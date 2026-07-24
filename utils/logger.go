@@ -1,23 +1,56 @@
 package utils
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
+	"time"
 )
+
+type LogLevel string
+
+const (
+	LevelInfo  LogLevel = "INFO"
+	LevelWarn  LogLevel = "WARN"
+	LevelError LogLevel = "ERROR"
+)
+
+type LogEvent struct {
+	Time      time.Time
+	Level     LogLevel
+	Container string
+	Message   string
+}
+
+func (e LogEvent) Format() string {
+	timeStr := e.Time.Format("2006-01-02 15:04:05")
+	return fmt.Sprintf("%s [%s] %s", timeStr, e.Level, e.Message)
+}
+
+func (e LogEvent) TaskLogFormat() string {
+	timeStr := e.Time.Format("2006-01-02 15:04:05")
+	return fmt.Sprintf("%s [%s] %s", timeStr, e.Level, e.Message)
+}
+
+type CentralLogger struct {
+	mu           sync.RWMutex
+	pkgVar       string
+	isFnos       bool
+	sysLogWriter *RollingFileWriter
+	listeners    []func(event LogEvent)
+}
 
 var (
-	// RollingLogger 存储全局滚动日志写入器实例。
-	RollingLogger *RollingFileWriter
-	extraWriters  []io.Writer
-	mu            sync.RWMutex
+	GlobalLogger     *CentralLogger
+	RollingLogger    *RollingFileWriter
+	once             sync.Once
+	pendingListeners []func(event LogEvent)
+	pendingMu        sync.Mutex
 )
 
-// RollingFileWriter 实现轻量级日志滚动与切分。
 type RollingFileWriter struct {
 	mu         sync.Mutex
 	filePath   string
@@ -27,7 +60,6 @@ type RollingFileWriter struct {
 	size       int64
 }
 
-// NewRollingFileWriter 实例化滚动日志写入器。
 func NewRollingFileWriter(filePath string, maxSize int64, maxBackups int) *RollingFileWriter {
 	return &RollingFileWriter{
 		filePath:   filePath,
@@ -36,7 +68,6 @@ func NewRollingFileWriter(filePath string, maxSize int64, maxBackups int) *Rolli
 	}
 }
 
-// Write 向日志文件写入数据，在超过容量限制时触发滚动。
 func (w *RollingFileWriter) Write(p []byte) (n int, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -49,9 +80,7 @@ func (w *RollingFileWriter) Write(p []byte) (n int, err error) {
 	}
 
 	if w.size+writeSize > w.maxSize {
-		if err := w.rotate(); err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, "[WARNING] 日志回滚失败:", err.Error())
-		}
+		_ = w.rotate()
 	}
 
 	n, err = w.file.Write(p)
@@ -84,22 +113,55 @@ func (w *RollingFileWriter) rotate() error {
 		w.file = nil
 	}
 
-	for i := w.maxBackups; i >= 1; i-- {
-		src := w.filePath
-		if i > 1 {
-			src = fmt.Sprintf("%s.%d", w.filePath, i-1)
-		}
-		dst := fmt.Sprintf("%s.%d", w.filePath, i)
-		if _, err := os.Stat(src); err == nil {
-			_ = os.Remove(dst)
-			_ = os.Rename(src, dst)
-		}
+	dir := filepath.Dir(w.filePath)
+	timestamp := time.Now().Format("20060102_150405")
+	backupPath := filepath.Join(dir, fmt.Sprintf("info_%s.log", timestamp))
+
+	if _, err := os.Stat(backupPath); err == nil {
+		backupPath = filepath.Join(dir, fmt.Sprintf("info_%s_%d.log", timestamp, time.Now().UnixNano()))
 	}
+
+	if srcBytes, err := os.ReadFile(w.filePath); err == nil && len(srcBytes) > 0 {
+		_ = os.WriteFile(backupPath, srcBytes, 0644)
+	}
+
+	_ = os.Truncate(w.filePath, 0)
+	w.size = 0
+
+	w.cleanOldBackups(dir)
 
 	return w.openFile()
 }
 
-// Close 关闭当前滚动日志文件的文件指针。
+func (w *RollingFileWriter) cleanOldBackups(dir string) {
+	files, err := filepath.Glob(filepath.Join(dir, "info_*.log"))
+	if err != nil || len(files) <= w.maxBackups {
+		return
+	}
+
+	type backupItem struct {
+		path    string
+		modTime time.Time
+	}
+
+	var list []backupItem
+	for _, f := range files {
+		info, err := os.Stat(f)
+		if err == nil {
+			list = append(list, backupItem{path: f, modTime: info.ModTime()})
+		}
+	}
+
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].modTime.Before(list[j].modTime)
+	})
+
+	excess := len(list) - w.maxBackups
+	for i := 0; i < excess; i++ {
+		_ = os.Remove(list[i].path)
+	}
+}
+
 func (w *RollingFileWriter) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -111,85 +173,136 @@ func (w *RollingFileWriter) Close() error {
 	return nil
 }
 
-// InitLogger 初始化日志系统，更新标准 log 库的输出目标，并在启动时检测并截断日志。
-func InitLogger(pkgVar string) {
-	updateLoggerOutput()
-	logFilePath := filepath.Join(pkgVar, "info.log")
-	checkAndTruncateLog(logFilePath)
+func InitLogger(pkgVar string, isFnos bool) {
+	once.Do(func() {
+		logFilePath := filepath.Join(pkgVar, "info.log")
+
+		RollingLogger = NewRollingFileWriter(logFilePath, 3*1024*1024, 3)
+
+		if info, err := os.Stat(logFilePath); err == nil && info.Size() >= 3*1024*1024 {
+			_ = RollingLogger.rotate()
+		}
+
+		pendingMu.Lock()
+		GlobalLogger = &CentralLogger{
+			pkgVar:       pkgVar,
+			isFnos:       isFnos,
+			sysLogWriter: RollingLogger,
+			listeners:    pendingListeners,
+		}
+		pendingMu.Unlock()
+
+		log.SetFlags(0)
+		log.SetOutput(os.Stdout)
+	})
 }
 
-func checkAndTruncateLog(logFilePath string) {
-	info, err := os.Stat(logFilePath)
-	if err != nil {
+func RegisterLogListener(fn func(event LogEvent)) {
+	pendingMu.Lock()
+	defer pendingMu.Unlock()
+
+	if GlobalLogger == nil {
+		pendingListeners = append(pendingListeners, fn)
 		return
 	}
-	if info.Size() <= 10*1024*1024 {
-		return
+	GlobalLogger.mu.Lock()
+	defer GlobalLogger.mu.Unlock()
+	GlobalLogger.listeners = append(GlobalLogger.listeners, fn)
+}
+
+func (l *CentralLogger) Dispatch(event LogEvent) {
+	formattedLine := event.Format()
+
+	if !l.isFnos || l.sysLogWriter == nil {
+		fmt.Println(formattedLine)
 	}
-	data, err := os.ReadFile(logFilePath)
-	if err != nil {
-		return
+
+	if l.sysLogWriter != nil {
+		_, _ = l.sysLogWriter.Write([]byte(formattedLine + "\n"))
 	}
-	totalLen := len(data)
-	if totalLen <= 0 {
-		return
+
+	if event.Container != "" {
+		logsDir := filepath.Join(l.pkgVar, "logs")
+		_ = os.MkdirAll(logsDir, 0755)
+		taskLogPath := filepath.Join(logsDir, fmt.Sprintf("%s.log", event.Container))
+		f, err := os.OpenFile(taskLogPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err == nil {
+			_, _ = f.WriteString(event.TaskLogFormat() + "\n")
+			_ = f.Close()
+		}
 	}
-	halfOffset := totalLen / 2
-	idx := bytes.IndexByte(data[halfOffset:], '\n')
-	if idx == -1 {
-		data = data[halfOffset:]
+
+	l.mu.RLock()
+	listenersCopy := make([]func(event LogEvent), len(l.listeners))
+	copy(listenersCopy, l.listeners)
+	l.mu.RUnlock()
+
+	for _, listener := range listenersCopy {
+		listener(event)
+	}
+}
+
+func Log(level LogLevel, container string, format string, v ...interface{}) {
+	msg := fmt.Sprintf(format, v...)
+	event := LogEvent{
+		Time:      time.Now(),
+		Level:     level,
+		Container: container,
+		Message:   msg,
+	}
+
+	if GlobalLogger != nil {
+		GlobalLogger.Dispatch(event)
 	} else {
-		data = data[halfOffset+idx+1:]
+		fmt.Println(event.Format())
 	}
-	_ = os.WriteFile(logFilePath, data, 0644)
-}
 
-// RegisterExtraWriter 注册额外的输出通道。
-func RegisterExtraWriter(w io.Writer) {
-	mu.Lock()
-	defer mu.Unlock()
-	extraWriters = append(extraWriters, w)
-	updateLoggerOutputUnLocked()
-}
-
-// updateLoggerOutput 更新标准 log 库的输出目标。
-func updateLoggerOutput() {
-	mu.RLock()
-	defer mu.RUnlock()
-	updateLoggerOutputUnLocked()
-}
-
-// updateLoggerOutputUnLocked 在不加锁的情况下更新标准 log 库的输出目标。
-func updateLoggerOutputUnLocked() {
-	writers := []io.Writer{os.Stdout}
-	if RollingLogger != nil {
-		writers = append(writers, RollingLogger)
+	if level == LevelError && v == nil {
+		// noop
 	}
-	writers = append(writers, extraWriters...)
-	log.SetOutput(io.MultiWriter(writers...))
 }
 
-// LogInfo 记录普通运行信息。
 func LogInfo(format string, v ...interface{}) {
-	log.Printf("[INFO] "+format, v...)
+	Log(LevelInfo, "", format, v...)
 }
 
-// LogWarning 记录运行警告信息。
-func LogWarning(format string, v ...interface{}) {
-	log.Printf("[WARNING] "+format, v...)
-}
-
-// LogError 记录运行错误信息。
-func LogError(format string, v ...interface{}) {
-	log.Printf("[ERROR] "+format, v...)
-}
-
-// LogSuccess 记录操作成功信息。
 func LogSuccess(format string, v ...interface{}) {
-	log.Printf("[SUCCESS] "+format, v...)
+	Log(LevelInfo, "", format, v...)
 }
 
-// LogFatal 记录致命错误信息并终止执行。
+func LogWarn(format string, v ...interface{}) {
+	Log(LevelWarn, "", format, v...)
+}
+
+func LogWarning(format string, v ...interface{}) {
+	Log(LevelWarn, "", format, v...)
+}
+
+func LogError(format string, v ...interface{}) {
+	Log(LevelError, "", format, v...)
+}
+
 func LogFatal(format string, v ...interface{}) {
-	log.Fatalf("[ERROR] "+format, v...)
+	Log(LevelError, "", format, v...)
+	os.Exit(1)
+}
+
+func LogTaskInfo(container string, format string, v ...interface{}) {
+	Log(LevelInfo, container, format, v...)
+}
+
+func LogTaskSuccess(container string, format string, v ...interface{}) {
+	Log(LevelInfo, container, format, v...)
+}
+
+func LogTaskWarn(container string, format string, v ...interface{}) {
+	Log(LevelWarn, container, format, v...)
+}
+
+func LogTaskWarning(container string, format string, v ...interface{}) {
+	Log(LevelWarn, container, format, v...)
+}
+
+func LogTaskError(container string, format string, v ...interface{}) {
+	Log(LevelError, container, format, v...)
 }

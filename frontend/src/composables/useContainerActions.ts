@@ -78,7 +78,7 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     activeUnsubscribeLogs = wsService.subscribeLogs(name, ({ message: msg }) => {
       logLines.value.push(msg)
       scrollTerminal()
-      if (msg.includes('[SUCCESS]') || msg.includes('[ERROR]')) {
+      if (msg.includes('任务全部完成') || msg.includes('已成功') || msg.includes('恢复成功') || msg.includes('[ERROR]')) {
         logRunning.value = false
       }
     })
@@ -109,7 +109,7 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
         const unsub = wsService.subscribeLogs(name, ({ message: msg }) => {
           logLines.value.push(msg)
           scrollTerminal()
-          if (msg.includes('[SUCCESS]') || msg.includes('[ERROR]')) {
+          if (msg.includes('任务全部完成') || msg.includes('已成功') || msg.includes('恢复成功') || msg.includes('[ERROR]')) {
             unsub()
             resolve()
           }
@@ -118,7 +118,7 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     }
 
     logLines.value.push(`========================================`)
-    logLines.value.push(`[SUCCESS] 批量升级队列全部作业运行完毕`)
+    logLines.value.push(`[INFO] 批量升级队列全部作业运行完毕`)
     logRunning.value = false
     if (onClearSelection) onClearSelection()
   }
@@ -148,7 +148,7 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
           activeUnsubscribeLogs = wsService.subscribeLogs(name, ({ message: msg }) => {
             logLines.value.push(msg)
             scrollTerminal()
-            if (msg.includes('[SUCCESS]') || msg.includes('[ERROR]')) {
+            if (msg.includes('任务全部完成') || msg.includes('已成功') || msg.includes('恢复成功') || msg.includes('[ERROR]')) {
               logRunning.value = false
             }
           })
