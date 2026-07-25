@@ -13,6 +13,7 @@ cd ..
 
 # 2. 交叉编译 Linux x86_64 二进制文件
 echo "[INFO] 正在交叉编译 Linux x86_64 二进制文件..."
+go mod tidy
 mkdir -p fnpack/app/bin
 export GOOS=linux
 export GOARCH=amd64
