@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"docker-updater/db"
@@ -32,27 +33,22 @@ var WebFS embed.FS
 // CustomGinLogger 自定义 Gin 访问日志中间件
 func CustomGinLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		start := time.Now()
 		path := c.Request.URL.Path
+		if strings.Contains(path, "/assets/") || strings.HasSuffix(path, ".ico") || strings.HasSuffix(path, ".png") {
+			return
+		}
+
+		start := time.Now()
 		query := c.Request.URL.RawQuery
 
 		c.Next()
 
-		// 过滤 WebSocket 高频日志以降低噪声
-		if strings.HasSuffix(path, "/api/ws") {
-			return
-		}
-
-		latency := time.Since(start)
 		status := c.Writer.Status()
-		method := c.Request.Method
-		clientIP := c.ClientIP()
-
 		if status >= 400 {
+			latency := time.Since(start)
+			method := c.Request.Method
+			clientIP := c.ClientIP()
 			utils.LogWarning("HTTP | %3d | %13v | %15s | %s | %s %s",
-				status, latency, clientIP, method, path, query)
-		} else {
-			utils.LogInfo("HTTP | %3d | %13v | %15s | %s | %s %s",
 				status, latency, clientIP, method, path, query)
 		}
 	}
@@ -99,8 +95,6 @@ func InitRoutes(r *gin.Engine) {
 		api.POST("/check", apiCheck)
 		api.POST("/check/:name", apiCheckSingle)
 		api.GET("/update/:name", apiUpdate)
-		api.GET("/rollback/:name", apiRollback)
-		api.DELETE("/backup/:name", apiBackupDelete)
 		api.GET("/settings", apiSettingsGet)
 		api.POST("/settings", apiSettingsPost)
 		api.POST("/defer/:name", apiDefer)
@@ -170,25 +164,24 @@ func apiCheck(c *gin.Context) {
 	go func() {
 		defer service.EndScan()
 		ctx := context.Background()
-		results, err := dockerclient.ScanLocalHostForUpdates(ctx)
-		if err == nil {
-			for _, res := range results {
-				if res.HasUpdate {
-					updateEntry := db.AvailableUpdate{
-						ContainerName:  res.ContainerName,
-						Image:          res.Image,
-						LocalDigest:    res.LocalDigest,
-						RemoteDigest:   res.RemoteDigest,
-						LocalVersion:   res.LocalVersion,
-						RemoteVersion:  res.RemoteVersion,
-						CheckedAt:      res.CheckedAt,
-						ComposeProject: res.ComposeProject,
-					}
-					db.DB.Save(&updateEntry)
-				} else {
-					db.DB.Delete(&db.AvailableUpdate{ContainerName: res.ContainerName})
-				}
+		err := dockerclient.ScanLocalHostForUpdates(ctx, func(res dockerclient.UpdateCheckResult) {
+			updateEntry := db.AvailableUpdate{
+				ContainerName:  res.ContainerName,
+				Image:          res.Image,
+				LocalDigest:    res.LocalDigest,
+				RemoteDigest:   res.RemoteDigest,
+				LocalVersion:   res.LocalVersion,
+				RemoteVersion:  res.RemoteVersion,
+				CheckedAt:      res.CheckedAt,
+				ComposeProject: res.ComposeProject,
+				HasUpdate:      res.HasUpdate,
 			}
+			db.DB.Save(&updateEntry)
+			if service.GlobalObserver != nil {
+				service.GlobalObserver.OnStatusChange()
+			}
+		})
+		if err == nil {
 			if service.GlobalObserver != nil {
 				service.GlobalObserver.OnStatusChange()
 			}
@@ -198,19 +191,21 @@ func apiCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
-// apiCheckSingle 针对单容器单独发起版本比对检查
+// apiCheckSingle 针对单容器单独发起版本比对检查（异步）
 func apiCheckSingle(c *gin.Context) {
 	name := c.Param("name")
-	utils.LogInfo("开始对比检查容器 %s 的镜像版本...", name)
+	utils.LogInfo("容器 %s 版本检查任务已触发，后台异步执行中...", name)
 
-	res, err := dockerclient.ScanSingleContainer(c.Request.Context(), name)
-	if err != nil {
-		utils.LogError("容器 %s 版本检查失败: %s", name, err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
+	// 立即响应，避免前端阻塞
+	c.JSON(http.StatusAccepted, gin.H{"ok": true, "message": "检查已触发，结果将通过状态推送更新"})
 
-	if res.HasUpdate {
+	go func() {
+		res, err := dockerclient.ScanSingleContainer(context.Background(), name)
+		if err != nil {
+			utils.LogError("容器 %s 版本检查失败: %s", name, err.Error())
+			return
+		}
+
 		updateEntry := db.AvailableUpdate{
 			ContainerName:  res.ContainerName,
 			Image:          res.Image,
@@ -220,21 +215,15 @@ func apiCheckSingle(c *gin.Context) {
 			RemoteVersion:  res.RemoteVersion,
 			CheckedAt:      res.CheckedAt,
 			ComposeProject: res.ComposeProject,
+			CheckMethod:    res.CheckMethod,
+			HasUpdate:      res.HasUpdate,
 		}
 		db.DB.Save(&updateEntry)
-	} else {
-		db.DB.Delete(&db.AvailableUpdate{ContainerName: res.ContainerName})
-	}
 
-	if service.GlobalObserver != nil {
-		service.GlobalObserver.OnStatusChange()
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"ok":         true,
-		"has_update": res.HasUpdate,
-		"checked_at": res.CheckedAt,
-	})
+		if service.GlobalObserver != nil {
+			service.GlobalObserver.OnStatusChange()
+		}
+	}()
 }
 
 // serveTaskLogSSE 统一处理任务加入队列并分发 SSE 流式日志
@@ -282,70 +271,43 @@ func apiUpdate(c *gin.Context) {
 	serveTaskLogSSE(c, service.TaskUpdate, targetImage)
 }
 
-// apiRollback 容器一键回滚，加入任务队列并以 SSE 输出日志流
-func apiRollback(c *gin.Context) {
-	serveTaskLogSSE(c, service.TaskRollback, "")
-}
-
-// apiBackupDelete 删除旧备份释放存储
-func apiBackupDelete(c *gin.Context) {
-	name := c.Param("name")
-	cli, err := dockerclient.NewLocalClient()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	defer cli.Close()
-
-	backupName := name + "_backup_docker_updater"
-	err = cli.ContainerRemove(c, backupName, types.ContainerRemoveOptions{Force: true})
-	if err != nil {
-		utils.LogError("手动删除备份容器 %s 失败: %s", backupName, err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	db.DB.Delete(&db.RollbackMetadata{ContainerName: name})
-	utils.LogSuccess("手动删除备份容器 %s 成功", backupName)
-	if service.GlobalObserver != nil {
-		service.GlobalObserver.OnStatusChange()
-	}
-	c.JSON(http.StatusOK, gin.H{"ok": true})
-}
-
 // apiSettingsGet 获取全局配置
 func apiSettingsGet(c *gin.Context) {
-	backupEnabled := db.GetSetting("backup_enabled", "false") == "true"
-	backupHours, _ := strconv.Atoi(db.GetSetting("backup_hours", "24"))
-	restartStack := db.GetSetting("restart_stack", "false") == "true"
 	autoUpdateEnabled := db.GetSetting("auto_update_enabled", "false") == "true"
 	checkType := db.GetSetting("check_type", "day")
 	checkValueStr := db.GetSetting("check_value", "1")
 	checkValue, _ := strconv.Atoi(checkValueStr)
-	if checkValue <= 0 {
-		checkValue = 1
-	}
 
-	tempMirrorsStr := db.GetSetting("temp_mirrors", "[]")
-	var tempMirrors []string
-	_ = json.Unmarshal([]byte(tempMirrorsStr), &tempMirrors)
-	if tempMirrors == nil {
-		tempMirrors = []string{}
-	}
+	dockerhubMirrorsStr := db.GetSetting("dockerhub_mirrors", "")
+	ghcrMirrorsStr := db.GetSetting("ghcr_mirrors", "[]")
+	var dockerhubMirrors []string
+	var ghcrMirrors []string
 
-	notifyEnabled := db.GetSetting("notify_enabled", "")
-	if notifyEnabled == "" {
-		notifyEnabled = db.GetSetting("smtp_enabled", "false")
+	if dockerhubMirrorsStr == "" {
+		tempMirrorsStr := db.GetSetting("temp_mirrors", "[]")
+		_ = json.Unmarshal([]byte(tempMirrorsStr), &dockerhubMirrors)
+	} else {
+		_ = json.Unmarshal([]byte(dockerhubMirrorsStr), &dockerhubMirrors)
 	}
+	_ = json.Unmarshal([]byte(ghcrMirrorsStr), &ghcrMirrors)
+
+	notifyEnabledStr := db.GetSetting("notify_enabled", "")
+	if notifyEnabledStr == "" {
+		notifyEnabledStr = db.GetSetting("smtp_enabled", "false")
+	}
+	notifyEnabled := notifyEnabledStr
 	notifyType := db.GetSetting("notify_type", "email")
 
-	smtpEnabled := notifyEnabled == "true"
 	smtpHost := db.GetSetting("smtp_host", "")
 	smtpPort := db.GetSetting("smtp_port", "465")
 	smtpUsername := db.GetSetting("smtp_username", "")
 	smtpPassword := db.GetSetting("smtp_password", "")
+	if smtpPassword != "" {
+		smtpPassword = "******"
+	}
 	smtpSSL := db.GetSetting("smtp_ssl", "true") == "true"
 	smtpTo := db.GetSetting("smtp_to", "")
+	smtpEnabled := notifyEnabled == "true" && notifyType == "email"
 	smtpSubjectTemplate := db.GetSetting("smtp_subject_template", utils.DefaultSMTPSubject)
 	smtpBodyTemplate := db.GetSetting("smtp_body_template", utils.DefaultSMTPBody)
 	smtpSubjectTemplateCheck := db.GetSetting("smtp_subject_template_check", utils.DefaultSMTPSubjectCheck)
@@ -354,14 +316,11 @@ func apiSettingsGet(c *gin.Context) {
 	webhookURL := db.GetSetting("webhook_url", "")
 	webhookMethod := db.GetSetting("webhook_method", "POST")
 	webhookType := db.GetSetting("webhook_type", "custom")
-	if webhookType == "" {
-		webhookType = "custom"
-	}
 
-	getTpl := func(key string, wType string, isCheck bool) string {
+	getTpl := func(key string, tplType string, isCheck bool) string {
 		val := db.GetSetting(key, "")
 		if val == "" {
-			val = utils.GetDefaultWebhookTemplate(wType, isCheck)
+			return utils.GetDefaultWebhookTemplate(tplType, isCheck)
 		}
 		return val
 	}
@@ -377,11 +336,10 @@ func apiSettingsGet(c *gin.Context) {
 	webhookTemplateCheckFeishu := getTpl("webhook_template_check_feishu", "feishu", true)
 
 	c.JSON(http.StatusOK, gin.H{
-		"backup_enabled":              backupEnabled,
-		"backup_hours":                backupHours,
-		"restart_stack":               restartStack,
 		"auto_update_enabled":         autoUpdateEnabled,
-		"temp_mirrors":                tempMirrors,
+		"temp_mirrors":                dockerhubMirrors,
+		"dockerhub_mirrors":           dockerhubMirrors,
+		"ghcr_mirrors":                ghcrMirrors,
 		"check_type":                  checkType,
 		"check_value":                 checkValue,
 		"notify_enabled":              notifyEnabled == "true",
@@ -452,7 +410,11 @@ func apiImageTags(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "image parameter required"})
 		return
 	}
-	tags, err := dockerclient.GetRemoteTags(imageName)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	tags, err := dockerclient.GetRemoteTags(ctx, imageName)
 	if err != nil {
 		utils.LogWarning("获取镜像 %s 的远端 Tags 失败: %s", imageName, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -634,42 +596,73 @@ func apiImagesGet(c *gin.Context) {
 		return
 	}
 
-	var result []gin.H
+	// 3. 并发 Inspect（限制最大并发 6）
+	type inspectItem struct {
+		id          string
+		tags        []string
+		size        int64
+		created     int64
+		associated  []string
+		arch        string
+		ver         string
+	}
+
+	resultCh := make(chan inspectItem, len(list))
+	sem := make(chan struct{}, 6)
+	var wg sync.WaitGroup
+
 	for _, item := range list {
-		tags := item.RepoTags
-		if len(tags) == 0 {
-			tags = []string{"<none>:<none>"}
-		}
-		
-		// 绑定占用该镜像的容器名
-		associated := imageToContainers[item.ID]
-		if associated == nil {
-			associated = []string{}
-		}
+		wg.Add(1)
+		go func(img types.ImageSummary) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 
-		arch := ""
-		ver := ""
-		inspect, _, err := cli.ImageInspectWithRaw(c, item.ID)
-		if err == nil {
-			arch = inspect.Architecture
-			if inspect.Variant != "" {
-				arch = arch + "/" + inspect.Variant
+			tags := img.RepoTags
+			if len(tags) == 0 {
+				tags = []string{"<none>:<none>"}
 			}
-			tagStr := ""
-			if len(tags) > 0 && tags[0] != "<none>:<none>" {
-				tagStr = tags[0]
+			associated := imageToContainers[img.ID]
+			if associated == nil {
+				associated = []string{}
 			}
-			ver = dockerclient.ExtractSemanticVersion(inspect.Config.Labels, inspect.Config.Env, tagStr)
-		}
 
+			arch := ""
+			ver := ""
+			inspect, _, inspErr := cli.ImageInspectWithRaw(c, img.ID)
+			if inspErr == nil {
+				arch = inspect.Architecture
+				if inspect.Variant != "" {
+					arch = arch + "/" + inspect.Variant
+				}
+				tagStr := ""
+				if len(tags) > 0 && tags[0] != "<none>:<none>" {
+					tagStr = tags[0]
+				}
+				ver = dockerclient.ExtractSemanticVersion(inspect.Config.Labels, inspect.Config.Env, tagStr)
+			}
+
+			resultCh <- inspectItem{
+				id: img.ID, tags: tags, size: img.Size,
+				created: img.Created, associated: associated,
+				arch: arch, ver: ver,
+			}
+		}(item)
+	}
+
+	wg.Wait()
+	close(resultCh)
+
+	var result []gin.H
+	for it := range resultCh {
 		result = append(result, gin.H{
-			"id":           item.ID,
-			"tags":         tags,
-			"size":         item.Size,
-			"created":      item.Created,
-			"containers":   associated,
-			"architecture": arch,
-			"version":      ver,
+			"id":           it.id,
+			"tags":         it.tags,
+			"size":         it.size,
+			"created":      it.created,
+			"containers":   it.associated,
+			"architecture": it.arch,
+			"version":      it.ver,
 		})
 	}
 

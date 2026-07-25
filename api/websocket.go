@@ -109,8 +109,9 @@ func (h *WsHub) Run() {
 // BroadcastStatus 广播当前最新容器状态和任务历史至所有连接
 func (h *WsHub) BroadcastStatus() {
 	h.mu.RLock()
-	defer h.mu.RUnlock()
-	if len(h.clients) == 0 {
+	clientCount := len(h.clients)
+	h.mu.RUnlock()
+	if clientCount == 0 {
 		return
 	}
 
@@ -124,6 +125,8 @@ func (h *WsHub) BroadcastStatus() {
 		"payload": data,
 	})
 
+	h.mu.RLock()
+	defer h.mu.RUnlock()
 	for client := range h.clients {
 		select {
 		case client.send <- payload:

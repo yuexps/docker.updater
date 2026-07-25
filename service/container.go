@@ -52,13 +52,6 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 		deferMap[d.ContainerName] = d
 	}
 
-	var rollbacks []db.RollbackMetadata
-	db.DB.Find(&rollbacks)
-	rbMap := make(map[string]db.RollbackMetadata)
-	for _, r := range rollbacks {
-		rbMap[r.ContainerName] = r
-	}
-
 	today := time.Now().Format("2006-01-02")
 	var result []map[string]interface{}
 
@@ -73,7 +66,7 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 		if len(c.Names) > 0 {
 			name = strings.TrimPrefix(c.Names[0], "/")
 		}
-		if name == "" || strings.HasSuffix(name, "_backup_docker_updater") {
+		if name == "" {
 			continue
 		}
 		targets = append(targets, targetContainer{item: c, name: name})
@@ -84,6 +77,7 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 		name         string
 		container    types.Container
 		inspectData  types.ContainerJSON
+		imageInspect types.ImageInspect
 		imageMissing bool
 		err          error
 	}
@@ -105,13 +99,14 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 				return
 			}
 
-			_, _, inspectErr := cli.ImageInspectWithRaw(ctx, inspect.Image)
+			imgInspect, _, inspectErr := cli.ImageInspectWithRaw(ctx, inspect.Image)
 			imageMissing := inspectErr != nil
 
 			resultCh <- inspectResult{
 				name:         tc.name,
 				container:    tc.item,
 				inspectData:  inspect,
+				imageInspect: imgInspect,
 				imageMissing: imageMissing,
 			}
 		}(t)
@@ -129,6 +124,7 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 		name := res.name
 		containerItem := res.container
 		inspect := res.inspectData
+		imageInspect := res.imageInspect
 		imageName := inspect.Config.Image
 
 		status := "ok"
@@ -141,22 +137,11 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 			deferUntil = &val
 		}
 
-		info, hasUpdate := availMap[name]
-		if hasUpdate {
+		info, hasInfo := availMap[name]
+		if hasInfo {
 			checkedAt = info.CheckedAt
-			if status != "deferred" {
+			if info.HasUpdate && status != "deferred" {
 				status = "update"
-			}
-		}
-
-		rb, hasRollback := rbMap[name]
-		var rollbackExpires *string
-		if hasRollback {
-			if _, err := cli.ContainerInspect(ctx, name+"_backup_docker_updater"); err == nil {
-				val := rb.ExpiresAt
-				rollbackExpires = &val
-			} else {
-				hasRollback = false
 			}
 		}
 
@@ -164,39 +149,56 @@ func GetContainerStatusData(ctx context.Context) (map[string]interface{}, error)
 		remoteDigest := ""
 		localVersion := ""
 		remoteVersion := ""
-		if hasUpdate && !res.imageMissing {
-			localDigest = info.LocalDigest
-			if localDigest == "" && inspect.Image != "" {
-				localDigest = inspect.Image
-			}
-			remoteDigest = info.RemoteDigest
-			localVersion = info.LocalVersion
-			remoteVersion = info.RemoteVersion
-		} else {
-			if inspect.Image != "" {
-				localDigest = inspect.Image
-			}
-			localVersion = dockerclient.ExtractSemanticVersion(inspect.Config.Labels, inspect.Config.Env, imageName)
-			if status != "deferred" && checkedAt == "" {
-				checkedAt = db.GetSetting("last_check_time", "")
+		checkMethod := ""
+
+		if hasInfo {
+			if info.HasUpdate && !res.imageMissing {
+				localDigest = info.LocalDigest
+				if localDigest == "" && inspect.Image != "" {
+					localDigest = inspect.Image
+				}
+				remoteDigest = info.RemoteDigest
+				localVersion = info.LocalVersion
+				remoteVersion = info.RemoteVersion
+				checkMethod = info.CheckMethod
 			}
 		}
 
+		if checkMethod == "" {
+			if len(imageInspect.RepoDigests) > 0 {
+				for _, rd := range imageInspect.RepoDigests {
+					if parts := strings.SplitN(rd, "@", 2); len(parts) == 2 {
+						localDigest = parts[1]
+						checkMethod = "RepoDigest"
+						break
+					}
+				}
+			}
+			if localDigest == "" && inspect.Image != "" {
+				localDigest = inspect.Image
+				checkMethod = "ConfigDigest"
+			}
+			localVersion = dockerclient.ExtractSemanticVersion(inspect.Config.Labels, inspect.Config.Env, imageName)
+		}
+
+		if checkedAt == "" {
+			checkedAt = db.GetSetting("last_check_time", "")
+		}
+
 		result = append(result, map[string]interface{}{
-			"name":             name,
-			"image":            imageName,
-			"status":           status,
-			"defer_until":      deferUntil,
-			"checked_at":       checkedAt,
-			"has_rollback":     hasRollback,
-			"rollback_expires": rollbackExpires,
-			"compose_project":  containerItem.Labels["com.docker.compose.project"],
-			"running":          containerItem.State == "running",
-			"local_digest":     localDigest,
-			"remote_digest":    remoteDigest,
-			"local_version":    localVersion,
-			"remote_version":   remoteVersion,
-			"image_missing":    res.imageMissing,
+			"name":            name,
+			"image":           imageName,
+			"status":          status,
+			"defer_until":     deferUntil,
+			"checked_at":      checkedAt,
+			"compose_project": containerItem.Labels["com.docker.compose.project"],
+			"running":         containerItem.State == "running",
+			"local_digest":    localDigest,
+			"remote_digest":   remoteDigest,
+			"local_version":   localVersion,
+			"remote_version":  remoteVersion,
+			"image_missing":   res.imageMissing,
+			"check_method":    checkMethod,
 		})
 	}
 

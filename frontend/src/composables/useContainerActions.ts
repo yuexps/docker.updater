@@ -2,6 +2,7 @@ import { ref, nextTick, onScopeDispose } from 'vue'
 import { useMessage, useDialog } from 'naive-ui'
 import axios from 'axios'
 import wsService from '../utils/websocket'
+import { copyToClipboard as copyToClipboardUtil } from '../utils/clipboard'
 
 export function useContainerActions(apiBase = '/app/docker-updater/api') {
   const message = useMessage()
@@ -37,26 +38,8 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
   }
 
   // 复制文本至剪贴板
-  const copyToClipboard = (text: string) => {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(() => {
-        message?.success('已复制镜像名称到剪贴板')
-      }).catch(() => {
-        message?.error('复制失败')
-      })
-    } else {
-      const input = document.createElement('input')
-      input.setAttribute('value', text)
-      document.body.appendChild(input)
-      input.select()
-      try {
-        document.execCommand('copy')
-        message?.success('已复制镜像名称到剪贴板')
-      } catch (err) {
-        message?.error('复制失败')
-      }
-      document.body.removeChild(input)
-    }
+  const copyToClipboard = (text: string, label: string = '镜像名称') => {
+    return copyToClipboardUtil(text, label, message)
   }
 
   // 升级单个容器
@@ -123,63 +106,6 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     if (onClearSelection) onClearSelection()
   }
 
-  // 回滚单个容器
-  const rollbackContainer = (name: string) => {
-    dialog?.warning({
-      title: '确认回滚容器',
-      content: `你是否确定要将 ${name} 重建还原为上一次升级前的备份镜像？该过程会造成容器短暂中断重启。并且旧版本应用可能无法兼容新数据结构。`,
-      positiveText: '确认还原',
-      negativeText: '取消',
-      onPositiveClick: () => {
-        return new Promise<void>((resolve) => {
-          logLines.value = []
-          logModalVisible.value = true
-          logRunning.value = true
-
-          axios.get(`${apiBase}/rollback/${name}`)
-            .then(() => resolve())
-            .catch(() => {
-              message?.error('触发回滚失败')
-              logRunning.value = false
-              resolve()
-            })
-
-          if (activeUnsubscribeLogs) activeUnsubscribeLogs()
-          activeUnsubscribeLogs = wsService.subscribeLogs(name, ({ message: msg }) => {
-            logLines.value.push(msg)
-            scrollTerminal()
-            if (msg.includes('任务全部完成') || msg.includes('已成功') || msg.includes('恢复成功') || msg.includes('[ERROR]')) {
-              logRunning.value = false
-            }
-          })
-        })
-      }
-    })
-  }
-
-  // 删除备份容器
-  const deleteBackup = (name: string, onSuccess?: () => void) => {
-    dialog?.warning({
-      title: '清除备份容器',
-      content: `清理备份容器 ${name}_backup_docker_updater 将释放本地磁盘空间，但这之后您将无法直接一键回滚。确定清除吗？`,
-      positiveText: '确认清除',
-      negativeText: '取消',
-      onPositiveClick: () => {
-        return new Promise<void>(async (resolve, reject) => {
-          try {
-            await axios.delete(`${apiBase}/backup/${name}`)
-            message?.success('备份容器已彻底清除')
-            if (onSuccess) onSuccess()
-            resolve()
-          } catch (err) {
-            message?.error('清除备份失败')
-            reject()
-          }
-        })
-      }
-    })
-  }
-
   // 获取运行日志
   const showLogs = async (name: string) => {
     try {
@@ -224,7 +150,7 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     const actionKey = `${name}:start`
     operatingContainers.value.add(actionKey)
     try {
-      await axios.post(`${apiBase}/container/${name}/start`)
+      await axios.post(`${apiBase}/container/${name}/start`, null, { timeout: 20000 })
       message?.success(`已成功启动容器 ${name}`)
     } catch {
       message?.error(`启动容器 ${name} 失败`)
@@ -237,7 +163,7 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     const actionKey = `${name}:stop`
     operatingContainers.value.add(actionKey)
     try {
-      await axios.post(`${apiBase}/container/${name}/stop`)
+      await axios.post(`${apiBase}/container/${name}/stop`, null, { timeout: 15000 })
       message?.success(`已成功停止容器 ${name}`)
     } catch {
       message?.error(`停止容器 ${name} 失败`)
@@ -250,7 +176,7 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     const actionKey = `${name}:restart`
     operatingContainers.value.add(actionKey)
     try {
-      await axios.post(`${apiBase}/container/${name}/restart`)
+      await axios.post(`${apiBase}/container/${name}/restart`, null, { timeout: 25000 })
       message?.success(`已成功重启容器 ${name}`)
     } catch {
       message?.error(`重启容器 ${name} 失败`)
@@ -259,19 +185,15 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     }
   }
 
-  // 检查单个容器更新
+  // 检查单个容器更新（异步触发，结果由 WS 推送刷新）
   const checkContainer = async (name: string) => {
     const actionKey = `${name}:check`
     operatingContainers.value.add(actionKey)
     try {
-      const res = await axios.post(`${apiBase}/check/${name}`)
-      if (res.data?.has_update) {
-        message?.success(`检测完毕: 容器 ${name} 发现新版本镜像`)
-      } else {
-        message?.success(`检测完毕: 容器 ${name} 当前镜像已是最新`)
-      }
+      await axios.post(`${apiBase}/check/${name}`)
+      message?.info(`容器 ${name} 版本检测已触发，结果稍后自动刷新`)
     } catch {
-      message?.error(`检测容器 ${name} 版本失败`)
+      message?.error(`触发容器 ${name} 版本检测失败`)
     } finally {
       operatingContainers.value.delete(actionKey)
     }
@@ -353,8 +275,6 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     copyToClipboard,
     updateContainer,
     startBulkUpdate,
-    rollbackContainer,
-    deleteBackup,
     showLogs,
     openDeferModal,
     submitDefer,

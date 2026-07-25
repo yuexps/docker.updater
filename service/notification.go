@@ -11,7 +11,6 @@ import (
 const (
 	NotifyActionUpdateCheck = "可用版本更新提醒"
 	NotifyActionUpdate      = "容器升级"
-	NotifyActionRollback    = "回滚恢复"
 )
 
 // SendNotification 发送统一通知报告（邮件或 Webhook）

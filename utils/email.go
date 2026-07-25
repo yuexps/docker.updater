@@ -3,8 +3,10 @@ package utils
 import (
 	"crypto/tls"
 	"fmt"
-	"net/smtp"
-	"strings"
+	"strconv"
+	"time"
+
+	"gopkg.in/mail.v2"
 )
 
 // DefaultSMTPSubject 默认的邮件主题模板
@@ -47,65 +49,31 @@ func SendNotificationEmail(cfg SMTPConfig, subject, body string) error {
 	return nil
 }
 
-// SendEmailRaw 执行底层的 SMTP 协议握手和邮件发送，支持 SSL 与普通 TLS 模式
+// SendEmailRaw 使用 mail.v2 库执行 SMTP 邮件发送，支持 SSL 与普通 TLS 模式
 func SendEmailRaw(host, portStr, username, password, to string, ssl bool, subject, body string) error {
-	addr := host + ":" + portStr
-	auth := smtp.PlainAuth("", username, password, host)
-
-	header := make(map[string]string)
-	header["From"] = username
-	header["To"] = to
-	header["Subject"] = subject
-	header["Content-Type"] = "text/plain; charset=UTF-8"
-
-	// 拼接邮件正文
-	var sb strings.Builder
-	for k, v := range header {
-		sb.WriteString(fmt.Sprintf("%s: %s\r\n", k, v))
+	port, err := strconv.Atoi(portStr)
+	if err != nil || port <= 0 {
+		port = 25
+		if ssl {
+			port = 465
+		}
 	}
-	sb.WriteString("\r\n")
-	sb.WriteString(body)
-	message := sb.String()
 
+	m := mail.NewMessage()
+	m.SetHeader("From", username)
+	m.SetHeader("To", to)
+	m.SetHeader("Subject", subject)
+	m.SetBody("text/plain", body)
+
+	d := mail.NewDialer(host, port, username, password)
+	d.Timeout = 10 * time.Second
 	if ssl {
-		// SSL 协议加密信道 (通常 465 端口)
-		tlsconfig := &tls.Config{
-			InsecureSkipVerify: true,
-			ServerName:         host,
-		}
-		conn, err := tls.Dial("tcp", addr, tlsconfig)
-		if err != nil {
-			return err
-		}
-		defer conn.Close()
-
-		c, err := smtp.NewClient(conn, host)
-		if err != nil {
-			return err
-		}
-		defer c.Quit()
-
-		if err = c.Auth(auth); err != nil {
-			return err
-		}
-		if err = c.Mail(username); err != nil {
-			return err
-		}
-		if err = c.Rcpt(to); err != nil {
-			return err
-		}
-		w, err := c.Data()
-		if err != nil {
-			return err
-		}
-		defer w.Close()
-		_, err = w.Write([]byte(message))
-		if err != nil {
-			return err
-		}
-		return nil
+		d.SSL = true
+	}
+	d.TLSConfig = &tls.Config{
+		InsecureSkipVerify: true,
+		ServerName:         host,
 	}
 
-	// 非 SSL 信道模式 (通常 25 端口，或通过 STARTTLS)
-	return smtp.SendMail(addr, auth, username, []string{to}, []byte(message))
+	return d.DialAndSend(m)
 }

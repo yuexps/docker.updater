@@ -188,6 +188,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { NButton, NTooltip, useMessage } from 'naive-ui'
+import { copyToClipboard } from '../utils/clipboard'
 
 interface ImageItem {
   id: string;
@@ -280,25 +281,6 @@ const formatDate = (timestamp: number): string => {
 
 // 一键复制
 const copyText = (text: string) => {
-  const cleanText = text.replace('sha256:', '')
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(cleanText).then(() => {
-      message?.success('已复制到剪贴板')
-    }).catch(() => {
-      message?.error('复制失败')
-    })
-  } else {
-    const input = document.createElement('input')
-    input.setAttribute('value', cleanText)
-    document.body.appendChild(input)
-    input.select()
-    try {
-      document.execCommand('copy')
-      message?.success('已复制到剪贴板')
-    } catch {
-      message?.error('复制失败')
-    }
-    document.body.removeChild(input)
-  }
+  copyToClipboard(text, '镜像 ID', message)
 }
 </script>

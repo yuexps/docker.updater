@@ -18,45 +18,6 @@
       <!-- Configuration Cards stack -->
       <div class="space-y-6">
 
-        <!-- Card 1: Backup Toggle & Expiry Hours -->
-        <div
-          class="apple-card rounded-lg p-5 sm:p-6 flex flex-col gap-4 hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white">
-          <div class="flex items-start justify-between gap-4">
-            <div class="min-w-0 flex-1">
-              <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">保留旧版容器备份</div>
-              <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">升级成功后在保留期内保存旧容器实例。若新版本运行出现问题，支持随时手动一键回滚。</div>
-            </div>
-            <div class="shrink-0 pt-0.5">
-              <n-switch v-model:value="settings.backup_enabled" @update:value="autoSaveSettings" />
-            </div>
-          </div>
-
-          <!-- Expiry hours sub-config row inside same card -->
-          <div v-if="settings.backup_enabled"
-            class="border-t border-hairline pt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between transition-all duration-300">
-            <div class="min-w-0 flex-1">
-              <div class="text-[14px] font-bold text-slate-700 leading-snug">备份自动清除周期</div>
-              <div class="text-[12px] text-body-muted mt-1 leading-relaxed">超出保留期后，系统会自动物理清除旧容器备份以释放磁盘空间。</div>
-            </div>
-            <div class="w-full sm:w-45 shrink-0">
-              <n-select v-model:value="settings.backup_hours" :options="hoursOptions"
-                @update:value="autoSaveSettings" />
-            </div>
-          </div>
-        </div>
-
-        <!-- Card 3: Sibling Restart Toggle -->
-        <div
-          class="apple-card rounded-lg p-5 sm:p-6 flex items-start justify-between gap-4 hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white">
-          <div class="min-w-0 flex-1">
-            <div class="text-[16px] font-bold text-slate-800 tracking-tight leading-snug">自动重启同 Compose 项目服务</div>
-            <div class="text-[13px] text-body-muted mt-1.5 leading-relaxed">当服务更新重建后，自动重启同 Compose 项目下的其它关联服务。</div>
-          </div>
-          <div class="shrink-0 pt-0.5">
-            <n-switch v-model:value="settings.restart_stack" @update:value="autoSaveSettings" />
-          </div>
-        </div>
-
         <!-- Card 2: Auto Check & Update Config -->
         <div
           class="apple-card rounded-lg p-5 sm:p-6 flex flex-col gap-4 hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white">
@@ -309,7 +270,7 @@
           </div>
         </div>
 
-        <!-- Card 4: Registry Mirrors (Temporary) -->
+        <!-- Card 4: Registry Mirrors -->
         <div
           class="apple-card rounded-lg p-5 sm:p-6 hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(0,0,0,0.02)] transition-all duration-300 bg-white flex flex-col gap-5">
           <!-- Card Header (Title & Button in one row) -->
@@ -329,18 +290,22 @@
                 </template>
               </n-button>
             </div>
-            <div class="text-[13px] text-body-muted leading-relaxed">配置当前应用的 Docker 镜像加速源。</div>
+            <div class="text-[13px] text-body-muted leading-relaxed">配置当前应用的 DockerHub 及 GHCR 镜像加速源。</div>
           </div>
 
           <div class="flex flex-col gap-3">
             <!-- Temporary Mirrors List -->
-            <div v-if="settings.temp_mirrors && settings.temp_mirrors.length > 0"
+            <div v-if="allMirrorsList.length > 0"
               class="border border-hairline rounded-xl overflow-hidden divide-y divide-hairline bg-slate-50/5">
-              <div v-for="(m, idx) in settings.temp_mirrors" :key="idx"
+              <div v-for="(m, idx) in allMirrorsList" :key="idx"
                 class="flex items-center justify-between p-3.5">
-                <span class="text-[13px] font-mono text-slate-700 break-all pr-4">{{ m }}</span>
+                <div class="flex items-center min-w-0 pr-4">
+                  <n-tag v-if="m.type === 'dockerhub'" size="small" type="info" round class="mr-2 shrink-0 font-mono font-semibold">DockerHub</n-tag>
+                  <n-tag v-else size="small" type="success" round class="mr-2 shrink-0 font-mono font-semibold">GHCR</n-tag>
+                  <span class="text-[13px] font-mono text-slate-700 break-all truncate">{{ m.url }}</span>
+                </div>
                 <n-button size="tiny" type="error" ghost round class="active-scale shrink-0"
-                  @click="removeTempMirror(idx)">
+                  @click="removeMirror(m.type, m.index)">
                   删除
                 </n-button>
               </div>
@@ -400,8 +365,17 @@
 
         <div class="space-y-4 py-2">
           <div>
+            <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-2">镜像源类型</label>
+            <n-radio-group v-model:value="newTempMirrorType" name="mirrorType" size="medium">
+              <n-radio-button value="dockerhub">DockerHub</n-radio-button>
+              <n-radio-button value="ghcr">GHCR</n-radio-button>
+            </n-radio-group>
+          </div>
+
+          <div>
             <label class="text-[12px] font-semibold tracking-wider text-slate-500 block mb-1.5">加速源地址</label>
-            <n-input v-model:value="newTempMirror" placeholder="例如: https://docker.m.daocloud.io"
+            <n-input v-model:value="newTempMirror"
+              :placeholder="newTempMirrorType === 'dockerhub' ? '例如: https://docker.m.daocloud.io' : '例如: https://ghcr.nju.edu.cn'"
               class="rounded-lg" @keyup.enter="addTempMirror" />
           </div>
 
@@ -409,7 +383,7 @@
             <div class="text-[12px] font-semibold tracking-wider text-slate-500 mb-2">常用镜像源</div>
             <div class="flex flex-wrap gap-2">
               <button
-                v-for="url in recommendedMirrors"
+                v-for="url in currentRecommendedMirrors"
                 :key="url"
                 class="px-2.5 py-1 text-[11px] font-mono rounded-lg border border-slate-200 hover:border-primary hover:text-primary bg-slate-50/50 hover:bg-primary-50/20 active:scale-95 transition-all cursor-pointer select-none"
                 @click="newTempMirror = url"
@@ -444,11 +418,10 @@ const message = useMessage()
 const dialog = useDialog()
 
 interface SettingsData {
-  backup_enabled: boolean;
-  backup_hours: number;
-  restart_stack: boolean;
   auto_update_enabled: boolean;
   temp_mirrors: string[];
+  dockerhub_mirrors: string[];
+  ghcr_mirrors: string[];
   check_type: string;
   check_value: number;
   notify_enabled: boolean;
@@ -479,11 +452,10 @@ interface SettingsData {
 }
 
 const settings = ref<SettingsData>({
-  backup_enabled: false,
-  backup_hours: 24,
-  restart_stack: false,
   auto_update_enabled: false,
   temp_mirrors: [],
+  dockerhub_mirrors: [],
+  ghcr_mirrors: [],
   check_type: 'day',
   check_value: 1,
   notify_enabled: false,
@@ -549,14 +521,40 @@ const registryForm = ref({
 })
 
 const newTempMirror = ref<string>('')
+const newTempMirrorType = ref<'dockerhub' | 'ghcr'>('dockerhub')
 const mirrorModalVisible = ref<boolean>(false)
 
-const recommendedMirrors = [
+const recommendedDockerhubMirrors = [
   'https://docker.1ms.run',
   'https://docker.m.daocloud.io',
   'https://atomhub.openatom.cn',
   'https://docker.fxxk.dedyn.io'
 ]
+
+const recommendedGHCRMirrors = [
+  'https://ghcr.nju.edu.cn',
+  'https://ghcr.m.daocloud.io',
+  'https://ghcr.1ms.run'
+]
+
+const currentRecommendedMirrors = computed(() => {
+  return newTempMirrorType.value === 'dockerhub' ? recommendedDockerhubMirrors : recommendedGHCRMirrors
+})
+
+const allMirrorsList = computed(() => {
+  const list: { type: 'dockerhub' | 'ghcr'; url: string; index: number }[] = []
+  if (settings.value.dockerhub_mirrors) {
+    settings.value.dockerhub_mirrors.forEach((url, index) => {
+      list.push({ type: 'dockerhub', url, index })
+    })
+  }
+  if (settings.value.ghcr_mirrors) {
+    settings.value.ghcr_mirrors.forEach((url, index) => {
+      list.push({ type: 'ghcr', url, index })
+    })
+  }
+  return list
+})
 
 const saving = ref<boolean>(false)
 const showFeedback = ref<boolean>(false)
@@ -688,8 +686,14 @@ const loadSettings = async () => {
   try {
     const res = await axios.get(`${apiBase}/settings`)
     settings.value = res.data
+    if (!settings.value.dockerhub_mirrors) {
+      settings.value.dockerhub_mirrors = settings.value.temp_mirrors || []
+    }
+    if (!settings.value.ghcr_mirrors) {
+      settings.value.ghcr_mirrors = []
+    }
     if (!settings.value.temp_mirrors) {
-      settings.value.temp_mirrors = []
+      settings.value.temp_mirrors = settings.value.dockerhub_mirrors
     }
     if (settings.value.notify_type === undefined || settings.value.notify_type === '') {
       settings.value.notify_type = 'email'
@@ -770,11 +774,17 @@ const addTempMirror = async () => {
     message.warning('请输入加速源地址')
     return
   }
-  if (!settings.value.temp_mirrors) {
-    settings.value.temp_mirrors = []
+
+  const targetKey = newTempMirrorType.value === 'dockerhub' ? 'dockerhub_mirrors' : 'ghcr_mirrors'
+  if (!settings.value[targetKey]) {
+    settings.value[targetKey] = []
   }
-  if (!settings.value.temp_mirrors.includes(url)) {
-    settings.value.temp_mirrors.push(url)
+
+  if (!settings.value[targetKey].includes(url)) {
+    settings.value[targetKey].push(url)
+    if (targetKey === 'dockerhub_mirrors') {
+      settings.value.temp_mirrors = settings.value.dockerhub_mirrors
+    }
     newTempMirror.value = ''
     mirrorModalVisible.value = false
     await autoSaveSettings()
@@ -784,9 +794,13 @@ const addTempMirror = async () => {
   }
 }
 
-const removeTempMirror = async (index: number) => {
-  if (settings.value.temp_mirrors) {
-    settings.value.temp_mirrors.splice(index, 1)
+const removeMirror = async (type: 'dockerhub' | 'ghcr', index: number) => {
+  const targetKey = type === 'dockerhub' ? 'dockerhub_mirrors' : 'ghcr_mirrors'
+  if (settings.value[targetKey]) {
+    settings.value[targetKey].splice(index, 1)
+    if (targetKey === 'dockerhub_mirrors') {
+      settings.value.temp_mirrors = settings.value.dockerhub_mirrors
+    }
     await autoSaveSettings()
   }
 }

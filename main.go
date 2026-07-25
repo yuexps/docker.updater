@@ -56,10 +56,7 @@ func main() {
 		utils.LogFatal("数据库初始化失败: %s", err.Error())
 	}
 
-	// 3. 运行启动恢复，自愈断电中断的升级逻辑
-	service.SelfHealInterruptedOperations()
-
-	// 3.1 初始化后台升级排队队列管理器
+	// 3 初始化后台升级排队队列管理器
 	service.InitQueueManager()
 
 	// 4. 加载定时检查调度
@@ -113,6 +110,3 @@ func main() {
 		}
 	}
 }
-
-
-

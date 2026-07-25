@@ -7,12 +7,13 @@ interface MockContainer {
   status: string // 'ok' | 'update' | 'deferred'
   defer_until: string | null
   checked_at: string
-  has_rollback: boolean
-  rollback_expires: string | null
   compose_project: string | null
   running: boolean
   local_digest: string
   remote_digest: string
+  local_version?: string
+  remote_version?: string
+  check_method?: 'RepoDigest' | 'ConfigDigest'
 }
 
 interface MockImage {
@@ -35,7 +36,7 @@ interface RegistryItem {
 
 interface TaskItem {
   container_name: string
-  type: 'update' | 'rollback'
+  type: 'update'
   added_at: string
 }
 
@@ -43,9 +44,6 @@ class SimulationDatabase {
   containers: MockContainer[] = []
   images: MockImage[] = []
   settings = {
-    backup_enabled: true,
-    backup_hours: 24,
-    restart_stack: false,
     temp_mirrors: ['https://docker.m.daocloud.io', 'https://mirror.baidubce.com'],
     check_type: 'day',
     check_value: 1
@@ -73,12 +71,13 @@ class SimulationDatabase {
         status: 'update',
         defer_until: null,
         checked_at: '2026-07-09 10:30',
-        has_rollback: true,
-        rollback_expires: '2026-07-16 10:30',
         compose_project: 'web-cluster',
         running: true,
         local_digest: 'sha256:4f082ec15d862f1c84f3c0eb51b14a601859c402130386cfb8109bfcf9446d3e',
-        remote_digest: 'sha256:9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1a0b9c8d7e6f5a4b3c2d1e0f9a8b'
+        remote_digest: 'sha256:9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1a0b9c8d7e6f5a4b3c2d1e0f9a8b',
+        local_version: '1.25.3',
+        remote_version: '1.25.4',
+        check_method: 'RepoDigest'
       },
       {
         name: 'postgres-db',
@@ -86,12 +85,13 @@ class SimulationDatabase {
         status: 'ok',
         defer_until: null,
         checked_at: '2026-07-09 11:15',
-        has_rollback: false,
-        rollback_expires: null,
         compose_project: null,
         running: true,
         local_digest: 'sha256:5a4b3c2d1e0f9a8b8c7d6e5f4a3b2c1d0c9b8a7f6e5d4c3b2a1a0b9c8d7e6f5a',
-        remote_digest: 'sha256:5a4b3c2d1e0f9a8b8c7d6e5f4a3b2c1d0c9b8a7f6e5d4c3b2a1a0b9c8d7e6f5a'
+        remote_digest: 'sha256:5a4b3c2d1e0f9a8b8c7d6e5f4a3b2c1d0c9b8a7f6e5d4c3b2a1a0b9c8d7e6f5a',
+        local_version: '15.4',
+        remote_version: '15.4',
+        check_method: 'RepoDigest'
       },
       {
         name: 'redis-cache',
@@ -99,12 +99,13 @@ class SimulationDatabase {
         status: 'ok',
         defer_until: null,
         checked_at: '2026-07-09 12:00',
-        has_rollback: false,
-        rollback_expires: null,
         compose_project: 'cache-stack',
         running: false,
         local_digest: 'sha256:8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e',
-        remote_digest: 'sha256:8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e'
+        remote_digest: 'sha256:8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e',
+        local_version: '7.2.4',
+        remote_version: '7.2.4',
+        check_method: 'RepoDigest'
       },
       {
         name: 'node-service',
@@ -112,12 +113,13 @@ class SimulationDatabase {
         status: 'deferred',
         defer_until: '2026-08-01',
         checked_at: '2026-07-09 09:00',
-        has_rollback: false,
-        rollback_expires: null,
         compose_project: null,
         running: false,
         local_digest: 'sha256:1a84f3c0eb51b14a601859c402130386cfb8109bfcf9446d3e4f082ec15d862f',
-        remote_digest: 'sha256:1a84f3c0eb51b14a601859c402130386cfb8109bfcf9446d3e4f082ec15d862f'
+        remote_digest: 'sha256:1a84f3c0eb51b14a601859c402130386cfb8109bfcf9446d3e4f082ec15d862f',
+        local_version: '20.11.0',
+        remote_version: '20.11.0',
+        check_method: 'RepoDigest'
       },
       {
         name: 'python-worker',
@@ -125,12 +127,27 @@ class SimulationDatabase {
         status: 'update',
         defer_until: null,
         checked_at: '2026-07-09 08:30',
-        has_rollback: true,
-        rollback_expires: '2026-07-16 08:30',
         compose_project: 'data-pipeline',
         running: true,
         local_digest: 'sha256:7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6',
-        remote_digest: 'sha256:e0f9a8b8c7d6e5f4a3b2c1d0c9b8a7f6e5d4c3b2a1a0b9c8d7e6f5a4b3c2d1e'
+        remote_digest: 'sha256:e0f9a8b8c7d6e5f4a3b2c1d0c9b8a7f6e5d4c3b2a1a0b9c8d7e6f5a4b3c2d1e',
+        local_version: '3.11.7',
+        remote_version: '3.11.8',
+        check_method: 'RepoDigest'
+      },
+      {
+        name: 'custom-config-app',
+        image: 'my-private-service:latest',
+        status: 'update',
+        defer_until: null,
+        checked_at: '2026-07-09 10:45',
+        compose_project: null,
+        running: true,
+        local_digest: 'sha256:config_id_local_hash_11223344',
+        remote_digest: 'sha256:config_id_remote_hash_55667788',
+        local_version: '1.0.0',
+        remote_version: '1.0.1',
+        check_method: 'ConfigDigest'
       }
     ]
 
@@ -219,12 +236,11 @@ class SimulationDatabase {
       `[INFO] 正在从 registry 下载新镜像层: sha256:7f082ec15d86...`,
       `[INFO] 正在从 registry 下载新镜像层: sha256:1a84f3c0eb51...`,
       `[INFO] 最新镜像层拉取完毕，已校验校验和`,
-      `[INFO] 正在创建升级前镜像备份点: nginx-app_backup_docker_updater`,
-      `[INFO] 成功记录重启配置策略.`,
+      `[INFO] 已成功为旧镜像绑定临时保护标签`,
       `[INFO] 正在优雅停止运行中的旧容器...`,
       `[INFO] 旧容器实例已清理`,
       `[INFO] 基于新拉取镜像重新组装参数重建中...`,
-      `[INFO] 容器 nginx-app 正在唤醒启动...`,
+      `[INFO] 容器 nginx-app 正在观察 6 秒运行稳定性...`,
       `[INFO] 容器 nginx-app 已成功平滑升级至最新版本！`
     ])
 
@@ -295,60 +311,34 @@ class SimulationDatabase {
     }
   }
 
-  updateContainerRollbackState(name: string, hasRollback: boolean) {
-    const c = this.containers.find((item) => item.name === name)
-    if (c) {
-      c.has_rollback = hasRollback
-      c.rollback_expires = null
-      console.log(`[Mock DB] 容器 ${name} 的回滚备份已清除`)
-      notifyWSStatusChange()
-    }
-  }
-
   // 根据当前升级模式进行最终状态转移
-  onTaskFinished(name: string, type: 'update' | 'rollback') {
+  onTaskFinished(name: string) {
     const c = this.containers.find((item) => item.name === name)
     const targetImage = c ? c.image : 'unknown'
     let finalStatus = 'success'
     let errorMsg = ''
 
-    if (type === 'update') {
-      if (this.upgradeMode === 'success') {
-        c!.status = 'ok'
-        c!.local_digest = c!.remote_digest // 升级成功，对齐摘要
-        c!.has_rollback = true
-        const expireDate = new Date()
-        expireDate.setHours(expireDate.getHours() + 24)
-        c!.rollback_expires = expireDate.toISOString().replace('T', ' ').substring(0, 16)
-        c!.checked_at = new Date().toISOString().replace('T', ' ').substring(0, 16)
-        c!.running = true
-        console.log(`[Mock DB] 容器 ${name} 升级成功`)
-      } else if (this.upgradeMode === 'fail_pull') {
-        finalStatus = 'failed'
-        errorMsg = 'error: Connection timed out to registry'
-        console.log(`[Mock DB] 容器 ${name} 由于拉取失败升级未改变状态`)
-      } else if (this.upgradeMode === 'fail_start') {
-        finalStatus = 'failed'
-        errorMsg = 'error: Container failed to stay up'
-        // 自愈回滚，维持原状
-        c!.status = 'update'
-        c!.has_rollback = false
-        c!.rollback_expires = null
-        c!.running = true
-        console.log(`[Mock DB] 容器 ${name} 启动失败并成功自愈回滚`)
-      }
-    } else {
-      // 回滚
-      c!.status = 'update'
-      c!.local_digest = 'sha256:rollback_old_hash_value_1234567890abcdef'
-      c!.has_rollback = false
-      c!.rollback_expires = null
+    if (this.upgradeMode === 'success') {
+      c!.status = 'ok'
+      c!.local_digest = c!.remote_digest // 升级成功，对齐摘要
+      c!.checked_at = new Date().toISOString().replace('T', ' ').substring(0, 16)
       c!.running = true
-      console.log(`[Mock DB] 容器 ${name} 回滚成功`)
+      console.log(`[Mock DB] 容器 ${name} 升级成功`)
+    } else if (this.upgradeMode === 'fail_pull') {
+      finalStatus = 'failed'
+      errorMsg = 'error: Connection timed out to registry'
+      console.log(`[Mock DB] 容器 ${name} 由于拉取失败升级未改变状态`)
+    } else if (this.upgradeMode === 'fail_start') {
+      finalStatus = 'failed'
+      errorMsg = 'error: Container failed to stay up'
+      // 自愈回滚，维持原状
+      c!.status = 'update'
+      c!.running = true
+      console.log(`[Mock DB] 容器 ${name} 启动失败并成功自愈`)
     }
 
     // 归档日志到持久化内存
-    const logLines = this.getMockTaskLogLines(name, type)
+    const logLines = this.getMockTaskLogLines(name)
     this.updateLogs.set(name, logLines)
 
     // 写入升级历史表
@@ -361,7 +351,7 @@ class SimulationDatabase {
     })
 
     this.activeTask = null
-    console.log(`[Mock Queue] 容器 ${name} 的 ${type} 任务已处理完毕，状态: ${finalStatus}`)
+    console.log(`[Mock Queue] 容器 ${name} 的任务已处理完毕，状态: ${finalStatus}`)
 
     // 调出队列的下一个任务
     if (this.queuedTasks.length > 0) {
@@ -369,27 +359,14 @@ class SimulationDatabase {
       this.activeTask = nextTask
       console.log(`[Mock Queue] 从队列拉起下一个任务:`, nextTask)
       if (activeMockWS) {
-        activeMockWS.startMockLogStream(nextTask.container_name, nextTask.type)
+        activeMockWS.startMockLogStream(nextTask.container_name)
       }
     }
     notifyWSStatusChange()
   }
 
-  // 动态生成升级/回滚任务日志流数据
-  getMockTaskLogLines(containerName: string, mode: 'update' | 'rollback'): string[] {
-    if (mode === 'rollback') {
-      return [
-        `[INFO] 开启备份回退恢复机制: ${containerName}`,
-        `[INFO] 正在检查物理备份容器 ${containerName}_backup_docker_updater...`,
-        `[INFO] 停止正在运行中的异常/新容器 ${containerName}...`,
-        `[INFO] 正在解除其与 Docker 网桥的绑定...`,
-        `[INFO] 重新映射磁盘挂载卷数据...`,
-        `[INFO] 将物理备份容器还原并重命名为 ${containerName}`,
-        `[INFO] 恢复原有的重启策略和主机名关联...`,
-        `[INFO] 容器 ${containerName} 已成功回滚至升级前备份点！`
-      ]
-    }
-
+  // 动态生成升级任务日志流数据
+  getMockTaskLogLines(containerName: string): string[] {
     // update 模式，根据仿真模式决定日志
     if (this.upgradeMode === 'success') {
       return [
@@ -398,12 +375,11 @@ class SimulationDatabase {
         `[INFO] 正在从 registry 下载新镜像层: sha256:7f082ec15d86...`,
         `[INFO] 正在从 registry 下载新镜像层: sha256:1a84f3c0eb51...`,
         `[INFO] 最新镜像层拉取完毕，已校验校验和`,
-        `[INFO] 正在创建升级前镜像备份点: ${containerName}_backup_docker_updater`,
-        `[INFO] 成功记录重启配置策略.`,
+        `[INFO] 已成功为旧镜像绑定临时保护标签`,
         `[INFO] 正在优雅停止运行中的旧容器...`,
         `[INFO] 旧容器实例已清理`,
         `[INFO] 基于新拉取镜像重新组装参数重建中...`,
-        `[INFO] 容器 ${containerName} 正在唤醒启动...`,
+        `[INFO] 容器 ${containerName} 正在观察 6 秒运行稳定性...`,
         `[INFO] 容器 ${containerName} 已成功平滑升级至最新版本！`
       ]
     } else if (this.upgradeMode === 'fail_pull') {
@@ -421,18 +397,16 @@ class SimulationDatabase {
         `[INFO] 正在分析本地与远端分发凭证...`,
         `[INFO] 正在从 registry 下载新镜像层: sha256:7f082ec15d86...`,
         `[INFO] 最新镜像层拉取完毕，已校验校验和`,
-        `[INFO] 正在创建升级前镜像备份点: ${containerName}_backup_docker_updater`,
-        `[INFO] 成功记录重启配置策略.`,
+        `[INFO] 已成功为旧镜像绑定临时保护标签`,
         `[INFO] 正在优雅停止运行中的旧容器...`,
         `[INFO] 旧容器实例已清理`,
         `[INFO] 基于新拉取镜像重新组装参数重建中...`,
-        `[INFO] 容器 ${containerName} 正在唤醒启动...`,
+        `[INFO] 容器 ${containerName} 正在观察 6 秒运行稳定性...`,
         `[ERROR] 启动新容器失败: port 80 is already allocated by another service`,
-        `[INFO] 检测到容器启动异常，正在执行安全回滚自愈机制...`,
+        `[INFO] 检测到容器启动异常，正在执行 6 秒探活自愈机制...`,
         `[INFO] 正在物理清除故障新容器实例...`,
-        `[INFO] 将备份容器 ${containerName}_backup_docker_updater 重命名还原为 ${containerName}`,
-        `[INFO] 恢复原有的重启策略策略和网络网关绑定`,
-        `[INFO] 回滚恢复成功，原容器已上线运行`
+        `[INFO] 恢复原有的重启策略和网络网关绑定`,
+        `[INFO] 探活自愈成功，原容器已上线运行`
       ]
     }
   }
@@ -447,10 +421,10 @@ class SimulationDatabase {
 `
   }
 
-  addTaskToQueue(name: string, type: 'update' | 'rollback') {
+  addTaskToQueue(name: string) {
     const newTask: TaskItem = {
       container_name: name,
-      type,
+      type: 'update',
       added_at: new Date().toISOString()
     }
 
@@ -461,7 +435,7 @@ class SimulationDatabase {
       this.activeTask = newTask
       console.log(`[Mock Queue] 任务已立即运行:`, newTask)
       if (activeMockWS) {
-        activeMockWS.startMockLogStream(name, type)
+        activeMockWS.startMockLogStream(name)
       }
     }
     notifyWSStatusChange()
@@ -556,13 +530,6 @@ axios.defaults.adapter = async function (config) {
     return { data: { ok: true }, status: 200, statusText: 'OK', headers: config.headers || {}, config }
   }
 
-  // 5. 删除备份
-  const backupDeleteMatch = url.match(/\/api\/backup\/([^/]+)/)
-  if (backupDeleteMatch) {
-    db.updateContainerRollbackState(backupDeleteMatch[1], false)
-    return { data: { ok: true }, status: 200, statusText: 'OK', headers: config.headers || {}, config }
-  }
-
   // 6. 获取常规日志
   const logsMatch = url.match(/\/api\/container\/([^/]+)\/logs/)
   if (logsMatch) {
@@ -578,14 +545,7 @@ axios.defaults.adapter = async function (config) {
   // 7. 触发升级
   const updateMatch = url.match(/\/api\/update\/([^/]+)/)
   if (updateMatch) {
-    db.addTaskToQueue(updateMatch[1], 'update')
-    return { data: { ok: true }, status: 200, statusText: 'OK', headers: config.headers || {}, config }
-  }
-
-  // 8. 触发回滚
-  const rollbackMatch = url.match(/\/api\/rollback\/([^/]+)/)
-  if (rollbackMatch) {
-    db.addTaskToQueue(rollbackMatch[1], 'rollback')
+    db.addTaskToQueue(updateMatch[1])
     return { data: { ok: true }, status: 200, statusText: 'OK', headers: config.headers || {}, config }
   }
 
@@ -874,9 +834,9 @@ class MockWebSocket {
     }
   }
 
-  startMockLogStream(containerName: string, mode: 'update' | 'rollback') {
+  startMockLogStream(containerName: string) {
     let step = 0
-    const logs = db.getMockTaskLogLines(containerName, mode)
+    const logs = db.getMockTaskLogLines(containerName)
 
     const logInterval = setInterval(() => {
       if (this.readyState !== 1) {
@@ -886,7 +846,7 @@ class MockWebSocket {
 
       if (step >= logs.length) {
         clearInterval(logInterval)
-        db.onTaskFinished(containerName, mode)
+        db.onTaskFinished(containerName)
         return
       }
 
@@ -897,7 +857,7 @@ class MockWebSocket {
               type: 'log',
               payload: {
                 container: containerName,
-                task: mode,
+                task: 'update',
                 message: logs[step]
               }
             })

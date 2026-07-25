@@ -74,11 +74,18 @@ class WsService {
     };
   }
 
+  private statusNotifyTimer: any = null;
+
   private handleMessagePayload(data: any): void {
     if (data.type === 'status') {
       this.cachedStatus = data.payload; // 实时更新缓存
-      for (const listener of this.listeners) {
-        listener(data.payload);
+      if (!this.statusNotifyTimer) {
+        this.statusNotifyTimer = setTimeout(() => {
+          this.statusNotifyTimer = null;
+          for (const listener of this.listeners) {
+            listener(this.cachedStatus);
+          }
+        }, 100);
       }
     } else if (data.type === 'log') {
       const { container, task, message } = data.payload;

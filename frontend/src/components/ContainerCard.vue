@@ -84,7 +84,7 @@
       <!-- 详细镜像元数据及比对 -->
       <div class="mt-4 space-y-2.5">
         <!-- 版本摘要比对 -->
-        <div class="rounded-xl p-3 h-19 flex flex-col justify-between transition-colors duration-200" :class="[
+        <div class="rounded-xl px-3 py-2.5 min-h-19 flex flex-col justify-between transition-colors duration-200 gap-1.5" :class="[
           container.status === 'update'
             ? 'bg-blue-50/40 border border-blue-100/50'
             : container.status === 'deferred'
@@ -93,66 +93,127 @@
         ]">
           <!-- 标题与检测时间 -->
           <div class="flex items-center justify-between text-[11px] font-semibold">
-            <span :class="[
-              container.status === 'update'
-                ? 'text-slate-500'
-                : container.status === 'deferred'
-                  ? 'text-amber-800'
-                  : 'text-emerald-800'
-            ]">版本摘要比对</span>
-            <span class="text-[10px] font-normal text-slate-400" v-if="container.checked_at">检测于: {{ formatCheckedAt(container.checked_at) }}</span>
+            <div class="flex items-center space-x-1.5 min-w-0">
+              <span :class="[
+                container.status === 'update'
+                  ? 'text-slate-500'
+                  : container.status === 'deferred'
+                    ? 'text-amber-800'
+                    : 'text-emerald-800'
+              ]">版本摘要比对</span>
+              <span
+                class="px-1.5 py-0.2 text-[9px] font-mono font-semibold rounded border bg-slate-100/90 text-slate-500 border-slate-200/60 shrink-0 select-none"
+                :title="'检测比对机制: ' + ((container.check_method || getFallbackCheckMethod(container)) === 'RepoDigest' ? 'RepoDigest 方案 (优先)' : 'Config Digest 降级方案')">
+                {{ container.check_method || getFallbackCheckMethod(container) }}
+              </span>
+            </div>
+            <span class="text-[10px] font-normal text-slate-400 shrink-0 ml-2" v-if="container.checked_at">检测于: {{ formatCheckedAt(container.checked_at) }}</span>
           </div>
 
           <!-- 比对内容 -->
           <div class="flex items-center justify-between text-[11px]">
-            <!-- 本地版本 -->
-            <div
-              class="bg-white border border-slate-200 px-2.5 py-1 rounded-md text-slate-600 font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center"
-              :title="'本地 ' + (container.local_digest || '无')">
-              <span class="text-[10px] text-slate-400 font-sans font-semibold mr-1.5 shrink-0">本地</span>
-              <span class="font-bold">{{ container.local_version || shortDigest(container.local_digest) || '未知'
-                }}</span>
-            </div>
-
-            <!-- 有更新 -->
-            <template v-if="container.status === 'update'">
-              <svg class="w-3.5 h-3.5 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
-
+            <!-- 若左右两边均有语义化版本号，则展示版本号比对 -->
+            <template v-if="container.local_version && container.remote_version">
               <div
-                class="bg-blue-500 text-white px-2.5 py-1 rounded-md font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center"
-                :title="'最新 ' + (container.remote_digest || '无')">
-                <span class="text-[10px] text-blue-200 font-sans font-semibold mr-1.5 shrink-0">最新</span>
-                <span class="font-bold">{{ container.remote_version || shortDigest(container.remote_digest) || '未知'
-                  }}</span>
+                class="bg-white border border-slate-200 px-2.5 py-1 rounded-md text-slate-600 font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center cursor-pointer hover:border-slate-300 hover:bg-slate-50/80 active:scale-98 transition-all"
+                :title="`[${container.check_method || getFallbackCheckMethod(container)}] ${container.local_digest || '无'}`"
+                @click="copyText(container.local_digest || '', '本地 Digest 摘要')">
+                <span class="text-[10px] text-slate-400 font-sans font-semibold mr-1.5 shrink-0">本地</span>
+                <span class="font-bold">{{ container.local_version }}</span>
               </div>
-            </template>
 
-            <!-- 已暂挂 -->
-            <template v-else-if="container.status === 'deferred'">
-              <div class="text-[11px] text-amber-700 flex items-center shrink-0">
-                <svg class="w-3.5 h-3.5 mr-1.5 text-amber-600 shrink-0" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 6v6l4 2" />
+              <!-- 有更新 -->
+              <template v-if="container.status === 'update'">
+                <svg class="w-3.5 h-3.5 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12h14M12 5l7 7-7 7" />
                 </svg>
-                <span class="font-medium">暂挂至: {{ container.defer_until === 'forever' ? '无限期' :
-                  (container.defer_until || '无限期') }}</span>
-              </div>
+
+                <div
+                  class="bg-blue-500 text-white px-2.5 py-1 rounded-md font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center cursor-pointer hover:bg-blue-600 active:scale-98 transition-all"
+                  :title="`[${container.check_method || getFallbackCheckMethod(container)}] ${container.remote_digest || '无'}`"
+                  @click="copyText(container.remote_digest || '', '最新 Digest 摘要')">
+                  <span class="text-[10px] text-blue-200 font-sans font-semibold mr-1.5 shrink-0">最新</span>
+                  <span class="font-bold">{{ container.remote_version }}</span>
+                </div>
+              </template>
+
+              <!-- 已暂挂 -->
+              <template v-else-if="container.status === 'deferred'">
+                <div class="text-[11px] text-amber-700 flex items-center shrink-0">
+                  <svg class="w-3.5 h-3.5 mr-1.5 text-amber-600 shrink-0" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 6v6l4 2" />
+                  </svg>
+                  <span class="font-medium">暂挂至: {{ container.defer_until === 'forever' ? '无限期' :
+                    (container.defer_until || '无限期') }}</span>
+                </div>
+              </template>
+
+              <!-- 已是最新 -->
+              <template v-else>
+                <div class="text-[11px] text-emerald-700 flex items-center shrink-0">
+                  <svg class="w-3.5 h-3.5 mr-1.5 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                    <polyline points="22 4 12 14.01 9 11.01" />
+                  </svg>
+                  <span class="font-medium">已是最新</span>
+                </div>
+              </template>
             </template>
 
-            <!-- 已是最新 -->
+            <!-- 默认统一为 Digest 摘要比对模式，严格保持同类型维度 -->
             <template v-else>
-              <div class="text-[11px] text-emerald-700 flex items-center shrink-0">
-                <svg class="w-3.5 h-3.5 mr-1.5 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                  <path d="M22 4L12 14.01l-3-3" />
-                </svg>
-                <span class="font-medium">当前镜像已是最新</span>
+              <div
+                class="bg-white border border-slate-200 px-2.5 py-1 rounded-md text-slate-600 font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center cursor-pointer hover:border-slate-300 hover:bg-slate-50/80 active:scale-98 transition-all"
+                :title="`[${container.check_method || getFallbackCheckMethod(container)}] ${container.local_digest || '无'}`"
+                @click="copyText(container.local_digest || '', '本地 Digest 摘要')">
+                <span class="text-[10px] text-slate-400 font-sans font-semibold mr-1.5 shrink-0">本地</span>
+                <span class="font-bold">{{ shortDigest(container.local_digest) || '未知' }}</span>
               </div>
+
+              <!-- 有更新 -->
+              <template v-if="container.status === 'update'">
+                <svg class="w-3.5 h-3.5 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+
+                <div
+                  class="bg-blue-500 text-white px-2.5 py-1 rounded-md font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center cursor-pointer hover:bg-blue-600 active:scale-98 transition-all"
+                  :title="`[${container.check_method || getFallbackCheckMethod(container)}] ${container.remote_digest || '无'}`"
+                  @click="copyText(container.remote_digest || '', '最新 Digest 摘要')">
+                  <span class="text-[10px] text-blue-200 font-sans font-semibold mr-1.5 shrink-0">最新</span>
+                  <span class="font-bold">{{ shortDigest(container.remote_digest) || '未知' }}</span>
+                </div>
+              </template>
+
+              <!-- 已暂挂 -->
+              <template v-else-if="container.status === 'deferred'">
+                <div class="text-[11px] text-amber-700 flex items-center shrink-0">
+                  <svg class="w-3.5 h-3.5 mr-1.5 text-amber-600 shrink-0" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 6v6l4 2" />
+                  </svg>
+                  <span class="font-medium">暂挂至: {{ container.defer_until === 'forever' ? '无限期' :
+                    (container.defer_until || '无限期') }}</span>
+                </div>
+              </template>
+
+              <!-- 已是最新 -->
+              <template v-else>
+                <div class="text-[11px] text-emerald-700 flex items-center shrink-0">
+                  <svg class="w-3.5 h-3.5 mr-1.5 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                    <polyline points="22 4 12 14.01 9 11.01" />
+                  </svg>
+                  <span class="font-medium">已是最新</span>
+                </div>
+              </template>
             </template>
           </div>
         </div>
@@ -222,19 +283,7 @@
           恢复检测
         </n-button>
 
-        <!-- 回滚 -->
-        <n-button v-else-if="act.key === 'rollback'" size="small" round secondary
-          class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale font-medium animate-none shrink-0"
-          @click="emit('rollback')">
-          回滚
-        </n-button>
 
-        <!-- 清除备份 -->
-        <n-button v-else-if="act.key === 'delete-backup'" size="small" round secondary
-          class="bg-surface-pearl border border-divider-soft text-slate-700 active-scale font-medium animate-none shrink-0"
-          title="删除回滚备份镜像释放空间" @click="emit('delete-backup')">
-          清除备份
-        </n-button>
 
         <!-- 指定版本升级 -->
         <n-button v-else-if="act.key === 'update-to-version'" size="small" round secondary
@@ -279,6 +328,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { NButton, NCheckbox, NDropdown, useMessage } from 'naive-ui'
+import { copyToClipboard } from '../utils/clipboard'
 
 const props = withDefaults(defineProps<{
   container: any
@@ -291,13 +341,19 @@ const props = withDefaults(defineProps<{
   mode: 'full'
 })
 
+const getFallbackCheckMethod = (item: any) => {
+  if (item?.check_method) return item.check_method
+  if (item?.local_digest && (item.local_digest.includes('@') || item.local_digest.length > 20)) {
+    return 'RepoDigest'
+  }
+  return 'ConfigDigest'
+}
+
 const emit = defineEmits<{
   (e: 'update:checked', val: boolean): void
   (e: 'update'): void
-  (e: 'rollback'): void
   (e: 'defer'): void
   (e: 'undefer'): void
-  (e: 'delete-backup'): void
   (e: 'show-logs'): void
   (e: 'update-to-version'): void
   (e: 'check'): void
@@ -366,17 +422,7 @@ const allAvailableActions = computed(() => {
     list.push({ key: 'undefer', label: '恢复检测', width: realWidths.value.char4, priority: 5 })
   }
 
-  // 6. 回滚
-  if (props.mode === 'full' && props.container.has_rollback) {
-    list.push({ key: 'rollback', label: '回滚', width: realWidths.value.char2, priority: 6 })
-  }
-
-  // 7. 清除备份
-  if (props.mode === 'full' && props.container.has_rollback) {
-    list.push({ key: 'delete-backup', label: '清除备份', width: realWidths.value.char4, priority: 7 })
-  }
-
-  // 8. 修改版本
+  // 6. 修改版本
   if (props.mode === 'full') {
     list.push({ key: 'update-to-version', label: '修改版本', width: realWidths.value.char4, priority: 8 })
   }
@@ -437,10 +483,6 @@ const handleMoreSelect = (key: string) => {
     emit('defer')
   } else if (key === 'undefer') {
     emit('undefer')
-  } else if (key === 'rollback') {
-    emit('rollback')
-  } else if (key === 'delete-backup') {
-    emit('delete-backup')
   } else if (key === 'update-to-version') {
     emit('update-to-version')
   } else if (key === 'check') {
@@ -476,27 +518,9 @@ const formatCheckedAt = (timeStr: string) => {
   }
 }
 
-// 复制镜像名称到剪贴板
-const copyText = (text: string) => {
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(() => {
-      message?.success('已复制镜像名称到剪贴板')
-    }).catch(() => {
-      message?.error('复制失败')
-    })
-  } else {
-    const input = document.createElement('input')
-    input.setAttribute('value', text)
-    document.body.appendChild(input)
-    input.select()
-    try {
-      document.execCommand('copy')
-      message?.success('已复制镜像名称到剪贴板')
-    } catch {
-      message?.error('复制失败')
-    }
-    document.body.removeChild(input)
-  }
+// 复制指定文本到剪贴板
+const copyText = (text: string, label: string = '镜像名称') => {
+  copyToClipboard(text, label, message)
 }
 
 onMounted(() => {

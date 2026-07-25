@@ -72,51 +72,14 @@ func StartScheduler() {
 		utils.LogError("注册镜像检测任务失败: %s", err.Error())
 	}
 
-	// 注册备份容器及约束记录清理任务(周期: 每小时)
+	// 注册约束记录清理任务(周期: 每小时)
 	_, err = CronScheduler.AddFunc("0 * * * *", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-
-		// 1. 清理物理过期备份容器及其元数据
-		var allRollbacks []db.RollbackMetadata
-		now := time.Now().UTC()
-		if dbErr := db.DB.Find(&allRollbacks, "expires_at != '' AND expires_at != 'forever'").Error; dbErr == nil && len(allRollbacks) > 0 {
-			var expiredMetas []db.RollbackMetadata
-			var backupNames []string
-			for _, meta := range allRollbacks {
-				t, err := time.Parse(time.RFC3339, meta.ExpiresAt)
-				if err == nil && !t.After(now) {
-					expiredMetas = append(expiredMetas, meta)
-					backupNames = append(backupNames, meta.ContainerName+"_backup_docker_updater")
-				}
-			}
-			if len(backupNames) > 0 {
-				dockerclient.CleanExpiredBackups(ctx, backupNames)
-				db.DB.Delete(&expiredMetas)
-			}
-		}
-
-		// 2. 清理失效的延迟更新保护配置
+		// 清理失效的延迟更新保护配置
 		today := time.Now().Format("2006-01-02")
 		db.DB.Where("until <= ?", today).Delete(&db.DeferredUpdate{})
-
-		// 3. 校验容器状态，清理无效备份元数据
-		var rollbacks []db.RollbackMetadata
-		if err := db.DB.Find(&rollbacks).Error; err == nil {
-			cli, cliErr := dockerclient.NewLocalClient()
-			if cliErr == nil {
-				defer cli.Close()
-				for _, rb := range rollbacks {
-					backupName := rb.ContainerName + "_backup_docker_updater"
-					if _, inspectErr := cli.ContainerInspect(ctx, backupName); inspectErr != nil {
-						db.DB.Delete(&rb)
-					}
-				}
-			}
-		}
 	})
 	if err != nil {
-		utils.LogError("注册备份清理任务失败: %s", err.Error())
+		utils.LogError("注册延迟更新记录清理任务失败: %s", err.Error())
 	}
 
 	CronScheduler.Start()
@@ -154,42 +117,40 @@ func RunScheduledCheck(isInitial bool) {
 
 	// 获取扫描前待更新记录基数
 	var countBefore int64
-	db.DB.Model(&db.AvailableUpdate{}).Count(&countBefore)
+	db.DB.Model(&db.AvailableUpdate{}).Where("has_update = ?", true).Count(&countBefore)
 
-	results, err := dockerclient.ScanLocalHostForUpdates(ctx)
+	err := dockerclient.ScanLocalHostForUpdates(ctx, func(res dockerclient.UpdateCheckResult) {
+		updateEntry := db.AvailableUpdate{
+			ContainerName:  res.ContainerName,
+			Image:          res.Image,
+			LocalDigest:    res.LocalDigest,
+			RemoteDigest:   res.RemoteDigest,
+			LocalVersion:   res.LocalVersion,
+			RemoteVersion:  res.RemoteVersion,
+			CheckedAt:      res.CheckedAt,
+			ComposeProject: res.ComposeProject,
+			CheckMethod:    res.CheckMethod,
+			HasUpdate:      res.HasUpdate,
+		}
+		db.DB.Save(&updateEntry)
+		if service.GlobalObserver != nil {
+			service.GlobalObserver.OnStatusChange()
+		}
+	})
 	if err != nil {
 		utils.LogError("镜像更新检查扫描失败: %s", err.Error())
 		return
 	}
 
-	for _, res := range results {
-		if res.HasUpdate {
-			updateEntry := db.AvailableUpdate{
-				ContainerName:  res.ContainerName,
-				Image:          res.Image,
-				LocalDigest:    res.LocalDigest,
-				RemoteDigest:   res.RemoteDigest,
-				LocalVersion:   res.LocalVersion,
-				RemoteVersion:  res.RemoteVersion,
-				CheckedAt:      res.CheckedAt,
-				ComposeProject: res.ComposeProject,
-			}
-			db.DB.Save(&updateEntry)
-		} else {
-			db.DB.Delete(&db.AvailableUpdate{ContainerName: res.ContainerName})
-		}
-	}
-	if service.GlobalObserver != nil {
-		service.GlobalObserver.OnStatusChange()
-	}
+	_ = db.SetSetting("last_check_time", time.Now().Format("2006-01-02 15:04:05"))
 
 	var countAfter int64
-	db.DB.Model(&db.AvailableUpdate{}).Where("local_digest != remote_digest").Count(&countAfter)
+	db.DB.Model(&db.AvailableUpdate{}).Where("has_update = ?", true).Count(&countAfter)
 
 	if countAfter > 0 && countAfter > countBefore {
 		// 汇总待更新容器特征明细
 		var list []db.AvailableUpdate
-		db.DB.Find(&list)
+		db.DB.Where("has_update = ?", true).Find(&list)
 		var names []string
 		var details []string
 		for _, item := range list {
@@ -241,7 +202,7 @@ func RunScheduledCheck(isInitial bool) {
 	// 入队自动更新任务(过滤延迟保护期容器)
 	if db.GetSetting("auto_update_enabled", "false") == "true" {
 		var list []db.AvailableUpdate
-		db.DB.Find(&list)
+		db.DB.Where("has_update = ?", true).Find(&list)
 
 		var deferred []db.DeferredUpdate
 		db.DB.Find(&deferred)
@@ -254,7 +215,7 @@ func RunScheduledCheck(isInitial bool) {
 		}
 
 		for _, item := range list {
-			if item.LocalDigest != item.RemoteDigest && !deferMap[item.ContainerName] {
+			if !deferMap[item.ContainerName] {
 				utils.LogInfo("自动更新: 将容器 %s 加入升级队列...", item.ContainerName)
 				service.GlobalQueue.AddTask(item.ContainerName, service.TaskUpdate, "", true)
 			}

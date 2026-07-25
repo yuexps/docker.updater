@@ -27,9 +27,6 @@ type Setting struct {
     Value string
 }
 // 键映射:
-// - backup_enabled: 是否开启更新前备份 ("true"/"false")
-// - backup_hours: 备份保留时长 (整型小时数，-1 表示永久保留/无限期，默认 24)
-// - restart_stack: 升级后是否重启同一 Compose 栈的其他容器 ("true"/"false")
 // - auto_update_enabled: 是否开启定时自动升级 ("true"/"false")
 // - temp_mirrors: 临时镜像加速源列表 (JSON 数组，如 ["https://mirror.com"])
 // - check_type: 定时检测周期类型 ("hour"/"day"/"week"/"month", 默认 "day")
@@ -40,7 +37,7 @@ type Setting struct {
 // - last_check_time: 上次检测更新时间 (UTC ISO8601 格式)
 ```
 
-### db.AvailableUpdate (待更新容器表)
+### db.AvailableUpdate (容器版本检测结果表)
 ```go
 type AvailableUpdate struct {
     ContainerName  string `gorm:"primaryKey"`
@@ -51,6 +48,8 @@ type AvailableUpdate struct {
     RemoteVersion  string // 提取的远端语义化版本号 (如 v1.3.0)
     CheckedAt      string
     ComposeProject string
+    CheckMethod    string
+    HasUpdate      bool   // 是否存在可用更新；所有扫描到的容器均写入此表，通过该字段区分状态
 }
 ```
 
@@ -70,16 +69,6 @@ type UpdateHistory struct {
     Image         string
     UpdatedAt     string
     Status        string // "success" 或 "error: [错误信息]"
-}
-```
-
-### db.RollbackMetadata (备份元数据表)
-```go
-type RollbackMetadata struct {
-    ContainerName string `gorm:"primaryKey"`
-    BackedUpAt    string
-    ExpiresAt     string
-    RestartPolicy string // 容器原始重启策略的 JSON 序列化字符串
 }
 ```
 
@@ -119,8 +108,6 @@ type RegistryCredential struct {
 | GET | `/status` | 无 | `{"containers": [...], "last_check": "...", "history": [...], "active": {...}, "queued": [...]}` | 无 |
 | POST | `/check` | 无 | `{"ok": true}` | 异步触发本地活动容器版本扫描比对并更新数据库 |
 | GET | `/update/:name` | 无 | SSE 日志流 (分块传输) | 异步将容器升级任务注册至全局队列。SSE 从日志缓冲区推流 |
-| GET | `/rollback/:name` | 无 | SSE 日志流 (分块传输) | 异步将容器回滚任务注册至全局队列 |
-| DELETE| `/backup/:name` | 无 | `{"ok": true}` | 物理删除指定的 `{name}_backup_docker_updater` 备份容器，清除相关数据库元数据 |
 | POST | `/defer/:name` | `{"days": int}` | `{"ok": true, "until": "YYYY-MM-DD"}` | 写入延迟截止日期约束（`days: -1` 表示永久暂挂/无限期，对应返回 `"until": "forever"`） |
 | POST | `/undefer/:name`| 无 | `{"ok": true}` | 移除延迟更新约束 |
 | GET | `/container/:name/logs`| 无 | `{"logs": string}` | 从 Docker 引擎获取容器的末尾 200 行标准输出与标准错误日志 |
@@ -159,35 +146,27 @@ type RegistryCredential struct {
 
 ## 6. 更新与自动回滚生命周期
 
-* **纯 Docker SDK 克隆升级规范**: 所有容器升级（含带 `com.docker.compose.project` 标签的 Compose 容器）均采用纯 Go Docker SDK 实现，禁止调用外部 `docker` / `docker compose` 命令行进程。
-* **私有仓库鉴权注入**: 镜像拉取阶段（`pullImageWithMirrors`）自动提取 Registry 域名并匹配凭证提供者（`GlobalCredentialsProvider`），将 Base64 编码的 Auth 配置注入 `types.ImagePullOptions{RegistryAuth: ...}`。
-* **静态 IP 与网络解绑防冲突**: 旧容器停止并重命名为 `_backup_docker_updater` 后，立即从其挂载的 Docker 网络中断开端点（`NetworkDisconnect`），彻底释放静态 IP 占用，规避 `IP already in use` 导致的容器创建/启动失败。若发生回滚，自动将旧容器重新连回原网络。
-* **克隆配置清洗**: 基于旧容器 `inspect.Config` 创建新容器时，若 `inspect.Config.Hostname` 为自动生成的 12 位 ID Hash，自动重置为空字符串 `""`，防止主机名污染。
-* **8 秒健康探活与自愈**: 新容器启动后执行 8 秒稳定性观察（8 次 1 秒轮询），全面检测 `State.Running`、`State.Restarting` 及 `State.ExitCode`；若探活失败，自动解绑并移除故障新容器，无缝回滚旧容器。
+* **纯 SDK 克隆重建**: 基于旧容器 `inspect` 捕获完整 Config、HostConfig 及 NetworkingConfig。停止并移除旧容器以自动释放名称、端口与网络资源。
+* **旧镜像 Tag 保护**: 在 `ImagePull` 之前给旧 `Image ID` 绑定临时 Tag（`image_name:du_bak_<container>`），避免旧镜像沦为 `<none>` 悬空镜像。
+* **6 秒健康探活与自愈回滚**: 新容器启动后轮询 6 秒探活；若异常，自动清除故障新容器、退标故障镜像，将原始 Tag 指回旧 `Image ID` 并基于内存 Spec 重建还原原服务。
 
 ```mermaid
 graph TD
-    A[启动升级任务] --> B[Docker 探测容器原始 Config 与 HostConfig]
-    B --> C[解析凭证并使用镜像加速源/私有仓 Auth 拉取目标镜像]
-    C --> D[优雅停止旧容器 - 超时30s]
-    D --> E[将旧容器重命名备份为 name_backup_docker_updater]
-    E --> F[从原网络解绑旧容器端点, 释放静态 IP 占用]
-    F --> G[清洗 Config 默认主机名, 创建新容器并绑定网络]
-    G -->|创建成功| H[启动新容器]
-    G -->|创建失败| R[回滚还原分支]
-    H -->|启动成功| I[观察 8 秒探测容器运行与崩溃状态]
-    H -->|启动失败| R
-    I -->|探活通过| J[容器升级成功]
-    I -->|探活失败| R
-    J --> K{开启了备份保留?}
-    K -->|是| L[保留 name_backup_docker_updater, 并在数据库写入 RollbackMetadata]
-    K -->|否| M[物理删除 name_backup_docker_updater 容器并释放空间]
+    A[启动升级任务] --> B[捕获旧容器 Spec 快照与 Image ID]
+    B --> C[旧镜像绑定临时保护 Tag]
+    C --> D[拉取目标新镜像]
+    D --> E[停止并物理移除旧容器 - 释放名称/IP/端口]
+    E --> F[基于新镜像和旧 Spec 创建并启动新容器]
+    F -->|启动成功| G[观察 6 秒健康探活]
+    F -->|启动失败| R[自动回滚分支]
+    G -->|探活通过| H[升级成功, 清理临时 Tag]
+    G -->|探活失败| R
     
-    R[回滚还原分支] --> S[物理移除已创建的损坏新容器]
-    S --> T[将 name_backup_docker_updater 重新连回原网络]
-    T --> U[将 name_backup_docker_updater 重命名还原为原容器名 name]
-    U --> V[恢复原容器重启策略并启动原容器]
-    V --> W[向日志分发失败错误并结束任务]
+    R[自动回滚分支] --> S[移除损坏新容器]
+    S --> T[将原始 Tag 重新绑定回旧 Image ID]
+    T --> U[物理卸载故障新镜像]
+    U --> V[使用旧 Spec 与旧 Image ID 重建并启动原容器]
+    V --> W[清理临时 Tag 并结束任务]
 ```
 
 ## 7. 定时任务热重载工作流

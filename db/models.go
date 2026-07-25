@@ -10,7 +10,7 @@ type Setting struct {
 	Value string
 }
 
-// AvailableUpdate 待更新容器表
+// AvailableUpdate 容器版本检测结果表
 type AvailableUpdate struct {
 	ContainerName  string `gorm:"primaryKey"`
 	Image          string
@@ -20,6 +20,8 @@ type AvailableUpdate struct {
 	RemoteVersion  string
 	CheckedAt      string
 	ComposeProject string
+	CheckMethod    string
+	HasUpdate      bool // 是否存在可用更新
 }
 
 // DeferredUpdate 延迟更新约束表
@@ -35,14 +37,6 @@ type UpdateHistory struct {
 	Image         string
 	UpdatedAt     string
 	Status        string
-}
-
-// RollbackMetadata 备份容器元数据表
-type RollbackMetadata struct {
-	ContainerName string `gorm:"primaryKey"`
-	BackedUpAt    string
-	ExpiresAt     string
-	RestartPolicy string
 }
 
 // RegistryCredential 镜像仓库凭证表

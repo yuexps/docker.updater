@@ -14,10 +14,10 @@
 
 ## 项目结构
 * **[api/](api)**: Gin 路由与 WebSocket Hub。
-* **[db/](db)**: 数据库连接初始化与 6 个模型定义 ([models.go](db/models.go))。
+* **[db/](db)**: 数据库连接初始化与 5 个模型定义 ([models.go](db/models.go))。
 * **[dockerclient/](dockerclient)**: Docker API 交互（拉取、启动、检测、Tag 提取）。
 * **[scheduler/](scheduler)**: 定时任务调度器。
-* **[service/](service)**: 队列调度 ([queue.go](service/queue.go))、断电自愈 ([selfheal.go](service/selfheal.go))、仓库凭证 ([credentials.go](service/credentials.go)) 等业务逻辑。
+* **[service/](service)**: 队列调度 ([queue.go](service/queue.go))、仓库凭证 ([credentials.go](service/credentials.go)) 等业务逻辑。
 * **[utils/](utils)**: 统一日志与网络辅助方法。
 * **[frontend/](frontend)**: Vue 前端 SPA 源码。
 * **[docs/](docs)**: 包含项目设计与规范文档。
@@ -33,8 +33,8 @@
 1. **单二进制嵌入**: 后端通过 `go:embed` 挂载 `frontend/dist/*` 资产。
 2. **启动与监听模式**: 支持飞牛模式与原生模式。飞牛模式（携带启动参数 `--fnos`）下强依赖 `TRIM_APPDEST` 环境变量，监听 Unix Domain Socket 进行网关代理；原生模式（无启动参数，默认）下监听 TCP 端口 `2293`，并将日志和配置文件路径强制设为可执行文件同目录下。
 3. **路由统一**: 所有 API 及静态服务统归 `/app/docker-updater/` 组。
-4. **单工排队**: 容器升级、回滚加入单工任务队列，规避并发争抢。
-5. **探活与自愈**: 容器更新后休眠探活，失败则回退至 `{name}_backup_docker_updater` 旧容器并重启。
+4. **单工排队**: 容器升级加入单工任务队列，规避并发争抢。
+5. **探活与自愈**: 容器更新后执行 6 秒探活，若失败自动退标故障镜像并基于旧 Spec 秒级重建还原。
 6. **无 Emoji与统一日志落盘**: 统一采用文本前缀禁用 emoji。后端禁止直接调用原生 log/fmt 打印日志，必须统一使用 `utils` 封装器 (`utils.LogInfo` / `LogWarning` / `LogError` / `LogSuccess` / `LogFatal`)。全局日志文件限制单文件最大 3MB，达到上限自动重命名为 `info_YYYYMMDD_HHMMSS.log` 并重新创建干净的 `info.log`，历史备份文件最多自动保留 3 份。
 7. **CGO-free**: 禁止引入 CGO，采用纯 Go SQLite 驱动，支持交叉编译。
 8. **无 CLI 依赖**: 所有 Docker 操作均通过 Docker SDK 交互，禁止调用命令行 `docker` 进程。

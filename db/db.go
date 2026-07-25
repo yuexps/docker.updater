@@ -60,7 +60,6 @@ func InitDB() error {
 			&AvailableUpdate{},
 			&DeferredUpdate{},
 			&UpdateHistory{},
-			&RollbackMetadata{},
 			&RegistryCredential{},
 		)
 	})

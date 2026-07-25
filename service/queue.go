@@ -13,15 +13,12 @@ import (
 	"docker-updater/db"
 	"docker-updater/dockerclient"
 	"docker-updater/utils"
-
-	"github.com/docker/docker/api/types/container"
 )
 
 type TaskType string
 
 const (
-	TaskUpdate   TaskType = "update"
-	TaskRollback TaskType = "rollback"
+	TaskUpdate TaskType = "update"
 )
 
 // QueueObserver 队列状态观察接口
@@ -246,83 +243,43 @@ func (q *QueueManager) worker() {
 			}
 		}()
 
-		var err error
-		if task.Type == TaskUpdate {
-			backupHours := 24
-			fmt.Sscanf(db.GetSetting("backup_hours", "24"), "%d", &backupHours)
+		var dockerhubMirrors []string
+		var ghcrMirrors []string
+		dockerhubMirrorsStr := db.GetSetting("dockerhub_mirrors", "")
+		if dockerhubMirrorsStr == "" {
+			dockerhubMirrorsStr = db.GetSetting("temp_mirrors", "[]")
+		}
+		_ = json.Unmarshal([]byte(dockerhubMirrorsStr), &dockerhubMirrors)
+		ghcrMirrorsStr := db.GetSetting("ghcr_mirrors", "[]")
+		_ = json.Unmarshal([]byte(ghcrMirrorsStr), &ghcrMirrors)
 
-			var tempMirrors []string
-			tempMirrorsStr := db.GetSetting("temp_mirrors", "[]")
-			_ = json.Unmarshal([]byte(tempMirrorsStr), &tempMirrors)
+		opts := dockerclient.UpdateOptions{
+			TempMirrors:      dockerhubMirrors,
+			DockerhubMirrors: dockerhubMirrors,
+			GHCRMirrors:      ghcrMirrors,
+		}
 
-			opts := dockerclient.UpdateOptions{
-				BackupEnabled: db.GetSetting("backup_enabled", "false") == "true",
-				BackupHours:   backupHours,
-				RestartStack:  db.GetSetting("restart_stack", "false") == "true",
-				TempMirrors:   tempMirrors,
+		err := dockerclient.ApplyUpdate(ctx, task.ContainerName, task.TargetImage, opts, streamChan)
+
+		if err == nil {
+			db.DB.Delete(&db.AvailableUpdate{ContainerName: task.ContainerName})
+
+			history := db.UpdateHistory{
+				ContainerName: task.ContainerName,
+				UpdatedAt:     time.Now().UTC().Format(time.RFC3339),
+				Status:        "success",
 			}
-
-			var policyStr string
-			policyStr, err = dockerclient.ApplyUpdate(ctx, task.ContainerName, task.TargetImage, opts, streamChan)
-
-			if err == nil {
-				db.DB.Delete(&db.AvailableUpdate{ContainerName: task.ContainerName})
-
-				history := db.UpdateHistory{
-					ContainerName: task.ContainerName,
-					UpdatedAt:     time.Now().UTC().Format(time.RFC3339),
-					Status:        "success",
-				}
-				cli, cliErr := dockerclient.NewLocalClient()
-				if cliErr == nil {
-					defer cli.Close()
-					if inspect, inspectErr := cli.ContainerInspect(ctx, task.ContainerName); inspectErr == nil {
-						history.Image = inspect.Config.Image
-					}
-				}
-				if history.Image == "" {
-					history.Image = task.TargetImage
-				}
-				db.DB.Create(&history)
-
-				if opts.BackupEnabled && policyStr != "" {
-					var expiresAt string
-					if backupHours < 0 {
-						expiresAt = "forever"
-					} else {
-						expiresAt = time.Now().Add(time.Duration(backupHours) * time.Hour).UTC().Format(time.RFC3339)
-					}
-					rollbackMeta := db.RollbackMetadata{
-						ContainerName: task.ContainerName,
-						BackedUpAt:    time.Now().UTC().Format(time.RFC3339),
-						ExpiresAt:     expiresAt,
-						RestartPolicy: policyStr,
-					}
-					db.DB.Save(&rollbackMeta)
+			cli, cliErr := dockerclient.NewLocalClient()
+			if cliErr == nil {
+				defer cli.Close()
+				if inspect, inspectErr := cli.ContainerInspect(ctx, task.ContainerName); inspectErr == nil {
+					history.Image = inspect.Config.Image
 				}
 			}
-		} else {
-			var policy container.RestartPolicy
-			var meta db.RollbackMetadata
-			if dbErr := db.DB.First(&meta, "container_name = ?", task.ContainerName).Error; dbErr == nil {
-				_ = json.Unmarshal([]byte(meta.RestartPolicy), &policy)
-			} else {
-				policy = container.RestartPolicy{Name: "unless-stopped"}
+			if history.Image == "" {
+				history.Image = task.TargetImage
 			}
-
-			err = dockerclient.ApplyRollback(ctx, task.ContainerName, policy, streamChan)
-
-			if err == nil {
-				db.DB.Delete(&db.RollbackMetadata{ContainerName: task.ContainerName})
-
-				history := db.UpdateHistory{
-					ContainerName: task.ContainerName,
-					Image:         "rollback",
-					UpdatedAt:     time.Now().UTC().Format(time.RFC3339),
-					Status:        "success",
-				}
-				db.DB.Create(&history)
-			}
+			db.DB.Create(&history)
 		}
 		close(streamChan)
 		wg.Wait()
@@ -352,9 +309,6 @@ func (q *QueueManager) worker() {
 		if task.IsAuto {
 			go func(taskName string, tType TaskType, status string, logs []string) {
 				typeName := NotifyActionUpdate
-				if tType == TaskRollback {
-					typeName = NotifyActionRollback
-				}
 
 				statusName := "执行成功"
 				switch status {
