@@ -410,46 +410,21 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, h } from 'vue'
-import { NButton, NSwitch, NSelect, NInput, NInputNumber, NModal, useMessage, useDialog, NRadioGroup, NRadioButton } from 'naive-ui'
-import axios from 'axios'
+import { NButton, NSwitch, NSelect, NInput, NInputNumber, NModal, useDialog, NRadioGroup, NRadioButton } from 'naive-ui'
+import {
+  getSettingsApi,
+  saveSettingsApi,
+  testNotificationApi,
+  getRegistriesApi,
+  saveRegistryApi,
+  deleteRegistryApi,
+  type SettingsData,
+  type RegistryItem
+} from '../api/settings'
+import { message } from '../utils/discrete'
 
-const apiBase = '/app/docker-updater/api'
-const message = useMessage()
 const dialog = useDialog()
 
-interface SettingsData {
-  auto_update_enabled: boolean;
-  temp_mirrors: string[];
-  dockerhub_mirrors: string[];
-  ghcr_mirrors: string[];
-  check_type: string;
-  check_value: number;
-  notify_enabled: boolean;
-  notify_type: string;
-  smtp_enabled: boolean;
-  smtp_host: string;
-  smtp_port: string;
-  smtp_username: string;
-  smtp_password: string;
-  smtp_ssl: boolean;
-  smtp_to: string;
-  smtp_subject_template: string;
-  smtp_body_template: string;
-  smtp_subject_template_check: string;
-  smtp_body_template_check: string;
-  webhook_url: string;
-  webhook_method: string;
-  webhook_type: string;
-  webhook_template_custom: string;
-  webhook_template_wechat: string;
-  webhook_template_dingtalk: string;
-  webhook_template_feishu: string;
-  webhook_template_check_custom: string;
-  webhook_template_check_wechat: string;
-  webhook_template_check_dingtalk: string;
-  webhook_template_check_feishu: string;
-  [key: string]: any;
-}
 
 const settings = ref<SettingsData>({
   auto_update_enabled: false,
@@ -637,7 +612,7 @@ const sendTestNotification = async () => {
   }
   testingEmail.value = true
   try {
-    const res = await axios.post(`${apiBase}/settings/test-email`, {
+    const res = await testNotificationApi({
       notify_type: settings.value.notify_type,
       smtp_host: settings.value.smtp_host,
       smtp_port: settings.value.smtp_port,
@@ -655,7 +630,7 @@ const sendTestNotification = async () => {
       webhook_template_dingtalk: settings.value.auto_update_enabled ? settings.value.webhook_template_dingtalk : settings.value.webhook_template_check_dingtalk,
       webhook_template_feishu: settings.value.auto_update_enabled ? settings.value.webhook_template_feishu : settings.value.webhook_template_check_feishu
     })
-    const respBody = res.data?.response
+    const respBody = res?.response
     if (settings.value.notify_type === 'email') {
       message.success('测试邮件发送成功，请前往您的收件箱查收！')
     } else {
@@ -684,8 +659,8 @@ const sendTestNotification = async () => {
 
 const loadSettings = async () => {
   try {
-    const res = await axios.get(`${apiBase}/settings`)
-    settings.value = res.data
+    const data = await getSettingsApi()
+    settings.value = data
     if (!settings.value.dockerhub_mirrors) {
       settings.value.dockerhub_mirrors = settings.value.temp_mirrors || []
     }
@@ -740,7 +715,7 @@ const autoSaveSettings = async () => {
 
   autoSaveTimer = setTimeout(async () => {
     try {
-      await axios.post(`${apiBase}/settings`, settings.value)
+      await saveSettingsApi(settings.value)
       saving.value = false
       feedbackText.value = '配置已自动保存'
 
@@ -760,13 +735,12 @@ const autoSaveSettings = async () => {
 
 const loadRegistries = async () => {
   try {
-    const res = await axios.get(`${apiBase}/registries`)
-    registries.value = res.data || []
+    const data = await getRegistriesApi()
+    registries.value = data || []
   } catch (err) {
     message.error('载入私有源列表失败')
   }
 }
-
 
 const addTempMirror = async () => {
   const url = newTempMirror.value.trim()
@@ -788,9 +762,9 @@ const addTempMirror = async () => {
     newTempMirror.value = ''
     mirrorModalVisible.value = false
     await autoSaveSettings()
-    message.success('添加成功')
+    message.success(`已添加镜像加速源 [${url}]`)
   } else {
-    message.warning('该加速源已存在')
+    message.warning(`镜像加速源 [${url}] 已存在`)
   }
 }
 
@@ -821,28 +795,6 @@ const editRegistry = (item: any) => {
   registryModalVisible.value = true
 }
 
-const copyText = (text: string) => {
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(() => {
-      message.success('已复制到剪贴板')
-    }).catch(() => {
-      message.error('复制失败')
-    })
-  } else {
-    const input = document.createElement('input')
-    input.setAttribute('value', text)
-    document.body.appendChild(input)
-    input.select()
-    try {
-      document.execCommand('copy')
-      message.success('已复制到剪贴板')
-    } catch {
-      message.error('复制失败')
-    }
-    document.body.removeChild(input)
-  }
-}
-
 const submitRegistry = async () => {
   if (!registryForm.value.registry || !registryForm.value.username || !registryForm.value.password) {
     message.warning('请填写完整的认证信息')
@@ -850,48 +802,48 @@ const submitRegistry = async () => {
   }
 
   submittingRegistry.value = true
+  const regName = registryForm.value.registry
   try {
-    await axios.post(`${apiBase}/registries`, {
+    await saveRegistryApi({
       id: editingRegistryId.value || 0,
-      registry: registryForm.value.registry,
+      registry: regName,
       username: registryForm.value.username,
       password: registryForm.value.password
     })
-    message.success('凭证保存成功')
+    message.success(`私有仓 [${regName}] 凭证保存成功`)
     loadRegistries()
     registryModalVisible.value = false
   } catch (err) {
-    message.error('保存凭证失败')
+    message.error(`保存私有仓 [${regName}] 凭证失败`)
     return false
   } finally {
     submittingRegistry.value = false
   }
 }
 
-
 const deleteRegistry = (id: number) => {
+  const targetItem = registries.value.find((r: any) => r.id === id)
+  const regName = targetItem?.registry || ''
   dialog.warning({
     title: '删除 Registry 凭据',
-    content: '确认删除该 Registry 镜像认证凭证吗？删除后将导致针对该镜像源的容器服务无法正常升级。',
+    content: regName ? `确认删除镜像源 [${regName}] 的认证凭据吗？` : '确认删除该 Registry 镜像认证凭证吗？',
     positiveText: '确认删除',
     negativeText: '取消',
     onPositiveClick: () => {
-      return new Promise<void>(async (resolve, reject) => {
-        try {
-          await axios.delete(`${apiBase}/registries/${id}`)
-          message.success('凭证删除成功')
-          loadRegistries()
-          resolve()
-        } catch (err) {
-          message.error('删除凭证失败')
-          reject()
-        }
-      })
+      executeDeleteRegistry(id, regName)
     }
   })
 }
 
-
+const executeDeleteRegistry = async (id: number, regName?: string) => {
+  try {
+    await deleteRegistryApi(id)
+    message.success(`已删除私有仓 ${regName ? '[' + regName + '] ' : ''}凭证`)
+    loadRegistries()
+  } catch (err) {
+    message.error(`删除私有仓 ${regName ? '[' + regName + '] ' : ''}凭证失败`)
+  }
+}
 
 onMounted(() => {
   loadSettings()

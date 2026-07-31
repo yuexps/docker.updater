@@ -86,12 +86,19 @@ func InitRoutes(r *gin.Engine) {
 	group.GET("/settings", func(c *gin.Context) {
 		serveIndex(c)
 	})
+	group.GET("/compose", func(c *gin.Context) {
+		serveIndex(c)
+	})
 
 	// 2. API 路由接口
 	api := group.Group("/api")
 	{
 		api.GET("/ws", HandleWebSocket)
 		api.GET("/status", apiStatus)
+		api.GET("/compose/projects", apiComposeProjects)
+		api.GET("/compose/config", apiComposeConfigGet)
+		api.POST("/compose/config", apiComposeConfigPost)
+		api.POST("/compose/lifecycle", apiComposeLifecycle)
 		api.POST("/check", apiCheck)
 		api.POST("/check/:name", apiCheckSingle)
 		api.GET("/update/:name", apiUpdate)
@@ -129,7 +136,7 @@ func InitRoutes(r *gin.Engine) {
 
 	// 其他路径返回 404
 	r.NoRoute(func(c *gin.Context) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "未找到相关资源"})
 	})
 }
 
@@ -145,6 +152,16 @@ func serveIndex(c *gin.Context) {
 // apiStatus 返回当前本机所有容器运行与版本更新状态
 func apiStatus(c *gin.Context) {
 	data, err := service.GetContainerStatusData(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, data)
+}
+
+// apiComposeProjects 返回宿主机 Docker Compose 项目列表及状态
+func apiComposeProjects(c *gin.Context) {
+	data, err := service.GetComposeProjectsData(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -407,7 +424,7 @@ func apiSettingsTestEmail(c *gin.Context) {
 func apiImageTags(c *gin.Context) {
 	imageName := c.Query("image")
 	if imageName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "image parameter required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "缺少必需的镜像名称参数"})
 		return
 	}
 
@@ -505,7 +522,7 @@ func apiContainerLogs(c *gin.Context) {
 func apiUpdateLogGet(c *gin.Context) {
 	name := c.Param("name")
 	if matched, _ := regexp.MatchString(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`, name); !matched {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid container name format"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "容器名称格式无效"})
 		return
 	}
 
@@ -535,7 +552,7 @@ func apiUpdateLogGet(c *gin.Context) {
 func apiUpdateLogDelete(c *gin.Context) {
 	name := c.Param("name")
 	if matched, _ := regexp.MatchString(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`, name); !matched {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid container name format"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "容器名称格式无效"})
 		return
 	}
 	logFilePath := utils.GetLogFilePath(name)
@@ -1046,6 +1063,81 @@ func apiHistoryDelete(c *gin.Context) {
 	utils.LogSuccess("手动删除容器 %s 的升级历史记录成功", hist.ContainerName)
 	// 4. 广播给所有的前端客户端更新状态
 	go GlobalHub.BroadcastStatus()
+
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// apiComposeConfigGet 读取指定 Compose 项目的 docker-compose.yml
+func apiComposeConfigGet(c *gin.Context) {
+	projName := c.Query("project")
+	if projName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "缺少必需的项目名称参数"})
+		return
+	}
+
+	content, filePath, err := service.GetComposeProjectConfig(c.Request.Context(), projName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"project":   projName,
+		"file_path": filePath,
+		"content":   content,
+	})
+}
+
+// apiComposeConfigPost 更新指定 Compose 项目的 docker-compose.yml 配置文件
+func apiComposeConfigPost(c *gin.Context) {
+	var payload struct {
+		Project string `json:"project"`
+		Content string `json:"content"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if payload.Project == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "缺少必需的项目名称参数"})
+		return
+	}
+
+	err := service.SaveComposeProjectConfig(c.Request.Context(), payload.Project, payload.Content)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	utils.LogSuccess("Compose 项目 %s 配置文件已更新", payload.Project)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// apiComposeLifecycle 处理 Compose 项目批量生命周期控制 (start / stop / restart)
+func apiComposeLifecycle(c *gin.Context) {
+	defer func() {
+		go GlobalHub.BroadcastStatus()
+	}()
+
+	var payload struct {
+		Project string `json:"project"`
+		Action  string `json:"action"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if payload.Project == "" || payload.Action == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "缺少必需的项目名称或操作类型参数"})
+		return
+	}
+
+	if err := service.BatchComposeLifecycle(c.Request.Context(), payload.Project, payload.Action); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

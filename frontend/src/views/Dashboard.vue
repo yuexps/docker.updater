@@ -67,7 +67,7 @@
           </span>
         </div>
 
-        <div v-if="!loading && updatableContainerNames.length > 0 && selectedContainers.length > 0" class="flex items-center justify-between mb-5 bg-white/40 dark:bg-zinc-900/10 px-4 py-2.5 rounded-xl border border-hairline select-none">
+        <div v-if="!dockerStore.loading && updatableContainerNames.length > 0 && selectedContainers.length > 0" class="flex items-center justify-between mb-5 bg-white/40 dark:bg-zinc-900/10 px-4 py-2.5 rounded-xl border border-hairline select-none">
           <div class="flex items-center space-x-2">
             <n-checkbox 
               :checked="isAllSelected" 
@@ -95,14 +95,14 @@
               size="small"
               class="active-scale font-semibold"
               :disabled="selectedContainers.length === 0"
-              @click="actions.startBulkUpdate(selectedContainers, () => selectedContainers = [])"
+              @click="handleBatchUpgrade"
             >
               批量升级
             </n-button>
           </div>
         </div>
 
-        <div v-if="loading" class="flex justify-center py-20">
+        <div v-if="dockerStore.loading && containers.length === 0" class="flex justify-center py-20">
           <n-spin size="large" />
         </div>
 
@@ -168,33 +168,30 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { NButton, NSpin, NCheckbox, useMessage } from 'naive-ui'
-import axios from 'axios'
-import wsService from '../utils/websocket'
+import { ref, onUnmounted, computed } from 'vue'
+import { NButton, NSpin, NCheckbox } from 'naive-ui'
+import { checkAllContainersApi } from '../api/container'
 import { useContainerActions } from '../composables/useContainerActions'
+import { useDockerStore } from '../stores/useDockerStore'
+import { message } from '../utils/discrete'
 import ContainerCard from '../components/ContainerCard.vue'
 import TerminalModal from '../components/TerminalModal.vue'
 import DeferModal from '../components/DeferModal.vue'
 import UpdateVersionModal from '../components/UpdateVersionModal.vue'
 
-const apiBase = '/app/docker-updater/api'
+const dockerStore = useDockerStore()
 
-const containers = ref<any[]>([])
-const lastCheck = ref<string>('')
-const loading = ref<boolean>(false)
 const checking = ref<boolean>(false)
-
 const selectedContainers = ref<string[]>([])
 const currentFilter = ref<'update' | 'deferred'>('update')
-const message = useMessage()
 
-// 初始化共享 Composable 业务方法
 const actions = useContainerActions()
 
-let unsubscribeStatus: (() => void) | null = null
+const containers = computed(() => dockerStore.containers)
+const lastCheck = computed(() => dockerStore.lastCheckTime)
+const updateCount = computed(() => dockerStore.updateCount)
+const deferredCount = computed(() => dockerStore.deferredCount)
 
-// 待更新或已挂起列表
 const pendingContainers = computed(() => {
   return containers.value
     .filter(c => c.status === currentFilter.value)
@@ -202,28 +199,18 @@ const pendingContainers = computed(() => {
     .sort((a, b) => a.name.localeCompare(b.name))
 })
 
-const updateCount = computed(() => {
-  return containers.value.filter(c => c.status === 'update').length
-})
-const deferredCount = computed(() => {
-  return containers.value.filter(c => c.status === 'deferred').length
-})
-
-// 所有可升级容器名列表
 const updatableContainerNames = computed(() => {
   return pendingContainers.value
     .filter(c => c.status === 'update')
     .map(c => c.name)
 })
 
-// 是否为全选状态
 const isAllSelected = computed(() => {
   const names = updatableContainerNames.value
   if (names.length === 0) return false
   return names.every(name => selectedContainers.value.includes(name))
 })
 
-// 是否为半选状态
 const isSomeSelected = computed(() => {
   const names = updatableContainerNames.value
   if (names.length === 0) return false
@@ -231,7 +218,6 @@ const isSomeSelected = computed(() => {
   return selectedCount > 0 && selectedCount < names.length
 })
 
-// 全选操作逻辑
 const handleSelectAll = (checked: boolean) => {
   const names = updatableContainerNames.value
   if (checked) {
@@ -248,12 +234,13 @@ const handleSelectAll = (checked: boolean) => {
 }
 
 const checkUpdates = async () => {
+  if (checking.value) return
   checking.value = true
   try {
-    await axios.post(`${apiBase}/check`)
-    message.success('版本检测已在后台触发')
-  } catch (err) {
-    message.error('触发检测失败')
+    await checkAllContainersApi()
+    message.success('已成功触发全量容器版本比对检查')
+  } catch {
+    message.error('触发全量容器版本检查失败')
   } finally {
     checking.value = false
   }
@@ -269,23 +256,19 @@ const toggleSelect = (name: string, checked: boolean) => {
   }
 }
 
-const formatCheckTime = (isoStr: string) => {
-  if (!isoStr) return '无'
-  const date = new Date(isoStr)
-  return date.toLocaleString()
+const handleBatchUpgrade = () => {
+  if (selectedContainers.value.length === 0) return
+  selectedContainers.value.forEach(name => {
+    actions.updateContainer(name)
+  })
 }
 
-onMounted(() => {
-  loading.value = true
-  unsubscribeStatus = wsService.subscribeStatus((payload) => {
-    containers.value = payload.containers || []
-    lastCheck.value = payload.last_check || ''
-    loading.value = false
-  })
-})
+const formatCheckTime = (isoStr: string) => {
+  if (!isoStr) return '无'
+  return new Date(isoStr).toLocaleString()
+}
 
 onUnmounted(() => {
-  if (unsubscribeStatus) unsubscribeStatus()
   actions.cleanup()
 })
 </script>

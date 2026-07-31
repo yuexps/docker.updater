@@ -177,6 +177,15 @@
   - 除了弹窗类型的表单需要点击“保存”按钮外，页面内的所有常规 Switch 开关、Select 选择框、输入框（在失焦 `@blur` 时）发生数值改变，前端都会**自动触发**配置同步保存，向后端 POST `/settings`。
   - 配合自动保存，前端右上角会淡入显示带有 `正在同步...` 和 `配置已自动保存` 状态的过渡气泡反馈，提供微动交互体验，防止用户忘记点击保存或页面跳转导致配置丢失。
 
+### 3.8 Compose 编排管理视图 (Compose.vue)
+* 自动识别 `com.docker.compose.project` Label 进行零配置 Compose 项目聚合展示。
+* 精简极致视口，无需冗余统计框与重复标题，直接展示 Compose 编排项目卡片与所辖服务列表。
+* 右侧提供带规范间距与明晰卡扣的生命周期控制按钮（`启动项目`、`停止项目`、`重启项目`、`编辑`）。
+* 支持单容器无缝“升级”与跨视图一键快捷定位。
+* **项目级联动控制与在线编辑**：
+  - 支持快捷一键启动项目、停止项目、重启项目。
+  - 支持点击“编辑”按钮，调出在线 IDE 风格文本编辑器，读取与保存 `docker-compose.yml` 物理配置文件。
+
 ---
 
 ## 4. 前端交互核心模态框组件 (Core Components)
@@ -195,4 +204,28 @@
 
 ### 4.4 指定版本升级框 (UpdateVersionModal)
 * 展示当前容器的原始镜像名称。
-* 提供输入框，允许用户自定义升级的 Tag。支持输入如 `latest`、`v1.2.3` 或其他特定镜像名，点击提交后调用携带 `target_image` 变量的更新流程。
+* 提供输入框，允许用户自定义升级的 Tag。支持输入如 `latest`、`v1.2.3` 或其他特定镜像名，点击提交后调用携带 `target_image` 变量的更新流程（容器卡片按钮显示为“修改版本”）。
+
+### 4.5 Compose 配置文件编辑器 (ComposeEditorModal)
+* 基于轻量级开源代码编辑器标杆 **CodeMirror 6** (`vue-codemirror` + `@codemirror/lang-yaml` + OneDark 暗色主题) 构建。
+* 提供专业的 YAML 语法彩色高亮、括号与括号对齐匹配、自动智能 Tab 键缩进以及动态行号 Gutter 指示。
+* 结合高视口利用率的纤细底栏 (`h-9`)，左下角实时计算展示代码行数与字符数，右下角提供直观的“保存”主按键。
+
+---
+
+## 5. 数据交互与 API 服务层 (Data & API Service Layer)
+
+前端对 HTTP 网络请求与 Pinia State 进行了完全解耦与规范封装：
+* **统一 API 客户端 (`frontend/src/api/client.ts`)**：统一封装 Axios 客户端，配置默认请求超时时间与自动响应数据解构。
+* **业务模块解耦 (`frontend/src/api/`)**：
+  - `container.ts`：容器升级、检活、暂挂/解暂挂、日志获取与单容器生命周期控制。
+  - `compose.ts`：Compose 编排项目列表获取、组内容器批量生命周期控制、`docker-compose.yml` 文件的在线读取与保存。
+  - `task.ts`：容器升级排队队列取消与更新日志历史获取。
+  - `image.ts`：镜像列表拉取、无标签残留镜像 Prune 清理、Tag 列表拉取与强删镜像。
+  - `history.ts`：容器历史升级/回滚记录拉取与单条/批量清空历史。
+  - `settings.ts`：系统全局配置读取与自动落盘保存、SMTP/Webhook 测试推送、私有仓库认证凭据 CRUD。
+  - `system.ts`：系统后台运行日志读取与日志文件一键清空。
+* **原生 Pinia 状态驱动 (`frontend/src/stores/useDockerStore.ts`)**：
+  - 下沉异步 API 调用至 API 模块，Pinia 专注于沉淀状态与 Getters 派生计算。
+  - 全局 WebSocket 推送同步更新 Pinia 状态，所有组件统一读取全局任务队列与容器快照。
+

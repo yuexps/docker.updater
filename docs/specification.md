@@ -89,6 +89,7 @@ type RegistryCredential struct {
     - 用于后台定时扫描（Cron）与服务启动初始化扫描。后台扫描禁止调用 ImagePull 拉取镜像，仅获取元数据。
     - 请求时带上与容器运行时一致的 `Platform` 平台架构（`os` / `architecture` / `variant`）。遇到多架构 Manifest List 时，解析匹配架构的 `Child Manifest Digest` 以及 `config.digest` (Image ID)。
     - **比对判定规则**: 只要远端 `Child Manifest Digest` 存在于本地 `RepoDigests` 中、远端 `config.digest` 等于本地镜像 `Image ID`、或本地 Docker `ImageInspectWithRaw` 能检索到此 Digest，即判定为无更新。
+    - **远程语义化版本提取策略**: 被动元数据检查完成 Digest 比对后即直接返回，不主动发起专程拉取 Config 的额外网络请求；仅在降级至 ConfigDigest 检测且已成功获取 Config 时顺便解析。
   - **主动镜像拉取检查 (ImagePull + Inspect)**:
     - 仅在用户手动触发更新检测且镜像属于 `docker commit` / `docker load` 离线镜像（`RepoDigests` 为空）或元数据检查无法判定时调用。
     - 通过 SDK 的 `ImagePull` 更新 Tag 元数据，比对最新镜像 ID 与运行容器镜像 ID。ID 相同判定无更新，ID 变动判定有更新。
@@ -132,6 +133,10 @@ type RegistryCredential struct {
 | GET | `/registries` | 无 | 凭证列表 JSON | 密码字段已被强制屏蔽为 `******` 的仓库凭据展示 |
 | POST | `/registries` | 凭证编辑负载 | `{"ok": true}` | 加密私有仓密码并存库，保存前将域名首尾多余协议前缀清除 |
 | DELETE| `/registries/:id`| 无 | `{"ok": true}` | 删除对应的私有仓账户密码凭证 |
+| GET | `/compose/projects` | 无 | `[{"name": string, "working_dir": string, "config_files": string, "containers": [...], "status": string, "services_count": int, "has_update": bool}]` | 按 com.docker.compose.project Label 归集并返回宿主机 Docker Compose 项目列表 |
+| GET | `/compose/config` | `?project=name` | `{"project": string, "file_path": string, "content": string}` | 读取指定 Compose 项目的 docker-compose.yml 物理文件内容 |
+| POST | `/compose/config` | `{"project": string, "content": string}` | `{"ok": true}` | 更新覆盖指定 Compose 项目的 docker-compose.yml 物理配置文件，校验仅允许 .yml / .yaml 路径 |
+| POST | `/compose/lifecycle` | `{"project": string, "action": "start" \| "stop" \| "restart"}` | `{"ok": true}` | 批量下发 Compose 项目组内关联容器的生命周期控制指令 |
 | GET | `/ws` | 无 | 协议升级载荷 | 升级为 WebSocket 长连接 |
 
 ## 5. 事件循环与排队机制

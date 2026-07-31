@@ -139,7 +139,7 @@ func getGCRAuth(ctx context.Context, registry string) authn.Authenticator {
 
 func getStandardTransport() http.RoundTripper {
 	dialer := &net.Dialer{
-		Timeout:   5 * time.Second,
+		Timeout:   8 * time.Second,
 		KeepAlive: 30 * time.Second,
 	}
 
@@ -148,7 +148,7 @@ func getStandardTransport() http.RoundTripper {
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			return dialer.DialContext(ctx, "tcp4", addr)
 		},
-		TLSHandshakeTimeout: 5 * time.Second,
+		TLSHandshakeTimeout: 8 * time.Second,
 	}
 }
 
@@ -218,10 +218,14 @@ func checkImageUpdate(ctx context.Context, cli *client.Client, imageName string,
 	}
 
 	if len(imageInspect.RepoDigests) > 0 {
+		localDigestsSet := make(map[string]bool)
 		for _, rd := range imageInspect.RepoDigests {
 			if parts := strings.SplitN(rd, "@", 2); len(parts) == 2 {
-				localDigest = parts[1]
-				break
+				cleanHash := strings.TrimPrefix(parts[1], "sha256:")
+				localDigestsSet[cleanHash] = true
+				if localDigest == "" {
+					localDigest = parts[1]
+				}
 			}
 		}
 
@@ -229,46 +233,22 @@ func checkImageUpdate(ctx context.Context, cli *client.Client, imageName string,
 		distInspect, distErr := cli.DistributionInspect(ctx, imageName, authHeader)
 		if distErr == nil && distInspect.Descriptor.Digest.String() != "" {
 			remoteDigest = distInspect.Descriptor.Digest.String()
-			hasUpdate = (localDigest != remoteDigest)
-
-			for _, cRef := range candidateRefs {
-				subCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-				auth := getGCRAuth(subCtx, cRef.Context().RegistryStr())
-				opts := []remote.Option{
-					remote.WithAuth(auth),
-					remote.WithPlatform(platform),
-					remote.WithTransport(transport),
-					remote.WithContext(subCtx),
-				}
-				if img, imgErr := remote.Image(cRef, opts...); imgErr == nil {
-					if cfg, cfgErr := img.ConfigFile(); cfgErr == nil && cfg != nil {
-						remoteVersion = ExtractSemanticVersion(cfg.Config.Labels, cfg.Config.Env, imageName)
-					}
-				}
-				cancel()
-				if remoteVersion != "" {
-					break
-				}
-			}
-			return localDigest, remoteDigest, remoteVersion, hasUpdate, "RepoDigest", nil
+			cleanRemote := strings.TrimPrefix(remoteDigest, "sha256:")
+			hasUpdate = !localDigestsSet[cleanRemote]
+			return localDigest, remoteDigest, "", hasUpdate, "RepoDigest", nil
 		}
 
 		var lastErr error = distErr
 		for _, cRef := range candidateRefs {
-			subCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			subCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 			auth := getGCRAuth(subCtx, cRef.Context().RegistryStr())
 			desc, headErr := remote.Head(cRef, remote.WithAuth(auth), remote.WithTransport(transport), remote.WithContext(subCtx))
 			if headErr == nil && desc.Digest.String() != "" {
 				remoteDigest = desc.Digest.String()
-				hasUpdate = (localDigest != remoteDigest)
-
-				if img, imgErr := remote.Image(cRef, remote.WithAuth(auth), remote.WithPlatform(platform), remote.WithTransport(transport), remote.WithContext(subCtx)); imgErr == nil {
-					if cfg, cfgErr := img.ConfigFile(); cfgErr == nil && cfg != nil {
-						remoteVersion = ExtractSemanticVersion(cfg.Config.Labels, cfg.Config.Env, imageName)
-					}
-				}
+				cleanRemote := strings.TrimPrefix(remoteDigest, "sha256:")
+				hasUpdate = !localDigestsSet[cleanRemote]
 				cancel()
-				return localDigest, remoteDigest, remoteVersion, hasUpdate, "RepoDigest", nil
+				return localDigest, remoteDigest, "", hasUpdate, "RepoDigest", nil
 			}
 			if headErr != nil {
 				lastErr = headErr
@@ -286,7 +266,7 @@ func checkImageUpdate(ctx context.Context, cli *client.Client, imageName string,
 
 	var lastConfigErr error
 	for _, cRef := range candidateRefs {
-		subCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		subCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 		auth := getGCRAuth(subCtx, cRef.Context().RegistryStr())
 		opts := []remote.Option{
 			remote.WithAuth(auth),
@@ -550,7 +530,7 @@ func GetRemoteTags(ctx context.Context, imageName string) ([]string, error) {
 	var lastErr error
 
 	for _, cRef := range candidateRefs {
-		subCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		subCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
 		candRepo := cRef.Context()
 		auth := getGCRAuth(subCtx, candRepo.RegistryStr())
 

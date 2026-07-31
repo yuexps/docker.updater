@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import Dashboard from '../views/Dashboard.vue'
 import Containers from '../views/Containers.vue'
+import Compose from '../views/Compose.vue'
 import Images from '../views/Images.vue'
 import History from '../views/History.vue'
 import Settings from '../views/Settings.vue'
@@ -17,6 +18,11 @@ const routes: Array<RouteRecordRaw> = [
     path: '/containers',
     name: 'Containers',
     component: Containers
+  },
+  {
+    path: '/compose',
+    name: 'Compose',
+    component: Compose
   },
   {
     path: '/images',

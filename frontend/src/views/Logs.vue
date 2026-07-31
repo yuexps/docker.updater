@@ -76,32 +76,24 @@
               未检索到匹配的日志行
             </div>
             <div v-else class="space-y-2">
-              <!-- 单条日志容器（内联文本流支持贴左折行） -->
               <div v-for="(line, idx) in filteredLines" :key="idx"
                 class="p-2.5 sm:p-3 rounded-lg border border-slate-200/60 bg-slate-50/40 hover:bg-white hover:border-slate-300 hover:shadow-2xs transition-all text-[12px] font-mono leading-relaxed">
                 <template v-for="parsed in [parseLine(line)]" :key="idx">
                   <template v-if="parsed">
                     <div class="break-all whitespace-pre-wrap">
-                      <!-- 时间戳 -->
                       <span v-if="parsed.time"
                         class="inline-block mr-2.5 text-slate-400 text-[11.5px] align-baseline">
                         {{ parsed.time }}
                       </span>
-
-                      <!-- 日志等级徽章 -->
                       <span :class="parsed.badgeClass"
                         class="inline-block mr-2.5 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider align-baseline">
                         {{ parsed.level }}
                       </span>
-
-                      <!-- 日志正文 -->
                       <span :class="parsed.textClass">
                         {{ parsed.content }}
                       </span>
                     </div>
                   </template>
-
-                  <!-- 无标签日志正文 -->
                   <template v-else>
                     <div class="break-all whitespace-pre-wrap text-slate-600">
                       {{ line }}
@@ -134,24 +126,20 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
-import { NButton, NSpin, useMessage, useDialog } from 'naive-ui'
-import axios from 'axios'
+import { NButton, NSpin, useDialog } from 'naive-ui'
+import { getSystemLogsApi, clearSystemLogsApi } from '../api/system'
+import { message } from '../utils/discrete'
 import wsService from '../utils/websocket'
 
-const apiBase = '/app/docker-updater/api'
-const message = useMessage()
 const dialog = useDialog()
 
-// 状态声明与元素引用
 const logLines = ref<string[]>([])
 const loading = ref<boolean>(false)
 const clearing = ref<boolean>(false)
 const logContainer = ref<HTMLDivElement | null>(null)
 
-// 订阅取消句柄
 let unsubscribeSysLog: (() => void) | null = null
 
-// 筛选与滚动组件状态
 const selectedLevel = ref('ALL')
 const searchQuery = ref('')
 const showScrollBtn = ref(false)
@@ -163,23 +151,18 @@ const levels = [
   { label: 'ERROR', value: 'ERROR' }
 ]
 
-// 过滤后的日志列表
 const filteredLines = computed(() => {
   let lines = logLines.value
-
   if (selectedLevel.value !== 'ALL') {
     lines = lines.filter(line => line.includes(`[${selectedLevel.value}]`))
   }
-
   if (searchQuery.value.trim()) {
     const query = searchQuery.value.toLowerCase()
     lines = lines.filter(line => line.toLowerCase().includes(query))
   }
-
   return lines
 })
 
-// 解析后日志格式定义
 interface ParsedLine {
   time: string
   level: string
@@ -188,7 +171,6 @@ interface ParsedLine {
   textClass: string
 }
 
-// 日志等级标签解析器
 const parseLine = (line: string): ParsedLine | null => {
   const targetLevels = ['ERROR', 'WARN', 'INFO'] as const
   for (const lvl of targetLevels) {
@@ -224,17 +206,13 @@ const parseLine = (line: string): ParsedLine | null => {
   return null
 }
 
-// 日志容器滚动监听
 const handleScroll = (e: Event) => {
   const el = e.target as HTMLDivElement
   if (!el) return
-
   const threshold = 100
-  const isFarFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight > threshold
-  showScrollBtn.value = isFarFromBottom
+  showScrollBtn.value = el.scrollHeight - el.scrollTop - el.clientHeight > threshold
 }
 
-// 容器视图滚动至底部
 const scrollToBottom = () => {
   nextTick(() => {
     if (logContainer.value) {
@@ -244,14 +222,13 @@ const scrollToBottom = () => {
   })
 }
 
-// 拉取历史日志快照
 const fetchSystemLogs = async () => {
   loading.value = true
   try {
-    const res = await axios.get(`${apiBase}/system/logs`)
-    logLines.value = res.data.logs || []
+    const data = await getSystemLogsApi()
+    logLines.value = data.logs || []
   } catch {
-    message.error('加载系统运行日志失败')
+    message.error('加载系统运行日志 [info.log] 失败')
   } finally {
     loading.value = false
     nextTick(() => {
@@ -260,7 +237,6 @@ const fetchSystemLogs = async () => {
   }
 }
 
-// 确认清空系统运行日志
 const clearSystemLogs = () => {
   dialog.warning({
     title: '确认清空运行日志',
@@ -268,33 +244,29 @@ const clearSystemLogs = () => {
     positiveText: '确认清空',
     negativeText: '取消',
     onPositiveClick: () => {
-      return new Promise<void>(async (resolve, reject) => {
-        clearing.value = true
-        try {
-          const res = await axios.delete(`${apiBase}/system/logs`)
-          if (res.data.ok) {
-            message.success('已成功清空系统运行日志')
-            logLines.value = []
-            showScrollBtn.value = false
-            resolve()
-          } else {
-            reject()
-          }
-        } catch {
-          message.error('清空日志文件失败')
-          reject()
-        } finally {
-          clearing.value = false
-        }
-      })
+      executeClearSystemLogs()
     }
   })
 }
 
-// 生命周期挂载与卸载
+const executeClearSystemLogs = async () => {
+  clearing.value = true
+  try {
+    const res = await clearSystemLogsApi()
+    if (res.ok) {
+      message.success('已成功清空系统运行日志 [info.log]')
+      logLines.value = []
+      showScrollBtn.value = false
+    }
+  } catch {
+    message.error('清空系统运行日志 [info.log] 失败')
+  } finally {
+    clearing.value = false
+  }
+}
+
 onMounted(async () => {
   await fetchSystemLogs()
-
   unsubscribeSysLog = wsService.subscribeSysLog((line: string) => {
     if (line.trim()) {
       logLines.value.push(line)
@@ -316,34 +288,27 @@ onUnmounted(() => {
   width: 6px;
   height: 6px;
 }
-
 .scrollbar-thin::-webkit-scrollbar-track {
   background: transparent;
 }
-
 .scrollbar-thin::-webkit-scrollbar-thumb {
   background: #e2e8f0;
   border-radius: 3px;
 }
-
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: #cbd5e1;
 }
-
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
-
 .scrollbar-none {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
-
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;

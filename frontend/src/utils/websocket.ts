@@ -78,7 +78,8 @@ class WsService {
 
   private handleMessagePayload(data: any): void {
     if (data.type === 'status') {
-      this.cachedStatus = data.payload; // 实时更新缓存
+      const payload = data.payload || data;
+      this.cachedStatus = payload;
       if (!this.statusNotifyTimer) {
         this.statusNotifyTimer = setTimeout(() => {
           this.statusNotifyTimer = null;

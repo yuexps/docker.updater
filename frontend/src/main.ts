@@ -1,10 +1,13 @@
 import { createApp } from 'vue'
+import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import './style.css'
 
 const mountApp = () => {
   const app = createApp(App)
+  const pinia = createPinia()
+  app.use(pinia)
   app.use(router)
   
   // 路由切换后自动释放先前点击元素的焦点，防止移动端按钮/底栏在切换页面后残留 hover/focus 高亮
@@ -17,7 +20,9 @@ const mountApp = () => {
   app.mount('#app')
 }
 
-if (import.meta.env.DEV) {
+const useMock = import.meta.env.VITE_USE_MOCK === 'true' || localStorage.getItem('USE_MOCK') === 'true'
+
+if (import.meta.env.DEV && useMock) {
   import('./utils/test').then(() => {
     mountApp()
   })

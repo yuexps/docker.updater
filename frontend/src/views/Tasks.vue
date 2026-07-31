@@ -47,7 +47,7 @@
                 </span>
               </div>
               
-              <!-- 入队时间 (带小图标) -->
+              <!-- 入队时间 -->
               <div class="flex items-center text-[12px] text-body-muted font-medium select-none">
                 <svg class="w-3.5 h-3.5 mr-1.5 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="12" cy="12" r="10"/>
@@ -116,7 +116,7 @@
                   </span>
                 </div>
 
-                <!-- 入队时间 (带小图标) -->
+                <!-- 入队时间 -->
                 <div class="flex items-center text-[12px] text-body-muted font-medium select-none">
                   <svg class="w-3.5 h-3.5 mr-1.5 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"/>
@@ -162,26 +162,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { NButton, useMessage } from 'naive-ui'
-import axios from 'axios'
+import { ref, computed, onUnmounted } from 'vue'
+import { NButton } from 'naive-ui'
+import { useDockerStore } from '../stores/useDockerStore'
+import { cancelTaskApi, getUpdateLogApi } from '../api/task'
+import { message } from '../utils/discrete'
 import wsService from '../utils/websocket'
 import TerminalModal from '../components/TerminalModal.vue'
 
-const apiBase = '/app/docker-updater/api'
-const message = useMessage()
+const store = useDockerStore()
 
-interface TaskItem {
-  container_name: string;
-  type: string;
-  added_at: string;
-}
+// 直接使用 Pinia 全局响应式状态
+const activeTask = computed(() => store.activeTask)
+const queuedTasks = computed(() => store.queuedTasks)
 
-const activeTask = ref<TaskItem | null>(null)
-const queuedTasks = ref<TaskItem[]>([])
-let unsubscribeStatus: (() => void) | null = null
-
-// 活跃任务日志相关状态
 const logModalVisible = ref<boolean>(false)
 const logLines = ref<string[]>([])
 const logRunning = ref<boolean>(false)
@@ -192,17 +186,15 @@ const viewActiveTaskLog = async (name: string) => {
   logModalVisible.value = true
   logRunning.value = true
 
-  // 1. 先尝试获取历史日志，使终端有内容显示
   try {
-    const res = await axios.get(`${apiBase}/update-log/${name}`)
-    if (res.data.found) {
-      logLines.value = res.data.logs || []
+    const data = await getUpdateLogApi(name)
+    if (data.found) {
+      logLines.value = data.logs || []
     }
   } catch (err) {
     console.error('拉取当前活跃任务历史日志失败:', err)
   }
 
-  // 2. 然后通过 WebSocket 订阅实时日志流
   if (activeUnsubscribeLogs) activeUnsubscribeLogs()
   activeUnsubscribeLogs = wsService.subscribeLogs(name, ({ message: msg }) => {
     logLines.value.push(msg)
@@ -226,14 +218,14 @@ const cancelQueuedTask = async (name: string) => {
   if (cancelLoadingMap.value[name]) return
   cancelLoadingMap.value[name] = true
   try {
-    const res = await axios.post(`${apiBase}/tasks/cancel/${name}`)
-    if (res.data.success) {
-      message.success(`已成功将容器移出排队: ${name}`)
+    const res = await cancelTaskApi(name)
+    if (res.success) {
+      message.success(`已成功将容器 [${name}] 移出升级排队`)
     } else {
-      message.error('无法取消该任务，可能它已开始运行')
+      message.error(`无法取消容器 [${name}] 的任务，可能它已开始运行`)
     }
-  } catch (err) {
-    message.error('取消排队请求失败')
+  } catch {
+    message.error(`取消容器 [${name}] 的排队请求失败`)
   } finally {
     cancelLoadingMap.value[name] = false
   }
@@ -242,24 +234,13 @@ const cancelQueuedTask = async (name: string) => {
 const formatDate = (isoStr: string) => {
   if (!isoStr) return ''
   try {
-    const d = new Date(isoStr)
-    return d.toLocaleString()
-  } catch (e) {
+    return new Date(isoStr).toLocaleString()
+  } catch {
     return isoStr
   }
 }
 
-onMounted(() => {
-  unsubscribeStatus = wsService.subscribeStatus((payload) => {
-    activeTask.value = payload.active
-    queuedTasks.value = payload.queued || []
-  })
-})
-
 onUnmounted(() => {
-  if (unsubscribeStatus) {
-    unsubscribeStatus()
-  }
   if (activeUnsubscribeLogs) {
     activeUnsubscribeLogs()
   }

@@ -66,8 +66,9 @@
 
             <!-- Compose 项目徽章 -->
             <div v-if="container.compose_project"
-              class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-semibold text-slate-500 border border-slate-200/40 max-w-37.5 shrink-0 truncate"
-              :title="container.compose_project">
+              class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-semibold text-slate-500 border border-slate-200/40 max-w-37.5 shrink-0 truncate cursor-pointer hover:bg-slate-200/60 hover:text-slate-700 transition-colors"
+              :title="'点击查看 Compose 项目: ' + container.compose_project"
+              @click.stop="navigateToCompose(container.compose_project)">
               <svg class="w-2.5 h-2.5 mr-1 shrink-0 text-slate-400" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="18" cy="5" r="3" />
@@ -94,13 +95,6 @@
           <!-- 标题与检测时间 -->
           <div class="flex items-center justify-between text-[11px] font-semibold">
             <div class="flex items-center space-x-1.5 min-w-0">
-              <span :class="[
-                container.status === 'update'
-                  ? 'text-slate-500'
-                  : container.status === 'deferred'
-                    ? 'text-amber-800'
-                    : 'text-emerald-800'
-              ]">版本摘要比对</span>
               <span
                 class="px-1.5 py-0.2 text-[9px] font-mono font-semibold rounded border bg-slate-100/90 text-slate-500 border-slate-200/60 shrink-0 select-none"
                 :title="'检测比对机制: ' + ((container.check_method || getFallbackCheckMethod(container)) === 'RepoDigest' ? 'RepoDigest 方案 (优先)' : 'Config Digest 降级方案')">
@@ -112,108 +106,53 @@
 
           <!-- 比对内容 -->
           <div class="flex items-center justify-between text-[11px]">
-            <!-- 若左右两边均有语义化版本号，则展示版本号比对 -->
-            <template v-if="container.local_version && container.remote_version">
+            <div
+              class="bg-white border border-slate-200 px-2.5 py-1 rounded-md text-slate-600 font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center cursor-pointer hover:border-slate-300 hover:bg-slate-50/80 active:scale-98 transition-all"
+              :title="`[${container.check_method || getFallbackCheckMethod(container)}] ${container.local_digest || '无'}`"
+              @click="copyText(container.local_digest || '', '本地 Digest 摘要')">
+              <span class="text-[10px] text-slate-400 font-sans font-semibold mr-1.5 shrink-0">本地</span>
+              <span class="font-bold">{{ shortDigest(container.local_digest) || '未知' }}</span>
+            </div>
+
+            <!-- 有更新 -->
+            <template v-if="container.status === 'update'">
+              <svg class="w-3.5 h-3.5 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+
               <div
-                class="bg-white border border-slate-200 px-2.5 py-1 rounded-md text-slate-600 font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center cursor-pointer hover:border-slate-300 hover:bg-slate-50/80 active:scale-98 transition-all"
-                :title="`[${container.check_method || getFallbackCheckMethod(container)}] ${container.local_digest || '无'}`"
-                @click="copyText(container.local_digest || '', '本地 Digest 摘要')">
-                <span class="text-[10px] text-slate-400 font-sans font-semibold mr-1.5 shrink-0">本地</span>
-                <span class="font-bold">{{ container.local_version }}</span>
+                class="bg-blue-500 text-white px-2.5 py-1 rounded-md font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center cursor-pointer hover:bg-blue-600 active:scale-98 transition-all"
+                :title="`[${container.check_method || getFallbackCheckMethod(container)}] ${container.remote_digest || '无'}`"
+                @click="copyText(container.remote_digest || '', '最新 Digest 摘要')">
+                <span class="text-[10px] text-blue-200 font-sans font-semibold mr-1.5 shrink-0">最新</span>
+                <span class="font-bold">{{ shortDigest(container.remote_digest) || '未知' }}</span>
               </div>
-
-              <!-- 有更新 -->
-              <template v-if="container.status === 'update'">
-                <svg class="w-3.5 h-3.5 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-
-                <div
-                  class="bg-blue-500 text-white px-2.5 py-1 rounded-md font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center cursor-pointer hover:bg-blue-600 active:scale-98 transition-all"
-                  :title="`[${container.check_method || getFallbackCheckMethod(container)}] ${container.remote_digest || '无'}`"
-                  @click="copyText(container.remote_digest || '', '最新 Digest 摘要')">
-                  <span class="text-[10px] text-blue-200 font-sans font-semibold mr-1.5 shrink-0">最新</span>
-                  <span class="font-bold">{{ container.remote_version }}</span>
-                </div>
-              </template>
-
-              <!-- 已暂挂 -->
-              <template v-else-if="container.status === 'deferred'">
-                <div class="text-[11px] text-amber-700 flex items-center shrink-0">
-                  <svg class="w-3.5 h-3.5 mr-1.5 text-amber-600 shrink-0" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M12 6v6l4 2" />
-                  </svg>
-                  <span class="font-medium">暂挂至: {{ container.defer_until === 'forever' ? '无限期' :
-                    (container.defer_until || '无限期') }}</span>
-                </div>
-              </template>
-
-              <!-- 已是最新 -->
-              <template v-else>
-                <div class="text-[11px] text-emerald-700 flex items-center shrink-0">
-                  <svg class="w-3.5 h-3.5 mr-1.5 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                    <polyline points="22 4 12 14.01 9 11.01" />
-                  </svg>
-                  <span class="font-medium">已是最新</span>
-                </div>
-              </template>
             </template>
 
-            <!-- 默认统一为 Digest 摘要比对模式，严格保持同类型维度 -->
-            <template v-else>
-              <div
-                class="bg-white border border-slate-200 px-2.5 py-1 rounded-md text-slate-600 font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center cursor-pointer hover:border-slate-300 hover:bg-slate-50/80 active:scale-98 transition-all"
-                :title="`[${container.check_method || getFallbackCheckMethod(container)}] ${container.local_digest || '无'}`"
-                @click="copyText(container.local_digest || '', '本地 Digest 摘要')">
-                <span class="text-[10px] text-slate-400 font-sans font-semibold mr-1.5 shrink-0">本地</span>
-                <span class="font-bold">{{ shortDigest(container.local_digest) || '未知' }}</span>
-              </div>
-
-              <!-- 有更新 -->
-              <template v-if="container.status === 'update'">
-                <svg class="w-3.5 h-3.5 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M5 12h14M12 5l7 7-7 7" />
+            <!-- 已暂挂 -->
+            <template v-else-if="container.status === 'deferred'">
+              <div class="text-[11px] text-amber-700 flex items-center shrink-0">
+                <svg class="w-3.5 h-3.5 mr-1.5 text-amber-600 shrink-0" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 6v6l4 2" />
                 </svg>
+                <span class="font-medium">暂挂至: {{ container.defer_until === 'forever' ? '无限期' :
+                  (container.defer_until || '无限期') }}</span>
+              </div>
+            </template>
 
-                <div
-                  class="bg-blue-500 text-white px-2.5 py-1 rounded-md font-mono truncate max-w-30 xs:max-w-[140px] sm:max-w-40 flex items-center cursor-pointer hover:bg-blue-600 active:scale-98 transition-all"
-                  :title="`[${container.check_method || getFallbackCheckMethod(container)}] ${container.remote_digest || '无'}`"
-                  @click="copyText(container.remote_digest || '', '最新 Digest 摘要')">
-                  <span class="text-[10px] text-blue-200 font-sans font-semibold mr-1.5 shrink-0">最新</span>
-                  <span class="font-bold">{{ shortDigest(container.remote_digest) || '未知' }}</span>
-                </div>
-              </template>
-
-              <!-- 已暂挂 -->
-              <template v-else-if="container.status === 'deferred'">
-                <div class="text-[11px] text-amber-700 flex items-center shrink-0">
-                  <svg class="w-3.5 h-3.5 mr-1.5 text-amber-600 shrink-0" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M12 6v6l4 2" />
-                  </svg>
-                  <span class="font-medium">暂挂至: {{ container.defer_until === 'forever' ? '无限期' :
-                    (container.defer_until || '无限期') }}</span>
-                </div>
-              </template>
-
-              <!-- 已是最新 -->
-              <template v-else>
-                <div class="text-[11px] text-emerald-700 flex items-center shrink-0">
-                  <svg class="w-3.5 h-3.5 mr-1.5 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                    <polyline points="22 4 12 14.01 9 11.01" />
-                  </svg>
-                  <span class="font-medium">已是最新</span>
-                </div>
-              </template>
+            <!-- 已是最新 -->
+            <template v-else>
+              <div class="text-[11px] text-emerald-700 flex items-center shrink-0">
+                <svg class="w-3.5 h-3.5 mr-1.5 text-emerald-500 shrink-0" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+                <span class="font-medium">已是最新</span>
+              </div>
             </template>
           </div>
         </div>
@@ -327,8 +266,17 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { NButton, NCheckbox, NDropdown, useMessage } from 'naive-ui'
 import { copyToClipboard } from '../utils/clipboard'
+
+const router = useRouter()
+
+const navigateToCompose = (projName: string) => {
+  if (projName) {
+    router.push({ path: '/compose', query: { project: projName } })
+  }
+}
 
 const props = withDefaults(defineProps<{
   container: any

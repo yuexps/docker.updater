@@ -31,7 +31,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { NModal, NInput, NSelect } from 'naive-ui'
-import axios from 'axios'
+import { getImageTagsApi } from '../api/image'
+import { message } from '../utils/discrete'
 
 const props = defineProps<{
   show: boolean
@@ -59,7 +60,6 @@ const selectValue = ref<string>('custom')
 const loadingTags = ref<boolean>(false)
 const remoteTags = ref<string[]>([])
 
-// 封装下拉菜单选项，默认包含自定义输入项
 const selectOptions = computed(() => {
   const options = [{ label: '自定义输入', value: 'custom' }]
   remoteTags.value.forEach(tag => {
@@ -68,23 +68,22 @@ const selectOptions = computed(() => {
   return options
 })
 
-// 拉取远程仓库的 tags 列表 (最多展示 20 个)
 const fetchTags = async () => {
   loadingTags.value = true
   remoteTags.value = []
   try {
-    const res = await axios.get(`/app/docker-updater/api/image/tags?image=${encodeURIComponent(props.currentImage)}`)
-    if (Array.isArray(res.data)) {
-      remoteTags.value = res.data
+    const data = await getImageTagsApi(props.currentImage)
+    if (Array.isArray(data)) {
+      remoteTags.value = data
     }
   } catch (err) {
     console.warn('[UpdateModal] 获取镜像 tags 列表失败:', err)
+    message.warning(`获取镜像 [${props.currentImage}] 的远端版本列表失败，您可手动输入目标 Tag`)
   } finally {
     loadingTags.value = false
   }
 }
 
-// 侦听弹窗显隐状态，开启时初始化拉取 tags 列表
 watch(() => props.show, (newVal) => {
   if (newVal) {
     selectValue.value = 'custom'
@@ -92,14 +91,12 @@ watch(() => props.show, (newVal) => {
   }
 })
 
-// 侦听下拉框选项，选中具体 tag 时将其自动同步覆写至输入框中
 watch(selectValue, (newVal) => {
   if (newVal !== 'custom') {
     versionModel.value = newVal
   }
 })
 
-// 侦听输入框内容手动更改，若用户修改的值不在远端拉取的 tags 列表中，自动切回 custom
 watch(versionModel, (newVal) => {
   if (newVal !== selectValue.value && newVal !== '') {
     if (!remoteTags.value.includes(newVal)) {

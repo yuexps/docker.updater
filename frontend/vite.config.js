@@ -19,6 +19,18 @@ export default defineConfig({
     }
   },
   build: {
-    chunkSizeWarningLimit: 1000
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/naive-ui')) {
+            return 'naive-ui'
+          }
+          if (id.includes('node_modules/vue-codemirror') || id.includes('node_modules/@codemirror')) {
+            return 'codemirror'
+          }
+        }
+      }
+    }
   }
 })

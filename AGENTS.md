@@ -4,17 +4,17 @@
 **Docker Updater** 是飞牛系统 (FNOS) 的 Docker 容器升级管理器（`.fpk` 格式第三方应用）。提供 Web GUI 实现宿主机容器版本检测、一键升级、回滚、备份和镜像管理。
 
 ## 技术栈
-* **后端**: Go 1.26 + [Gin](https://github.com/gin-gonic/gin) + [GORM](https://gorm.io)
+* **后端**: Go 1.26 + [Gin](https://github.com/gin-gonic/gin) + [GORM](https://gorm.io) + `gopkg.in/yaml.v3` (Compose YAML 解析)
 * **数据库**: SQLite (纯 Go 驱动 [glebarez/sqlite](https://github.com/glebarez/sqlite)，CGO-free)
 * **Docker SDK**: [docker/docker/client](https://github.com/moby/moby/tree/master/client) (不使用 CLI)
 * **通信**: WebSocket + SSE 实时流
 * **定时任务**: [robfig/cron/v3](https://github.com/robfig/cron)
-* **前端**: Vue 3 (Composition API, `<script setup>`) + [Naive UI](https://www.naiveui.com/) + Tailwind CSS v4
+* **前端**: Vue 3 (Composition API, `<script setup>`) + [Naive UI](https://www.naiveui.com/) + Tailwind CSS v4 + CodeMirror 6 (`@codemirror/lang-yaml`)
 * **构建/打包**: Vite 8 + TS 5.7 + Vue Router 5 | fnpack (`.fpk`)
 
 ## 项目结构
 * **[api/](api)**: Gin 路由与 WebSocket Hub。
-* **[db/](db)**: 数据库连接初始化与 5 个模型定义 ([models.go](db/models.go))。
+* **[db/](db)**: 数据库连接初始化与模型定义 ([models.go](db/models.go))。
 * **[dockerclient/](dockerclient)**: Docker API 交互（拉取、启动、检测、Tag 提取）。
 * **[scheduler/](scheduler)**: 定时任务调度器。
 * **[service/](service)**: 队列调度 ([queue.go](service/queue.go))、仓库凭证 ([credentials.go](service/credentials.go)) 等业务逻辑。

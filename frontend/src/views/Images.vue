@@ -74,29 +74,18 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { NButton, NSpin, useMessage, useDialog } from 'naive-ui'
-import axios from 'axios'
+import { NButton, NSpin, useDialog } from 'naive-ui'
+import { getImagesApi, pruneImagesApi, deleteImageApi, type ImageItem } from '../api/image'
+import { message } from '../utils/discrete'
 import ImageCard from '../components/ImageCard.vue'
 
-const apiBase = '/app/docker-updater/api'
-const message = useMessage()
 const dialog = useDialog()
-
-interface ImageItem {
-  id: string;
-  tags: string[];
-  size: number;
-  created: number;
-  containers?: string[];
-  architecture?: string;
-}
 
 const images = ref<ImageItem[]>([])
 const currentFilter = ref<'all' | 'dangling'>('all')
 const loading = ref<boolean>(false)
 const pruning = ref<boolean>(false)
 
-// 虚悬镜像数量 (RepoTags 为 <none>:<none>)
 const danglingCount = computed(() => {
   return images.value.filter(img => isDangling(img)).length
 })
@@ -114,12 +103,11 @@ const filteredImages = computed(() => {
   })
 })
 
-
 const fetchImages = async () => {
   loading.value = true
   try {
-    const res = await axios.get(`${apiBase}/images`)
-    images.value = res.data || []
+    const data = await getImagesApi()
+    images.value = data || []
   } catch (err) {
     message.error('载入镜像清单失败')
   } finally {
@@ -127,7 +115,6 @@ const fetchImages = async () => {
   }
 }
 
-// Dangling Prune 清理
 const pruneImages = () => {
   dialog.warning({
     title: 'Prune 残留镜像清理',
@@ -135,48 +122,58 @@ const pruneImages = () => {
     positiveText: '确认清理',
     negativeText: '取消',
     onPositiveClick: () => {
-      return new Promise<void>(async (resolve, reject) => {
-        pruning.value = true
-        try {
-          const res = await axios.post(`${apiBase}/images/prune`)
-          const space = formatSize(res.data.space_reclaimed)
-          message.success(`清理完成，成功释放 ${space} 空间，共清理 ${res.data.deleted_count} 个残留镜像。`)
-          fetchImages()
-          resolve()
-        } catch (err: any) {
-          message.error('清理失败: ' + (err.response?.data?.error || err.message))
-          reject()
-        } finally {
-          pruning.value = false
-        }
-      })
+      executePrune()
     }
   })
 }
 
-// 彻底删除指定镜像
-const deleteImage = (id: string) => {
+const parseErrorMessage = (err: any): string => {
+  if (err?.response?.data) {
+    const d = err.response.data
+    if (typeof d === 'string') return d
+    if (typeof d === 'object' && (d.error || d.message)) return d.error || d.message
+  }
+  if (err?.message) return err.message
+  return '未知错误'
+}
+
+const executePrune = async () => {
+  pruning.value = true
+  try {
+    const res = await pruneImagesApi()
+    const space = formatSize(res.space_reclaimed)
+    message.success(`清理完成，成功释放 ${space} 空间，共清理 ${res.deleted_count} 个残留镜像。`)
+    fetchImages()
+  } catch (err: any) {
+    message.error(`清理无用虚悬镜像失败: ${parseErrorMessage(err)}`)
+  } finally {
+    pruning.value = false
+  }
+}
+
+const deleteImage = (id: string, tag?: string) => {
+  const displayTag = tag && tag !== '<none>:<none>' ? tag : id.slice(0, 12)
   dialog.warning({
     title: '确认删除镜像',
-    content: '如果该镜像正被某些活动容器使用，删除可能会报错或导致关联服务失效。确认强制删除吗？',
+    content: `确认删除镜像 [${displayTag}] 吗？如果该镜像正被活动容器依赖，删除可能会报错。`,
     positiveText: '确认删除',
     negativeText: '取消',
     onPositiveClick: () => {
-      return new Promise<void>(async (resolve, reject) => {
-        try {
-          await axios.delete(`${apiBase}/image`, { params: { id } })
-          message.success('镜像已成功删除')
-          fetchImages()
-          resolve()
-        } catch (err: any) {
-          message.error('删除镜像失败: ' + (err.response?.data?.error || err.message))
-          reject()
-        }
-      })
+      executeDeleteImage(id, displayTag)
     }
   })
 }
 
+const executeDeleteImage = async (id: string, displayTag?: string) => {
+  const targetName = displayTag || id.slice(0, 12)
+  try {
+    await deleteImageApi(id)
+    message.success(`已成功删除镜像 [${targetName}]`)
+    fetchImages()
+  } catch (err: any) {
+    message.error(`删除镜像 [${targetName}] 失败: ${parseErrorMessage(err)}`)
+  }
+}
 
 const formatSize = (bytes: number): string => {
   if (bytes === 0) return '0 B'
@@ -185,7 +182,6 @@ const formatSize = (bytes: number): string => {
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
-
 
 onMounted(() => {
   fetchImages()

@@ -1,13 +1,19 @@
 import { ref, nextTick, onScopeDispose } from 'vue'
-import { useMessage, useDialog } from 'naive-ui'
-import axios from 'axios'
 import wsService from '../utils/websocket'
 import { copyToClipboard as copyToClipboardUtil } from '../utils/clipboard'
+import { message as discreteMessage } from '../utils/discrete'
+import {
+  updateContainerApi,
+  getContainerLogsApi,
+  deferContainerApi,
+  undeferContainerApi,
+  startContainerApi,
+  stopContainerApi,
+  restartContainerApi,
+  checkContainerApi
+} from '../api/container'
 
-export function useContainerActions(apiBase = '/app/docker-updater/api') {
-  const message = useMessage()
-  const dialog = useDialog()
-
+export function useContainerActions() {
   const operatingContainers = ref<Set<string>>(new Set())
   const logModalVisible = ref<boolean>(false)
   const logLines = ref<string[]>([])
@@ -28,53 +34,42 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
 
   let activeUnsubscribeLogs: (() => void) | null = null
 
-  // 缩略哈希算法
   const shortDigest = (digest: string) => {
     if (!digest) return ''
-    if (digest.startsWith('sha256:')) {
-      return digest.slice(7, 19)
-    }
-    return digest.slice(0, 12)
+    return digest.startsWith('sha256:') ? digest.slice(7, 19) : digest.slice(0, 12)
   }
 
-  // 复制文本至剪贴板
   const copyToClipboard = (text: string, label: string = '镜像名称') => {
-    return copyToClipboardUtil(text, label, message)
+    return copyToClipboardUtil(text, label, discreteMessage)
   }
 
-  // 升级单个容器
   const updateContainer = (name: string, targetImage?: string) => {
     logLines.value = []
     logModalVisible.value = true
     logRunning.value = true
 
-    const url = targetImage
-      ? `${apiBase}/update/${name}?target_image=${encodeURIComponent(targetImage)}`
-      : `${apiBase}/update/${name}`
-
-    axios.get(url).catch(() => {
-      message?.error('触发升级失败')
-      logRunning.value = false
-    })
+    updateContainerApi(name, targetImage)
 
     if (activeUnsubscribeLogs) activeUnsubscribeLogs()
     activeUnsubscribeLogs = wsService.subscribeLogs(name, ({ message: msg }) => {
       logLines.value.push(msg)
       scrollTerminal()
-      if (msg.includes('任务全部完成') || msg.includes('已成功') || msg.includes('恢复成功') || msg.includes('[ERROR]')) {
+      if (msg.includes('已成功') || msg.includes('恢复成功') || msg.includes('任务全部完成')) {
         logRunning.value = false
+        discreteMessage.success(`容器 ${name} 升级成功`)
+      } else if (msg.includes('[ERROR]')) {
+        logRunning.value = false
+        discreteMessage.error(`容器 ${name} 升级失败，详情查看日志`)
       }
     })
   }
 
-  // 批量升级
   const startBulkUpdate = async (targets: string[], onClearSelection?: () => void) => {
     if (targets.length === 0) return
 
     logLines.value = []
     logModalVisible.value = true
     logRunning.value = true
-
     logLines.value.push(`[INFO] 批量升级开始，队列总数: ${targets.length}`)
 
     for (let i = 0; i < targets.length; i++) {
@@ -84,7 +79,7 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
       scrollTerminal()
 
       await new Promise<void>((resolve) => {
-        axios.get(`${apiBase}/update/${name}`).catch(() => {
+        updateContainerApi(name).catch(() => {
           logLines.value.push(`[ERROR] 触发容器 ${name} 升级失败`)
           resolve()
         })
@@ -106,18 +101,29 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     if (onClearSelection) onClearSelection()
   }
 
-  // 获取运行日志
+  const parseErrorMessage = (err: any): string => {
+    if (err?.response?.data) {
+      const d = err.response.data
+      if (typeof d === 'string') return d
+      if (typeof d === 'object' && (d.error || d.message)) return d.error || d.message
+    }
+    if (err?.message) {
+      if (err.message.includes('timeout of') && err.message.includes('exceeded')) return '请求超时'
+      return err.message
+    }
+    return '未知错误'
+  }
+
   const showLogs = async (name: string) => {
     try {
-      const res = await axios.get(`${apiBase}/container/${name}/logs`)
-      diagnosticsLogs.value = res.data.logs || '未检索到输出日志'
+      const data = await getContainerLogsApi(name)
+      diagnosticsLogs.value = data.logs || '未检索到输出日志'
       diagnosticsVisible.value = true
-    } catch (err) {
-      message?.error('获取容器日志失败')
+    } catch (err: any) {
+      discreteMessage.error(`获取容器 ${name} 日志失败: ${parseErrorMessage(err)}`)
     }
   }
 
-  // 暂挂控制
   const openDeferModal = (name: string) => {
     deferTarget.value = name
     deferDays.value = 7
@@ -125,35 +131,36 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
   }
 
   const submitDefer = async (onSuccess?: () => void) => {
+    const target = deferTarget.value
+    const days = deferDays.value
+    deferModalVisible.value = false
     try {
-      await axios.post(`${apiBase}/defer/${deferTarget.value}`, { days: deferDays.value })
-      message?.success(`已暂挂服务 ${deferTarget.value} 的版本检测`)
-      deferModalVisible.value = false
+      await deferContainerApi(target, days)
+      discreteMessage.success(`已暂挂服务 ${target} 的版本检测`)
       if (onSuccess) onSuccess()
-    } catch (err) {
-      message?.error('暂挂失败')
+    } catch (err: any) {
+      discreteMessage.error(`暂挂服务 ${target} 失败: ${parseErrorMessage(err)}`)
     }
   }
 
   const undeferContainer = async (name: string, onSuccess?: () => void) => {
     try {
-      await axios.post(`${apiBase}/undefer/${name}`)
-      message?.success('已恢复版本正常检测')
+      await undeferContainerApi(name)
+      discreteMessage.success(`已恢复服务 ${name} 版本正常检测`)
       if (onSuccess) onSuccess()
-    } catch (err) {
-      message?.error('恢复检测失败')
+    } catch (err: any) {
+      discreteMessage.error(`恢复服务 ${name} 检测失败: ${parseErrorMessage(err)}`)
     }
   }
 
-  // 容器生命周期 API
   const startContainer = async (name: string) => {
     const actionKey = `${name}:start`
     operatingContainers.value.add(actionKey)
     try {
-      await axios.post(`${apiBase}/container/${name}/start`, null, { timeout: 20000 })
-      message?.success(`已成功启动容器 ${name}`)
-    } catch {
-      message?.error(`启动容器 ${name} 失败`)
+      await startContainerApi(name)
+      discreteMessage.success(`已成功启动容器 ${name}`)
+    } catch (err: any) {
+      discreteMessage.error(`启动容器 ${name} 失败: ${parseErrorMessage(err)}`)
     } finally {
       operatingContainers.value.delete(actionKey)
     }
@@ -163,10 +170,10 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     const actionKey = `${name}:stop`
     operatingContainers.value.add(actionKey)
     try {
-      await axios.post(`${apiBase}/container/${name}/stop`, null, { timeout: 15000 })
-      message?.success(`已成功停止容器 ${name}`)
-    } catch {
-      message?.error(`停止容器 ${name} 失败`)
+      await stopContainerApi(name)
+      discreteMessage.success(`已成功停止容器 ${name}`)
+    } catch (err: any) {
+      discreteMessage.error(`停止容器 ${name} 失败: ${parseErrorMessage(err)}`)
     } finally {
       operatingContainers.value.delete(actionKey)
     }
@@ -176,24 +183,23 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
     const actionKey = `${name}:restart`
     operatingContainers.value.add(actionKey)
     try {
-      await axios.post(`${apiBase}/container/${name}/restart`, null, { timeout: 25000 })
-      message?.success(`已成功重启容器 ${name}`)
-    } catch {
-      message?.error(`重启容器 ${name} 失败`)
+      await restartContainerApi(name)
+      discreteMessage.success(`已成功重启容器 ${name}`)
+    } catch (err: any) {
+      discreteMessage.error(`重启容器 ${name} 失败: ${parseErrorMessage(err)}`)
     } finally {
       operatingContainers.value.delete(actionKey)
     }
   }
 
-  // 检查单个容器更新（异步触发，结果由 WS 推送刷新）
   const checkContainer = async (name: string) => {
     const actionKey = `${name}:check`
     operatingContainers.value.add(actionKey)
     try {
-      await axios.post(`${apiBase}/check/${name}`)
-      message?.info(`容器 ${name} 版本检测已触发，结果稍后自动刷新`)
-    } catch {
-      message?.error(`触发容器 ${name} 版本检测失败`)
+      await checkContainerApi(name)
+      discreteMessage.info(`容器 ${name} 版本检测已触发，结果稍后自动刷新`)
+    } catch (err: any) {
+      discreteMessage.error(`触发容器 ${name} 版本检测失败: ${parseErrorMessage(err)}`)
     } finally {
       operatingContainers.value.delete(actionKey)
     }
@@ -224,9 +230,7 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
   }
 
   try {
-    onScopeDispose(() => {
-      cleanup()
-    })
+    onScopeDispose(cleanup)
   } catch (e) {
     // 忽略非组件上下文调用的异常
   }
@@ -240,7 +244,7 @@ export function useContainerActions(apiBase = '/app/docker-updater/api') {
 
   const submitUpdateVersion = () => {
     if (!updateVersionValue.value.trim()) {
-      message?.warning('请输入要升级的目标版本或镜像名')
+      discreteMessage.warning('请输入要升级的目标版本或镜像名')
       return
     }
     const target = updateVersionTarget.value
