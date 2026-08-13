@@ -90,10 +90,10 @@
 
                 <div class="flex items-center gap-2 mt-1 min-w-0 text-[11px]">
                   <span
-                    class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 font-semibold text-slate-500 border border-slate-200/40">
+                    class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 font-semibold text-slate-500 border border-slate-200/40 shrink-0 whitespace-nowrap">
                     {{ project.containers.length }} 服务
                   </span>
-                  <span v-if="project.working_dir" class="font-mono text-slate-400 truncate max-w-md"
+                  <span v-if="project.working_dir" class="font-mono text-slate-400 truncate min-w-0 flex-1"
                     :title="project.working_dir">
                     {{ project.working_dir }}
                   </span>
@@ -103,24 +103,34 @@
 
             <!-- 项目级控制按钮组 -->
             <div class="shrink-0">
-              <n-space :size="10" align="center">
+              <n-space :size="8" align="center" class="flex-wrap">
+                <!-- 按钮 1: 启动/停止 动态切换 -->
                 <n-button v-if="project.status === 'running' || project.status === 'partial'" size="small" round
                   secondary type="error" class="active-scale font-medium border border-rose-200/60 shadow-2xs"
                   @click="handleBatchLifecycle(project, 'stop')">
-                  停止项目
+                  停止
                 </n-button>
                 <n-button v-else size="small" round secondary type="success"
                   class="active-scale font-medium border border-emerald-200/60 shadow-2xs"
                   @click="handleBatchLifecycle(project, 'start')">
-                  启动项目
+                  启动
                 </n-button>
 
+                <!-- 按钮 2: 重启 -->
                 <n-button size="small" round secondary
                   class="bg-slate-50 border border-slate-200 text-slate-700 active-scale font-medium shadow-2xs"
                   @click="handleBatchLifecycle(project, 'restart')">
-                  重启项目
+                  重启
                 </n-button>
 
+                <!-- 按钮 3: 重建 -->
+                <n-button size="small" round secondary type="warning"
+                  class="active-scale font-medium border border-amber-200/60 shadow-2xs"
+                  @click="handleBatchLifecycle(project, 'recreate')">
+                  重建
+                </n-button>
+
+                <!-- 按钮 4: 编辑 -->
                 <n-button size="small" round secondary
                   class="bg-slate-50 border border-slate-200 text-slate-700 active-scale font-medium shadow-2xs"
                   @click="openEditor(project.name)">
@@ -251,8 +261,8 @@ const openEditor = (projectName: string) => {
   showEditorModal.value = true
 }
 
-const handleBatchLifecycle = (project: ComposeProject, action: 'start' | 'stop' | 'restart') => {
-  const actionText = action === 'start' ? '启动' : action === 'stop' ? '停止' : '重启'
+const handleBatchLifecycle = (project: ComposeProject, action: 'start' | 'stop' | 'restart' | 'recreate') => {
+  const actionText = action === 'start' ? '启动' : action === 'stop' ? '停止' : action === 'restart' ? '重启' : '重建'
   dialog.warning({
     title: `确认${actionText}项目`,
     content: `确定要对项目 [${project.name}] 下的 ${project.containers.length} 个服务执行 ${actionText} 操作吗？`,
@@ -264,7 +274,7 @@ const handleBatchLifecycle = (project: ComposeProject, action: 'start' | 'stop' 
   })
 }
 
-const executeLifecycle = async (projectName: string, action: 'start' | 'stop' | 'restart', actionText: string) => {
+const executeLifecycle = async (projectName: string, action: 'start' | 'stop' | 'restart' | 'recreate', actionText: string) => {
   try {
     await dockerStore.handleComposeLifecycle(projectName, action)
     message.success(`已成功下发 Compose 项目 [${projectName}] 的 ${actionText} 命令`)

@@ -48,13 +48,15 @@ export function useContainerActions() {
     logModalVisible.value = true
     logRunning.value = true
 
+    discreteMessage.info('升级任务已启动，请查看任务日志确认最终结果')
+
     updateContainerApi(name, targetImage)
 
     if (activeUnsubscribeLogs) activeUnsubscribeLogs()
     activeUnsubscribeLogs = wsService.subscribeLogs(name, ({ message: msg }) => {
       logLines.value.push(msg)
       scrollTerminal()
-      if (msg.includes('已成功') || msg.includes('恢复成功') || msg.includes('任务全部完成')) {
+      if (msg.includes('恢复成功') || msg.includes('任务全部完成')) {
         logRunning.value = false
         discreteMessage.success(`容器 ${name} 升级成功`)
       } else if (msg.includes('[ERROR]')) {
@@ -71,6 +73,7 @@ export function useContainerActions() {
     logModalVisible.value = true
     logRunning.value = true
     logLines.value.push(`[INFO] 批量升级开始，队列总数: ${targets.length}`)
+    discreteMessage.info('升级任务已启动，请查看任务日志确认最终结果')
 
     for (let i = 0; i < targets.length; i++) {
       const name = targets[i]
@@ -87,7 +90,7 @@ export function useContainerActions() {
         const unsub = wsService.subscribeLogs(name, ({ message: msg }) => {
           logLines.value.push(msg)
           scrollTerminal()
-          if (msg.includes('任务全部完成') || msg.includes('已成功') || msg.includes('恢复成功') || msg.includes('[ERROR]')) {
+          if (msg.includes('任务全部完成') || msg.includes('恢复成功') || msg.includes('[ERROR]')) {
             unsub()
             resolve()
           }

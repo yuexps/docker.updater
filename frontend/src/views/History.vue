@@ -187,7 +187,7 @@ const executeDeleteHistory = async (id: number, name: string) => {
 const clearAllHistory = () => {
   dialog.warning({
     title: '确认清空历史',
-    content: '确认清空全部升级历史记录吗？该操作同时会彻底删除本地产生的全部日志文件，且不可恢复。',
+    content: '确认清空全部升级历史记录吗？该操作同时会删除本地产生的全部日志文件，且不可恢复。',
     positiveText: '确认清空',
     negativeText: '取消',
     onPositiveClick: () => {

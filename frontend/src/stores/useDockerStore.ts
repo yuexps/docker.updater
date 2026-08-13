@@ -125,8 +125,8 @@ export const useDockerStore = defineStore('dockerStore', {
       }
     },
 
-    // 发送 Compose 生命周期控制 (start/stop/restart)
-    async handleComposeLifecycle(projectName: string, action: 'start' | 'stop' | 'restart') {
+    // 发送 Compose 生命周期控制 (start/stop/restart/recreate)
+    async handleComposeLifecycle(projectName: string, action: 'start' | 'stop' | 'restart' | 'recreate') {
       await handleComposeLifecycleApi(projectName, action)
       await this.fetchComposeProjects(true)
     }

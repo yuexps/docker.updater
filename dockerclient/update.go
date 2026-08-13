@@ -239,7 +239,7 @@ func ApplyUpdate(ctx context.Context, name string, targetImage string, opts Upda
 		}
 	}
 
-	logChan <- "[INFO] 正在优雅停止旧容器..."
+	logChan <- "[INFO] 正在停止旧容器..."
 	stopTimeout := 30
 	_ = cli.ContainerStop(ctx, oldID, container.StopOptions{Timeout: &stopTimeout})
 
@@ -322,7 +322,7 @@ func ApplyUpdate(ctx context.Context, name string, targetImage string, opts Upda
 	return nil
 }
 
-// _rollback 使用旧镜像 Spec 彻底重建并还原旧容器
+// _rollback 使用旧镜像 Spec 重建并还原旧容器
 func _rollback(ctx context.Context, cli *client.Client, oldImageID, newImageID, imageName, tempBakTag, name string, inspect types.ContainerJSON, networkingConfig *network.NetworkingConfig, logChan chan<- string) {
 	logChan <- "[INFO] 正在执行回滚，重建恢复原服务..."
 
@@ -335,7 +335,7 @@ func _rollback(ctx context.Context, cli *client.Client, oldImageID, newImageID, 
 		}
 	}
 
-	// 2. 物理卸载清理故障新镜像
+	// 2. 清理故障新镜像
 	if newImageID != "" && newImageID != oldImageID {
 		logChan <- "[INFO] 正在清理拉取到的故障新镜像..."
 		_, _ = cli.ImageRemove(ctx, newImageID, types.ImageRemoveOptions{Force: false, PruneChildren: true})

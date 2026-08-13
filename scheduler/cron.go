@@ -142,7 +142,10 @@ func RunScheduledCheck(isInitial bool) {
 		return
 	}
 
-	_ = db.SetSetting("last_check_time", time.Now().Format("2006-01-02 15:04:05"))
+	_ = db.SetSetting("last_check_time", time.Now().UTC().Format(time.RFC3339))
+	if service.GlobalObserver != nil {
+		service.GlobalObserver.OnStatusChange()
+	}
 
 	var countAfter int64
 	db.DB.Model(&db.AvailableUpdate{}).Where("has_update = ?", true).Count(&countAfter)

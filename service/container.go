@@ -16,6 +16,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/network"
 )
 
 var isScanning atomic.Bool
@@ -488,6 +489,8 @@ func BatchComposeLifecycle(ctx context.Context, projectName string, action strin
 		actionText = "停止"
 	case "restart":
 		actionText = "重启"
+	case "recreate":
+		actionText = "重建"
 	}
 
 	timeoutVal := 10
@@ -514,6 +517,37 @@ func BatchComposeLifecycle(ctx context.Context, projectName string, action strin
 				opErr = cli.ContainerStop(ctx, cName, container.StopOptions{Timeout: &timeoutVal})
 			case "restart":
 				opErr = cli.ContainerRestart(ctx, cName, container.StopOptions{Timeout: &timeoutVal})
+			case "recreate":
+				inspect, inspErr := cli.ContainerInspect(ctx, cName)
+				if inspErr != nil {
+					opErr = fmt.Errorf("读取容器 %s 配置失败: %v", cName, inspErr)
+				} else {
+					_ = cli.ContainerStop(ctx, cName, container.StopOptions{Timeout: &timeoutVal})
+					_ = cli.ContainerRemove(ctx, cName, types.ContainerRemoveOptions{Force: true})
+
+					networkingConfig := &network.NetworkingConfig{
+						EndpointsConfig: make(map[string]*network.EndpointSettings),
+					}
+					for netName, netConfig := range inspect.NetworkSettings.Networks {
+						var ipamConfig *network.EndpointIPAMConfig
+						if netConfig.IPAMConfig != nil {
+							ipamConfig = &network.EndpointIPAMConfig{
+								IPv4Address: netConfig.IPAMConfig.IPv4Address,
+								IPv6Address: netConfig.IPAMConfig.IPv6Address,
+							}
+						}
+						networkingConfig.EndpointsConfig[netName] = &network.EndpointSettings{
+							IPAMConfig: ipamConfig,
+							Aliases:    netConfig.Aliases,
+						}
+					}
+					newC, createErr := cli.ContainerCreate(ctx, inspect.Config, inspect.HostConfig, networkingConfig, nil, cName)
+					if createErr != nil {
+						opErr = fmt.Errorf("重建容器 %s 失败: %v", cName, createErr)
+					} else {
+						opErr = cli.ContainerStart(ctx, newC.ID, types.ContainerStartOptions{})
+					}
+				}
 			default:
 				opErr = fmt.Errorf("不支持的生命周期操作类型: %s", action)
 			}

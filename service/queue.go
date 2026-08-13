@@ -227,6 +227,8 @@ func (q *QueueManager) worker() {
 		q.active = task
 		q.mu.Unlock()
 
+		utils.LogInfo("任务队列: 开始执行容器 %s 的升级更新...", task.ContainerName)
+
 		if GlobalObserver != nil {
 			GlobalObserver.OnStatusChange()
 		}
@@ -288,6 +290,7 @@ func (q *QueueManager) worker() {
 		q.mu.Lock()
 		if err != nil {
 			task.SetStatus("failed")
+			utils.LogError("任务队列: 容器 %s 升级更新失败: %v", task.ContainerName, err)
 			if task.Type == TaskUpdate && task.IsAuto {
 				d := db.DeferredUpdate{
 					ContainerName: task.ContainerName,
@@ -298,6 +301,7 @@ func (q *QueueManager) worker() {
 			}
 		} else {
 			task.SetStatus("success")
+			utils.LogSuccess("任务队列: 容器 %s 升级更新成功", task.ContainerName)
 		}
 		q.active = nil
 		q.mu.Unlock()

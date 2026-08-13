@@ -7,7 +7,7 @@ export const getComposeProjectsApi = (): Promise<ComposeProject[]> => {
 }
 
 // 变更 Compose 项目生命周期状态
-export const handleComposeLifecycleApi = (project: string, action: 'start' | 'stop' | 'restart'): Promise<any> => {
+export const handleComposeLifecycleApi = (project: string, action: 'start' | 'stop' | 'restart' | 'recreate'): Promise<any> => {
   return apiClient.post('/compose/lifecycle', { project, action })
 }
 

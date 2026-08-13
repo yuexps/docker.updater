@@ -144,7 +144,7 @@ const handleSave = async () => {
   saving.value = true
   try {
     await saveComposeContentApi(props.projectName, content.value)
-    message.success(`项目 ${props.projectName} 配置文件保存成功！请点击“重启项目”以应用最新配置。`)
+    message.success(`项目 ${props.projectName} 配置文件保存成功！请点击【重建】以应用最新配置。`)
     emit('saved')
     emit('close')
   } catch (err: any) {

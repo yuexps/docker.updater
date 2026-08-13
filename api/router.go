@@ -177,11 +177,11 @@ func apiCheck(c *gin.Context) {
 		return
 	}
 
-	utils.LogInfo("手动镜像更新比对比对检查已被用户触发...")
+	utils.LogInfo("触发容器版本比对检查...")
 	go func() {
 		defer service.EndScan()
 		ctx := context.Background()
-		err := dockerclient.ScanLocalHostForUpdates(ctx, func(res dockerclient.UpdateCheckResult) {
+		_ = dockerclient.ScanLocalHostForUpdates(ctx, func(res dockerclient.UpdateCheckResult) {
 			updateEntry := db.AvailableUpdate{
 				ContainerName:  res.ContainerName,
 				Image:          res.Image,
@@ -198,12 +198,10 @@ func apiCheck(c *gin.Context) {
 				service.GlobalObserver.OnStatusChange()
 			}
 		})
-		if err == nil {
-			if service.GlobalObserver != nil {
-				service.GlobalObserver.OnStatusChange()
-			}
-		}
 		_ = db.SetSetting("last_check_time", time.Now().UTC().Format(time.RFC3339))
+		if service.GlobalObserver != nil {
+			service.GlobalObserver.OnStatusChange()
+		}
 	}()
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
@@ -548,7 +546,7 @@ func apiUpdateLogGet(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"found": true, "logs": lines})
 }
 
-// apiUpdateLogDelete 物理清除指定容器的升级日志文件
+// apiUpdateLogDelete 清除指定容器的升级日志文件
 func apiUpdateLogDelete(c *gin.Context) {
 	name := c.Param("name")
 	if matched, _ := regexp.MatchString(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`, name); !matched {
@@ -557,11 +555,11 @@ func apiUpdateLogDelete(c *gin.Context) {
 	}
 	logFilePath := utils.GetLogFilePath(name)
 	if err := os.Remove(logFilePath); err != nil && !os.IsNotExist(err) {
-		utils.LogError("物理删除指定容器升级日志文件失败: %s", err.Error())
+		utils.LogError("删除容器 %s 升级日志文件失败: %s", name, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	utils.LogSuccess("物理删除指定容器升级日志文件成功: %s", name)
+	utils.LogSuccess("删除容器 %s 升级日志文件成功", name)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -686,7 +684,7 @@ func apiImagesGet(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// apiImageDelete 物理删除指定镜像
+// apiImageDelete 删除指定镜像
 func apiImageDelete(c *gin.Context) {
 	id := c.Query("id")
 	if id == "" {
@@ -732,12 +730,12 @@ func apiImageDelete(c *gin.Context) {
 	// 只有在明确传递 force=true 时才调用 ImageRemove 并指定 Force
 	_, err = cli.ImageRemove(c, id, types.ImageRemoveOptions{Force: force, PruneChildren: true})
 	if err != nil {
-		utils.LogError("手动物理删除镜像 %s 失败: %s", id, err.Error())
+		utils.LogError("删除镜像 %s 失败: %s", id, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	utils.LogSuccess("手动物理删除镜像 %s 成功", id)
+	utils.LogSuccess("删除镜像 %s 成功", id)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -826,17 +824,17 @@ func apiSystemLogsGet(c *gin.Context) {
 
 }
 
-// apiSystemLogsDelete 物理清空全局 info.log 日志内容
+// apiSystemLogsDelete 清空全局 info.log 日志内容
 func apiSystemLogsDelete(c *gin.Context) {
 	logFilePath := filepath.Join(utils.GetPkgVarDir(), "info.log")
 	// 使用 O_TRUNC 打开以截断清空内容，防止文件写句柄失效
 	err := os.WriteFile(logFilePath, []byte(""), 0644)
 	if err != nil {
-		utils.LogError("物理清空系统日志失败: %s", err.Error())
+		utils.LogError("清空系统日志失败: %s", err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	utils.LogSuccess("物理清空系统日志成功")
+	utils.LogSuccess("清空系统日志成功")
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
@@ -933,11 +931,11 @@ func apiContainerStart(c *gin.Context) {
 	defer cli.Close()
 
 	if err := cli.ContainerStart(c, name, types.ContainerStartOptions{}); err != nil {
-		utils.LogError("手动启动容器 %s 失败: %s", name, err.Error())
+		utils.LogError("启动容器 %s 失败: %s", name, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	utils.LogSuccess("手动启动容器 %s 成功", name)
+	utils.LogSuccess("启动容器 %s 成功", name)
 	go GlobalHub.BroadcastStatus()
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
@@ -966,11 +964,11 @@ func apiContainerStop(c *gin.Context) {
 	defer cli.Close()
 
 	if err := cli.ContainerStop(c, name, container.StopOptions{Timeout: &timeoutVal}); err != nil {
-		utils.LogError("手动停止容器 %s 失败: %s", name, err.Error())
+		utils.LogError("停止容器 %s 失败: %s", name, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	utils.LogSuccess("手动停止容器 %s 成功", name)
+	utils.LogSuccess("停止容器 %s 成功", name)
 	go GlobalHub.BroadcastStatus()
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
@@ -999,11 +997,11 @@ func apiContainerRestart(c *gin.Context) {
 	defer cli.Close()
 
 	if err := cli.ContainerRestart(c, name, container.StopOptions{Timeout: &timeoutVal}); err != nil {
-		utils.LogError("手动重启容器 %s 失败: %s", name, err.Error())
+		utils.LogError("重启容器 %s 失败: %s", name, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	utils.LogSuccess("手动重启容器 %s 成功", name)
+	utils.LogSuccess("重启容器 %s 成功", name)
 	go GlobalHub.BroadcastStatus()
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
@@ -1056,11 +1054,11 @@ func apiHistoryDelete(c *gin.Context) {
 		return
 	}
 
-	// 3. 删除对应的物理日志文件
+	// 3. 删除对应的日志文件
 	logFilePath := utils.GetLogFilePath(hist.ContainerName)
 	_ = os.Remove(logFilePath)
 
-	utils.LogSuccess("手动删除容器 %s 的升级历史记录成功", hist.ContainerName)
+	utils.LogSuccess("删除容器 %s 的升级历史记录成功", hist.ContainerName)
 	// 4. 广播给所有的前端客户端更新状态
 	go GlobalHub.BroadcastStatus()
 

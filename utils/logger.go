@@ -217,10 +217,6 @@ func (l *CentralLogger) Dispatch(event LogEvent) {
 		fmt.Println(formattedLine)
 	}
 
-	if l.sysLogWriter != nil {
-		_, _ = l.sysLogWriter.Write([]byte(formattedLine + "\n"))
-	}
-
 	if event.Container != "" {
 		logsDir := filepath.Join(l.pkgVar, "logs")
 		_ = os.MkdirAll(logsDir, 0755)
@@ -229,6 +225,10 @@ func (l *CentralLogger) Dispatch(event LogEvent) {
 		if err == nil {
 			_, _ = f.WriteString(event.TaskLogFormat() + "\n")
 			_ = f.Close()
+		}
+	} else {
+		if l.sysLogWriter != nil {
+			_, _ = l.sysLogWriter.Write([]byte(formattedLine + "\n"))
 		}
 	}
 

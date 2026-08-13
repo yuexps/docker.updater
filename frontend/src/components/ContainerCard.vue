@@ -247,7 +247,7 @@
       </n-dropdown>
     </div>
 
-    <!-- 隐藏测宽影子 DOM 容器：仅限 ResizeObserver 静态测量实际字号/字体的按钮物理边框 -->
+    <!-- 隐藏测宽影子 DOM 容器：仅限 ResizeObserver 静态测量实际字号/字体的按钮边框 -->
     <div class="absolute opacity-0 pointer-events-none select-none -z-50 flex items-center gap-2"
       style="top: -9999px; left: -9999px;">
       <n-button :id="container.name + '-m2'" size="small" round secondary>测试</n-button>
@@ -325,7 +325,7 @@ interface ActionItem {
   priority: number
 }
 
-// 物理容器尺寸实时测量
+// 容器组件尺寸实时测量
 const actionsContainerRef = ref<HTMLDivElement | null>(null)
 const containerWidth = ref(350) // 预设默认容器宽度
 let resizeObserver: ResizeObserver | null = null
