@@ -54,7 +54,8 @@
 
 ## 自动化构建与发布
 项目配置了 GitHub Actions 自动化工作流：
-* 当有代码推送（push）至 `main` 分支或手动通过 `workflow_dispatch` 触发时，将自动构建前端与交叉编译前后端单二进制。
+* 手动通过 `workflow_dispatch` 触发。
+* 触发后自动构建前端与交叉编译前后端单二进制。
 * 自动打包 `docker.updater-x86.fpk` 与 `docker.updater-arm.fpk` 以及对应的原生 Linux 独立二进制（`docker-updater-linux-amd64` 与 `docker-updater-linux-arm64`）。
 * 根据 `fnpack/manifest` 中的语义化版本自动创建 GitHub Release、自动生成 Commit 更新日志。
 * 自动计算各平台安装包的 SHA256 与文件大小，并同步更新推送至 `yuexps/FnDepot` 第三方应用商店源（需配置 `GH_PAT` Secret）。

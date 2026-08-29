@@ -1,9 +1,6 @@
 name: Build and Release
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       publish_release:
@@ -152,7 +149,7 @@ jobs:
           cat release_body.md
 
       - name: Delete Existing Release and Tag (if exists)
-        if: ${{ github.event_name == 'push' || github.event.inputs.publish_release == 'true' || github.event.inputs.publish_release == true }}
+        if: ${{ github.event.inputs.publish_release == 'true' || github.event.inputs.publish_release == true }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -166,7 +163,7 @@ jobs:
           git tag -d "$TAG_NAME" 2>/dev/null || true
 
       - name: Create GitHub Release
-        if: ${{ github.event_name == 'push' || github.event.inputs.publish_release == 'true' || github.event.inputs.publish_release == true }}
+        if: ${{ github.event.inputs.publish_release == 'true' || github.event.inputs.publish_release == true }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ steps.manifest.outputs.version }}"
@@ -182,7 +179,7 @@ jobs:
             docker-updater-linux-arm64
 
       - name: Update FnDepot fnpack.json
-        if: ${{ github.event_name == 'push' || github.event.inputs.publish_release == 'true' || github.event.inputs.publish_release == true }}
+        if: ${{ github.event.inputs.publish_release == 'true' || github.event.inputs.publish_release == true }}
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
           VERSION: ${{ steps.manifest.outputs.version }}
