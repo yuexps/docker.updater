@@ -34,13 +34,27 @@
           </div>
 
           <div
-            class="border-t border-hairline pt-4 flex items-start justify-between gap-4">
-            <div class="min-w-0 flex-1">
-              <div class="text-[14px] font-bold text-slate-700 leading-snug">自动更新容器</div>
-              <div class="text-[12px] text-body-muted mt-1 leading-relaxed">每次定时检测发现新版本时，将自动为容器执行克隆升级。</div>
+            class="border-t border-hairline pt-4 flex flex-col gap-3">
+            <div class="flex items-start justify-between gap-4">
+              <div class="min-w-0 flex-1">
+                <div class="text-[14px] font-bold text-slate-700 leading-snug">自动更新容器</div>
+                <div class="text-[12px] text-body-muted mt-1 leading-relaxed">定时检测到新版本时，自动为选中的容器执行升级。</div>
+              </div>
+              <div class="shrink-0 pt-0.5">
+                <n-switch v-model:value="settings.auto_update_enabled" @update:value="autoSaveSettings" />
+              </div>
             </div>
-            <div class="shrink-0 pt-0.5">
-              <n-switch v-model:value="settings.auto_update_enabled" @update:value="autoSaveSettings" />
+
+            <div v-if="settings.auto_update_enabled">
+              <n-select
+                v-model:value="settings.auto_update_whitelist"
+                multiple
+                filterable
+                clearable
+                placeholder="选择需要自动更新的容器..."
+                :options="containerOptions"
+                @update:value="autoSaveSettings"
+              />
             </div>
           </div>
         </div>
@@ -409,8 +423,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, h } from 'vue'
-import { NButton, NSwitch, NSelect, NInput, NInputNumber, NModal, useDialog, NRadioGroup, NRadioButton } from 'naive-ui'
+import { ref, onMounted, onUnmounted, computed, h } from 'vue'
+import { NButton, NSwitch, NSelect, NInput, NInputNumber, NModal, useDialog, NRadioGroup, NRadioButton, NTag } from 'naive-ui'
+import { useDockerStore } from '../stores/useDockerStore'
 import {
   getSettingsApi,
   saveSettingsApi,
@@ -424,10 +439,11 @@ import {
 import { message } from '../utils/discrete'
 
 const dialog = useDialog()
-
+const dockerStore = useDockerStore()
 
 const settings = ref<SettingsData>({
   auto_update_enabled: false,
+  auto_update_whitelist: [],
   temp_mirrors: [],
   dockerhub_mirrors: [],
   ghcr_mirrors: [],
@@ -483,6 +499,31 @@ const webhookTemplateCheckTitle = computed(() => {
     default:
       return '自定义推送服务更新提醒模板'
   }
+})
+
+// 容器多选下拉选项（优先根据系统实时容器构建，并兼容已保存的白名单项）
+const containerOptions = computed(() => {
+  const optionsMap = new Map<string, { label: string; value: string }>()
+
+  dockerStore.containers.forEach((c) => {
+    optionsMap.set(c.name, {
+      label: c.name,
+      value: c.name
+    })
+  })
+
+  if (settings.value.auto_update_whitelist) {
+    settings.value.auto_update_whitelist.forEach((name) => {
+      if (!optionsMap.has(name)) {
+        optionsMap.set(name, {
+          label: name,
+          value: name
+        })
+      }
+    })
+  }
+
+  return Array.from(optionsMap.values())
 })
 
 const registries = ref<any[]>([])
@@ -599,6 +640,7 @@ const detectProvider = () => {
 }
 
 const sendTestNotification = async () => {
+  await flushPendingSave()
   if (settings.value.notify_type === 'email') {
     if (!settings.value.smtp_host || !settings.value.smtp_username || !settings.value.smtp_password || !settings.value.smtp_to) {
       message.warning('请先填写完整的邮件通知配置（SMTP 服务器、账号、授权码和收件人）')
@@ -661,6 +703,9 @@ const loadSettings = async () => {
   try {
     const data = await getSettingsApi()
     settings.value = data
+    if (!settings.value.auto_update_whitelist) {
+      settings.value.auto_update_whitelist = []
+    }
     if (!settings.value.dockerhub_mirrors) {
       settings.value.dockerhub_mirrors = settings.value.temp_mirrors || []
     }
@@ -701,12 +746,25 @@ const loadSettings = async () => {
   }
 }
 
+const flushPendingSave = async () => {
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+    autoSaveTimer = null
+    try {
+      await saveSettingsApi(settings.value)
+      saving.value = false
+    } catch {}
+  }
+}
+
 const autoSaveSettings = async () => {
   if (autoSaveTimer) {
     clearTimeout(autoSaveTimer)
+    autoSaveTimer = null
   }
   if (feedbackTimer) {
     clearTimeout(feedbackTimer)
+    feedbackTimer = null
   }
 
   feedbackText.value = '正在同步...'
@@ -714,20 +772,22 @@ const autoSaveSettings = async () => {
   saving.value = true
 
   autoSaveTimer = setTimeout(async () => {
+    autoSaveTimer = null
     try {
       await saveSettingsApi(settings.value)
       saving.value = false
       feedbackText.value = '配置已自动保存'
 
-      // 2.5秒后渐变淡出
       feedbackTimer = setTimeout(() => {
         showFeedback.value = false
+        feedbackTimer = null
       }, 2500)
     } catch (err) {
       saving.value = false
       feedbackText.value = '保存配置失败'
       feedbackTimer = setTimeout(() => {
         showFeedback.value = false
+        feedbackTimer = null
       }, 3000)
     }
   }, 300)
@@ -848,5 +908,18 @@ const executeDeleteRegistry = async (id: number, regName?: string) => {
 onMounted(() => {
   loadSettings()
   loadRegistries()
+})
+
+onUnmounted(() => {
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+    autoSaveTimer = null
+    // 组件卸载时若有未决防抖任务，立即安全持久化
+    saveSettingsApi(settings.value).catch(() => {})
+  }
+  if (feedbackTimer) {
+    clearTimeout(feedbackTimer)
+    feedbackTimer = null
+  }
 })
 </script>

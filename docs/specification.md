@@ -28,6 +28,7 @@ type Setting struct {
 }
 // 键映射:
 // - auto_update_enabled: 是否开启定时自动升级 ("true"/"false")
+// - auto_update_whitelist: 自动升级白名单容器名称列表 (JSON 数组，如 ["ddns-go"])
 // - temp_mirrors: 临时镜像加速源列表 (JSON 数组，如 ["https://mirror.com"])
 // - check_type: 定时检测周期类型 ("hour"/"day"/"week"/"month", 默认 "day")
 // - check_value: 定时检测周期数值 (整型，默认 1)
@@ -141,6 +142,7 @@ type RegistryCredential struct {
 
 ## 5. 事件循环与排队机制
 * **串行任务调度**: 任务处理器为单工循环。所有的升级任务和回滚任务排队推送至 `GlobalQueue` 执行。
+* **白名单自动升级过滤**: 定时检测命中新版本且开启自动更新时，系统仅将处于 `auto_update_whitelist` 白名单集合内且未受暂挂约束的容器加入升级排队，白名单之外的容器自动跳过。
 * **状态实时推送**: 任务队列修改、容器启停及更新流式日志均触发 WS 事件广播订阅的前端。
 * **WebSocket 保活控制**:
   - `readPump`: 接收到 `{"type": "ping"}` 消息时，在写入 `c.send` 时必须使用 `select-default` 分支防范阻塞。协程头部采用 `defer recover()` 防止在 unregister 关闭 channel 时引起 `send on closed channel` 致命写 panic。

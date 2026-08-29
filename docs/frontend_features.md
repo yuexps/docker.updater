@@ -149,7 +149,7 @@
 ### 3.7 系统设置中心 (Settings)
 * **参数配置表单**：
   - **更新轮询频率**：输入数值 `check_value` 配合单位 `check_type`（小时/天/周/月）。
-  - **定时自动升级**：开关 `auto_update_enabled`。当开启时，定时扫描到更新将直接加入升级队列。
+  - **定时自动升级与白名单**：开关 `auto_update_enabled`。当开启时展开自动更新白名单选择器（`auto_update_whitelist`），使用 Naive UI 原生 `NSelect` 支持多选搜索与标签管理；仅白名单内的容器在定时扫描到更新时才自动加入升级队列。
 * **通知通道配置**：
   - **开关控制**：`notify_enabled` 决定是否开启推送。
   - **通知类型**：邮件通知 (`email`) 和 Webhook 推送 (`webhook`)。

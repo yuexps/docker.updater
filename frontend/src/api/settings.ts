@@ -2,6 +2,7 @@ import apiClient from './client'
 
 export interface SettingsData {
   auto_update_enabled: boolean
+  auto_update_whitelist: string[]
   temp_mirrors: string[]
   dockerhub_mirrors: string[]
   ghcr_mirrors: string[]

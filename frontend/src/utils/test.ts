@@ -43,22 +43,45 @@ interface TaskItem {
 class SimulationDatabase {
   containers: MockContainer[] = []
   images: MockImage[] = []
-  settings = {
+  settings: Record<string, any> = {
     temp_mirrors: ['https://docker.m.daocloud.io', 'https://mirror.baidubce.com'],
     dockerhub_mirrors: ['https://docker.m.daocloud.io'],
-    ghcr_mirrors: [],
+    ghcr_mirrors: ['https://ghcr.nju.edu.cn'],
     check_type: 'day',
     check_value: 1,
-    auto_update_enabled: false,
+    auto_update_enabled: true,
+    auto_update_whitelist: ['nginx-app', 'web-api'],
     notify_enabled: false,
-    notify_type: 'email'
+    notify_type: 'email',
+    smtp_enabled: false,
+    smtp_host: 'smtp.qq.com',
+    smtp_port: '465',
+    smtp_username: 'notification@example.com',
+    smtp_password: '******',
+    smtp_ssl: true,
+    smtp_to: 'admin@example.com',
+    smtp_subject_template: '',
+    smtp_body_template: '',
+    smtp_subject_template_check: '',
+    smtp_body_template_check: '',
+    webhook_url: '',
+    webhook_method: 'POST',
+    webhook_type: 'custom',
+    webhook_template_custom: '',
+    webhook_template_wechat: '',
+    webhook_template_dingtalk: '',
+    webhook_template_feishu: '',
+    webhook_template_check_custom: '',
+    webhook_template_check_wechat: '',
+    webhook_template_check_dingtalk: '',
+    webhook_template_check_feishu: ''
   }
   registries: RegistryItem[] = []
   history: any[] = []
   updateLogs = new Map<string, string[]>()
   activeTask: TaskItem | null = null
   queuedTasks: TaskItem[] = []
-  lastCheckTime = '2026-07-09 12:00:00'
+  lastCheckTime = '2026-08-29 19:30:00'
   upgradeMode: 'success' | 'fail_pull' | 'fail_start' = 'success'
   isWSConnected = true
   composeConfigs: Map<string, string> = new Map()
@@ -74,7 +97,7 @@ class SimulationDatabase {
         image: 'nginx:alpine',
         status: 'update',
         defer_until: null,
-        checked_at: '2026-07-09 10:30',
+        checked_at: '2026-08-29 18:30',
         compose_project: 'web-cluster',
         running: true,
         local_digest: 'sha256:4f082ec15d862f1c84f3c0eb51b14a601859c402130386cfb8109bfcf9446d3e',
@@ -88,7 +111,7 @@ class SimulationDatabase {
         image: 'node:20-alpine',
         status: 'ok',
         defer_until: null,
-        checked_at: '2026-07-09 10:35',
+        checked_at: '2026-08-29 18:35',
         compose_project: 'web-cluster',
         running: true,
         local_digest: 'sha256:7f082ec15d862f1c84f3c0eb51b14a601859c402130386cfb8109bfcf9446d3e',
@@ -102,7 +125,7 @@ class SimulationDatabase {
         image: 'postgres:15-alpine',
         status: 'ok',
         defer_until: null,
-        checked_at: '2026-07-09 10:40',
+        checked_at: '2026-08-29 18:40',
         compose_project: 'db-stack',
         running: true,
         local_digest: 'sha256:1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
@@ -115,8 +138,8 @@ class SimulationDatabase {
         name: 'redis-cache',
         image: 'redis:7-alpine',
         status: 'deferred',
-        defer_until: '2026-08-01 00:00:00',
-        checked_at: '2026-07-09 09:00',
+        defer_until: '2026-09-15 00:00:00',
+        checked_at: '2026-08-29 17:00',
         compose_project: null,
         running: true,
         local_digest: 'sha256:8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b',
@@ -130,7 +153,7 @@ class SimulationDatabase {
         image: 'myrepo/myapp:latest',
         status: 'update',
         defer_until: null,
-        checked_at: '2026-07-09 11:00',
+        checked_at: '2026-08-29 18:00',
         compose_project: null,
         running: false,
         local_digest: 'sha256:5555555555555555555555555555555555555555555555555555555555555555',
@@ -179,13 +202,15 @@ class SimulationDatabase {
         id: 1,
         registry: 'docker.io',
         username: 'dev_user',
-        updated_at: '2026-07-01 10:00:00'
+        password: '******',
+        updated_at: '2026-08-01 10:00:00'
       },
       {
         id: 2,
         registry: 'ghcr.io',
         username: 'github_user',
-        updated_at: '2026-07-02 11:30:00'
+        password: '******',
+        updated_at: '2026-08-02 11:30:00'
       }
     ]
 
@@ -194,10 +219,8 @@ class SimulationDatabase {
         ID: 101,
         ContainerName: 'nginx-app',
         Image: 'nginx:alpine',
-        OldDigest: 'sha256:old_nginx_digest_001',
-        NewDigest: 'sha256:4f082ec15d862f1c84f3c0eb51b14a601859c402130386cfb8109bfcf9446d3e',
         Status: 'success',
-        UpdatedAt: '2026-07-08T15:30:00Z'
+        UpdatedAt: '2026-08-28T15:30:00Z'
       }
     ]
 
@@ -214,21 +237,21 @@ class SimulationDatabase {
 
   getDynamicImages(): MockImage[] {
     const activeImageMap = new Map<string, string[]>()
-    this.containers.forEach(c => {
-      const matched = this.images.find(img => img.tags.includes(c.image))
+    this.containers.forEach((c) => {
+      const matched = this.images.find((img) => img.tags.includes(c.image))
       if (matched) {
         if (!activeImageMap.has(matched.id)) activeImageMap.set(matched.id, [])
         activeImageMap.get(matched.id)!.push(c.name)
       }
     })
-    return this.images.map(img => ({
+    return this.images.map((img) => ({
       ...img,
       containers: activeImageMap.get(img.id) || []
     }))
   }
 
   updateContainerRunningState(name: string, running: boolean) {
-    const target = this.containers.find(c => c.name === name)
+    const target = this.containers.find((c) => c.name === name)
     if (target) {
       target.running = running
       notifyWSStatusChange()
@@ -236,7 +259,7 @@ class SimulationDatabase {
   }
 
   updateContainerDeferState(name: string, days: number) {
-    const target = this.containers.find(c => c.name === name)
+    const target = this.containers.find((c) => c.name === name)
     if (target) {
       if (days <= 0) {
         target.status = 'ok'
@@ -252,13 +275,13 @@ class SimulationDatabase {
   }
 
   addTaskToQueue(name: string) {
-    const target = this.containers.find(c => c.name === name)
+    const target = this.containers.find((c) => c.name === name)
     if (!target) return
     const nowStr = new Date().toISOString()
     const task: TaskItem = { container_name: name, type: 'update', added_at: nowStr }
 
     if (this.activeTask) {
-      if (!this.queuedTasks.some(t => t.container_name === name)) {
+      if (!this.queuedTasks.some((t) => t.container_name === name)) {
         this.queuedTasks.push(task)
       }
     } else {
@@ -300,7 +323,7 @@ class SimulationDatabase {
           return
         }
 
-        const target = this.containers.find(c => c.name === name)
+        const target = this.containers.find((c) => c.name === name)
         if (target) {
           target.status = 'ok'
           target.local_digest = target.remote_digest
@@ -311,8 +334,6 @@ class SimulationDatabase {
           ID: Date.now(),
           ContainerName: name,
           Image: target?.image || 'unknown',
-          OldDigest: 'sha256:old_digest',
-          NewDigest: target?.remote_digest || 'sha256:new_digest',
           Status: 'success',
           UpdatedAt: new Date().toISOString()
         })
@@ -347,8 +368,8 @@ class SimulationDatabase {
   }
 
   batchComposeLifecycle(projectName: string, action: 'start' | 'stop' | 'restart') {
-    const list = this.containers.filter(c => c.compose_project === projectName)
-    list.forEach(c => {
+    const list = this.containers.filter((c) => c.compose_project === projectName)
+    list.forEach((c) => {
       if (action === 'start' || action === 'restart') c.running = true
       else if (action === 'stop') c.running = false
     })
@@ -357,7 +378,7 @@ class SimulationDatabase {
 
   getComposeProjects(): any[] {
     const projectMap = new Map<string, any>()
-    this.containers.forEach(c => {
+    this.containers.forEach((c) => {
       if (!c.compose_project) return
       const projName = c.compose_project
       if (!projectMap.has(projName)) {
@@ -387,7 +408,7 @@ class SimulationDatabase {
     })
 
     const result: any[] = []
-    projectMap.forEach(proj => {
+    projectMap.forEach((proj) => {
       proj.services_count = proj.containers.length
       const runningCount = proj.containers.filter((item: any) => item.state === 'running').length
       if (runningCount === proj.services_count) proj.status = 'running'
@@ -452,7 +473,7 @@ const mockAdapter = async function (config: any) {
       }
     } else {
       try {
-        const payload = JSON.parse(config.data || '{}')
+        const payload = typeof config.data === 'string' ? JSON.parse(config.data || '{}') : (config.data || {})
         if (payload.project && payload.content) {
           db.composeConfigs.set(payload.project, payload.content)
         }
@@ -463,7 +484,7 @@ const mockAdapter = async function (config: any) {
 
   if (cleanPath.endsWith('/compose/lifecycle')) {
     try {
-      const payload = JSON.parse(config.data || '{}')
+      const payload = typeof config.data === 'string' ? JSON.parse(config.data || '{}') : (config.data || {})
       if (payload.project && payload.action) {
         db.batchComposeLifecycle(payload.project, payload.action)
       }
@@ -502,7 +523,13 @@ const mockAdapter = async function (config: any) {
   if (cleanPath.includes('/container/') && cleanPath.endsWith('/logs')) {
     const match = cleanPath.match(/\/container\/([^/]+)\/logs/)
     const name = match ? match[1] : 'app'
-    return { data: { logs: db.updateLogs.get(name)?.join('\n') || '模拟容器运行日志...' }, status: 200, statusText: 'OK', headers: {}, config }
+    return {
+      data: { logs: db.updateLogs.get(name)?.join('\n') || `[${name}] 正在稳定运行中...\nCPU: 0.8% | MEM: 42MB` },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config
+    }
   }
 
   if (cleanPath.includes('/defer/')) {
@@ -527,26 +554,67 @@ const mockAdapter = async function (config: any) {
     return { data: db.getDynamicImages(), status: 200, statusText: 'OK', headers: {}, config }
   }
 
+  if (cleanPath.endsWith('/image') && method === 'delete') {
+    const id = config.params?.id
+    if (id) {
+      db.images = db.images.filter((img) => img.id !== id)
+    }
+    return { data: { ok: true }, status: 200, statusText: 'OK', headers: {}, config }
+  }
+
   if (cleanPath.endsWith('/images/prune')) {
+    db.images = db.images.filter((img) => !img.tags.includes('<none>:<none>'))
     return { data: { space_reclaimed: 154000000, deleted_count: 1 }, status: 200, statusText: 'OK', headers: {}, config }
   }
 
   if (cleanPath.endsWith('/settings')) {
-    if (method === 'get') return { data: db.settings, status: 200, statusText: 'OK', headers: {}, config }
+    if (method === 'get') {
+      return { data: { ...db.settings }, status: 200, statusText: 'OK', headers: {}, config }
+    }
+    try {
+      const payload = typeof config.data === 'string' ? JSON.parse(config.data || '{}') : (config.data || {})
+      db.settings = { ...db.settings, ...payload }
+    } catch {}
     return { data: { ok: true }, status: 200, statusText: 'OK', headers: {}, config }
   }
 
   if (cleanPath.endsWith('/settings/test-email')) {
-    return { data: { ok: true, response: 'SMTP 测试连接成功' }, status: 200, statusText: 'OK', headers: {}, config }
+    return { data: { ok: true, response: '测试通知发送成功' }, status: 200, statusText: 'OK', headers: {}, config }
   }
 
   if (cleanPath.endsWith('/registries')) {
-    if (method === 'get') return { data: db.registries, status: 200, statusText: 'OK', headers: {}, config }
+    if (method === 'get') {
+      return { data: [...db.registries], status: 200, statusText: 'OK', headers: {}, config }
+    }
+    try {
+      const payload = typeof config.data === 'string' ? JSON.parse(config.data || '{}') : (config.data || {})
+      if (payload.id) {
+        const idx = db.registries.findIndex((r) => r.id === payload.id)
+        if (idx !== -1) {
+          db.registries[idx] = { ...db.registries[idx], ...payload, updated_at: new Date().toISOString() }
+        }
+      } else {
+        const newId = Date.now()
+        db.registries.push({ ...payload, id: newId, updated_at: new Date().toISOString() })
+      }
+    } catch {}
     return { data: { ok: true }, status: 200, statusText: 'OK', headers: {}, config }
   }
 
+  if (cleanPath.includes('/registries/')) {
+    const match = cleanPath.match(/\/registries\/([^/]+)/)
+    if (match && method === 'delete') {
+      const id = parseInt(match[1], 10)
+      db.registries = db.registries.filter((r) => r.id !== id)
+      return { data: { ok: true }, status: 200, statusText: 'OK', headers: {}, config }
+    }
+  }
+
   if (cleanPath.endsWith('/system/logs')) {
-    return { data: { logs: ['2026-07-09 12:00:00 [INFO] 仿真日志'] }, status: 200, statusText: 'OK', headers: {}, config }
+    if (method === 'delete') {
+      return { data: { ok: true }, status: 200, statusText: 'OK', headers: {}, config }
+    }
+    return { data: { logs: ['2026-08-29 19:30:00 [INFO] 仿真系统就绪并正常运行'] }, status: 200, statusText: 'OK', headers: {}, config }
   }
 
   if (cleanPath.includes('/update-log/')) {
@@ -562,7 +630,7 @@ const mockAdapter = async function (config: any) {
       return { data: { found: true, logs }, status: 200, statusText: 'OK', headers: {}, config }
     } else if (method === 'delete') {
       db.updateLogs.delete(name)
-      db.history = db.history.filter(h => h.ContainerName !== name)
+      db.history = db.history.filter((h) => h.ContainerName !== name)
       notifyWSStatusChange()
       return { data: { ok: true }, status: 200, statusText: 'OK', headers: {}, config }
     }
@@ -573,7 +641,7 @@ const mockAdapter = async function (config: any) {
     if (method === 'delete') {
       if (match) {
         const targetId = parseInt(match[1], 10)
-        db.history = db.history.filter(h => h.ID !== targetId)
+        db.history = db.history.filter((h) => h.ID !== targetId)
       } else {
         db.history = []
       }
@@ -587,6 +655,40 @@ const mockAdapter = async function (config: any) {
     return { data: { ok: true }, status: 200, statusText: 'OK', headers: {}, config }
   }
 
+  if (cleanPath.includes('/check/')) {
+    const match = cleanPath.match(/\/check\/([^/]+)/)
+    if (match) {
+      setTimeout(() => {
+        const target = db.containers.find((c) => c.name === match[1])
+        if (target) {
+          target.status = 'update'
+          target.remote_digest = 'sha256:new_single_' + Date.now()
+          notifyWSStatusChange()
+        }
+      }, 800)
+    }
+    return { data: { ok: true }, status: 200, statusText: 'OK', headers: {}, config }
+  }
+
+  if (cleanPath.endsWith('/tasks')) {
+    return {
+      data: { queued: db.queuedTasks, active: db.activeTask },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config
+    }
+  }
+
+  if (cleanPath.includes('/tasks/cancel/')) {
+    const match = cleanPath.match(/\/tasks\/cancel\/([^/]+)/)
+    if (match) {
+      db.queuedTasks = db.queuedTasks.filter((t) => t.container_name !== match[1])
+      notifyWSStatusChange()
+    }
+    return { data: { success: true }, status: 200, statusText: 'OK', headers: {}, config }
+  }
+
   return { data: { ok: true }, status: 200, statusText: 'OK', headers: {}, config }
 }
 
@@ -595,6 +697,7 @@ if (apiClient && apiClient.defaults) {
   apiClient.defaults.adapter = mockAdapter as any
 }
 
+// 拦截全局 fetch，防范任何原生网络穿透
 const originalFetch = window.fetch
 window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
   const urlStr = typeof input === 'string' ? input : input instanceof Request ? input.url : input.toString()
@@ -613,10 +716,22 @@ window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
     )
   }
   if (cleanPath.endsWith('/compose/projects')) {
-    return new Response(
-      JSON.stringify(db.getComposeProjects()),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify(db.getComposeProjects()), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+  if (cleanPath.endsWith('/settings')) {
+    return new Response(JSON.stringify(db.settings), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+  if (cleanPath.endsWith('/registries')) {
+    return new Response(JSON.stringify(db.registries), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })
   }
   if (cleanPath.includes('/api/')) {
     return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
@@ -638,7 +753,7 @@ class MockWebSocket {
       this.readyState = 1
       if (this.onopen) this.onopen()
       this.sendStatusUpdate()
-    }, 150)
+    }, 100)
     activeMockWS = this
   }
 
@@ -689,7 +804,26 @@ class MockWebSocket {
   }
 }
 
+// 替换全局 WebSocket
 // @ts-ignore
 window.WebSocket = MockWebSocket
 
-console.log('[Mock System] 成功重构并激活 DEV 全量网络与 Websocket 仿真引擎')
+// 暴露控制台调试对象
+;(window as any).__DU_SIMULATION__ = {
+  db,
+  triggerUpdate: () => db.triggerUpdateFound(),
+  reset: () => {
+    db.reset()
+    notifyWSStatusChange()
+  },
+  disable: () => {
+    localStorage.setItem('USE_MOCK', 'false')
+    window.location.reload()
+  },
+  enable: () => {
+    localStorage.removeItem('USE_MOCK')
+    window.location.reload()
+  }
+}
+
+console.log('[Mock System] 成功加载 DEV 全量网络与 WebSocket 仿真引擎')

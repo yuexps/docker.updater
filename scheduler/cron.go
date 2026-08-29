@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -202,7 +203,7 @@ func RunScheduledCheck(isInitial bool) {
 		}
 	}
 
-	// 入队自动更新任务(过滤延迟保护期容器)
+	// 入队自动更新任务(过滤延迟保护期与白名单容器)
 	if db.GetSetting("auto_update_enabled", "false") == "true" {
 		var list []db.AvailableUpdate
 		db.DB.Where("has_update = ?", true).Find(&list)
@@ -217,11 +218,24 @@ func RunScheduledCheck(isInitial bool) {
 			}
 		}
 
+		whitelistStr := db.GetSetting("auto_update_whitelist", "[]")
+		var whitelist []string
+		_ = json.Unmarshal([]byte(whitelistStr), &whitelist)
+		whitelistMap := make(map[string]bool)
+		for _, name := range whitelist {
+			whitelistMap[name] = true
+		}
+
 		for _, item := range list {
-			if !deferMap[item.ContainerName] {
-				utils.LogInfo("自动更新: 将容器 %s 加入升级队列...", item.ContainerName)
-				service.GlobalQueue.AddTask(item.ContainerName, service.TaskUpdate, "", true)
+			if deferMap[item.ContainerName] {
+				continue
 			}
+			if !whitelistMap[item.ContainerName] {
+				utils.LogInfo("自动更新: 容器 %s 未在白名单中，跳过自动升级", item.ContainerName)
+				continue
+			}
+			utils.LogInfo("自动更新: 容器 %s 命中白名单，加入升级队列...", item.ContainerName)
+			service.GlobalQueue.AddTask(item.ContainerName, service.TaskUpdate, "", true)
 		}
 	}
 }

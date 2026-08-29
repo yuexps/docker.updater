@@ -18,6 +18,7 @@ var OnSettingsReload func()
 // GlobalSettings 全局配置结构体
 type GlobalSettings struct {
 	AutoUpdateEnabled        bool     `json:"auto_update_enabled"`
+	AutoUpdateWhitelist      []string `json:"auto_update_whitelist"`
 	TempMirrors              []string `json:"temp_mirrors"`
 	DockerhubMirrors         []string `json:"dockerhub_mirrors"`
 	GHCRMirrors              []string `json:"ghcr_mirrors"`
@@ -73,6 +74,7 @@ type TestNotificationSettings struct {
 func SaveGlobalSettings(body GlobalSettings) error {
 	// 1. 读取保存前的旧配置以进行增量变动对比
 	oldAutoUpdateEnabled := db.GetSetting("auto_update_enabled", "false") == "true"
+	oldWhitelistStr := db.GetSetting("auto_update_whitelist", "[]")
 	oldCheckType := db.GetSetting("check_type", "day")
 	oldCheckValue, _ := strconv.Atoi(db.GetSetting("check_value", "1"))
 	oldDockerhubStr := db.GetSetting("dockerhub_mirrors", "[]")
@@ -104,6 +106,13 @@ func SaveGlobalSettings(body GlobalSettings) error {
 
 	// 2. 保存新配置到数据库
 	_ = db.SetSetting("auto_update_enabled", strconv.FormatBool(body.AutoUpdateEnabled))
+	if body.AutoUpdateWhitelist == nil {
+		body.AutoUpdateWhitelist = []string{}
+	}
+	whitelistBytes, _ := json.Marshal(body.AutoUpdateWhitelist)
+	newWhitelistStr := string(whitelistBytes)
+	_ = db.SetSetting("auto_update_whitelist", newWhitelistStr)
+
 	_ = db.SetSetting("notify_enabled", strconv.FormatBool(body.NotifyEnabled))
 	_ = db.SetSetting("notify_type", body.NotifyType)
 	_ = db.SetSetting("smtp_enabled", strconv.FormatBool(body.NotifyEnabled)) // 兼容原 smtp_enabled
@@ -156,6 +165,7 @@ func SaveGlobalSettings(body GlobalSettings) error {
 	// 3. 使用 utils.SettingsDiffBuilder 构建增量对比日志
 	diff := utils.NewSettingsDiffBuilder()
 	diff.AddBool("自动更新", oldAutoUpdateEnabled, body.AutoUpdateEnabled)
+	diff.AddCustom(oldWhitelistStr != newWhitelistStr, fmt.Sprintf("自动更新白名单: 已更新(共 %d 个容器)", len(body.AutoUpdateWhitelist)))
 
 	newCheckType := body.CheckType
 	if newCheckType == "" {

@@ -5,20 +5,30 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: '是否发布到 GitHub Release 及同步 FnDepot'
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: write
 
 env:
   FNPACK_BIN: fnpack-1.2.3-linux-amd64
+  BIN_NAME: docker.updater
 
 jobs:
   build-and-release:
+    name: Build, Package and Release
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -38,7 +48,7 @@ jobs:
           npm ci
           npm run build
 
-      - name: Build x86 fpk
+      - name: Build x86 FPK and Linux amd64 Binary
         run: |
           mkdir -p fnpack/app/bin
           GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o fnpack/app/bin/docker-updater
@@ -49,7 +59,7 @@ jobs:
           cp fnpack/app/bin/docker-updater ./docker-updater-linux-amd64
           mv fnpack/docker.updater.fpk ./docker.updater-x86.fpk
 
-      - name: Build arm fpk
+      - name: Build ARM FPK and Linux arm64 Binary
         run: |
           mkdir -p fnpack_arm/app/bin
           cp -r fnpack/* fnpack_arm/
@@ -63,15 +73,191 @@ jobs:
           mv fnpack_arm/docker.updater.fpk ./docker.updater-arm.fpk
           rm -rf fnpack_arm
 
-      - name: Upload Pre-release Asset
-        uses: marvinpinto/action-automatic-releases@latest
+      - name: Extract Manifest Version
+        id: manifest
+        run: |
+          APP_VER=$(grep -E '^[[:space:]]*version[[:space:]]*=' fnpack/manifest | awk -F'=' '{gsub(/[ \t]/,"",$2); print $2}')
+          echo "version=$APP_VER" >> $GITHUB_OUTPUT
+          echo "Release version: $APP_VER"
+
+      - name: Upload x86 FPK Artifact
+        uses: actions/upload-artifact@v4
         with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "pre-release"
-          prerelease: true
-          title: "Latest Pre-release Build"
+          name: ${{ env.BIN_NAME }}-x86
+          path: ./${{ env.BIN_NAME }}-x86.fpk
+          if-no-files-found: error
+
+      - name: Upload ARM FPK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BIN_NAME }}-arm
+          path: ./${{ env.BIN_NAME }}-arm.fpk
+          if-no-files-found: error
+
+      - name: Generate Changelog and Release Body
+        run: |
+          CURR_TAG="v${{ steps.manifest.outputs.version }}"
+          
+          # 确保拉取完整 tags
+          git fetch --tags --force 2>/dev/null || true
+          
+          # 查找上一个语义化版本 tag（排除当前 tag）
+          PREV_TAG=$(git tag -l "v*" --sort=-v:refname | grep -E '^v[0-9]' | grep -v "^${CURR_TAG}$" | head -n 1)
+          
+          echo "Current Tag: $CURR_TAG"
+          echo "Previous Tag: $PREV_TAG"
+          
+          # 写入 Release 基础信息
+          {
+            echo "### 安装包说明"
+            echo ""
+            echo "| 文件名 | 架构 | 说明 |"
+            echo "| :--- | :---: | :--- |"
+            echo "| \`docker.updater-x86.fpk\` | x86_64 | 飞牛系统应用安装包 (x86_64 架构) |"
+            echo "| \`docker.updater-arm.fpk\` | ARM64 | 飞牛系统应用安装包 (ARM64 架构) |"
+            echo "| \`docker-updater-linux-amd64\` | x86_64 | Linux 可执行文件 (端口 2293) |"
+            echo "| \`docker-updater-linux-arm64\` | ARM64 | Linux 可执行文件 (端口 2293) |"
+            echo ""
+            echo "---"
+            echo "- 应用版本：\`${CURR_TAG}\`"
+            echo ""
+            echo "### 更新日志"
+            echo ""
+          } > release_body.md
+
+          HAS_COMMITS=0
+          if [ -n "$PREV_TAG" ]; then
+            if [ -n "$(git log "${PREV_TAG}..HEAD" --no-merges --oneline)" ]; then
+              git log "${PREV_TAG}..HEAD" --no-merges --pretty=format:"* %s (%h)" >> release_body.md
+              HAS_COMMITS=1
+            fi
+          else
+            if [ -n "$(git log HEAD --no-merges --oneline)" ]; then
+              git log HEAD --no-merges --pretty=format:"* %s (%h)" -n 20 >> release_body.md
+              HAS_COMMITS=1
+            fi
+          fi
+          
+          if [ $HAS_COMMITS -eq 0 ]; then
+            echo "* 维护与细节优化" >> release_body.md
+          fi
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "" >> release_body.md
+            echo "" >> release_body.md
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${CURR_TAG}" >> release_body.md
+          fi
+
+          echo "Generated release body:"
+          cat release_body.md
+
+      - name: Delete Existing Release and Tag (if exists)
+        if: ${{ github.event_name == 'push' || github.event.inputs.publish_release == 'true' || github.event.inputs.publish_release == true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="v${{ steps.manifest.outputs.version }}"
+          echo "Checking if release $TAG_NAME already exists..."
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Deleting existing release $TAG_NAME..."
+            gh release delete "$TAG_NAME" --yes --cleanup-tag || true
+          fi
+          git push --delete origin "$TAG_NAME" 2>/dev/null || true
+          git tag -d "$TAG_NAME" 2>/dev/null || true
+
+      - name: Create GitHub Release
+        if: ${{ github.event_name == 'push' || github.event.inputs.publish_release == 'true' || github.event.inputs.publish_release == true }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ steps.manifest.outputs.version }}"
+          name: "Release v${{ steps.manifest.outputs.version }}"
+          body_path: release_body.md
+          draft: false
+          prerelease: false
+          make_latest: true
           files: |
             docker.updater-x86.fpk
             docker.updater-arm.fpk
             docker-updater-linux-amd64
             docker-updater-linux-arm64
+
+      - name: Update FnDepot fnpack.json
+        if: ${{ github.event_name == 'push' || github.event.inputs.publish_release == 'true' || github.event.inputs.publish_release == true }}
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          VERSION: ${{ steps.manifest.outputs.version }}
+          TAG_NAME: v${{ steps.manifest.outputs.version }}
+        run: |
+          if [ -z "$GH_PAT" ]; then
+            echo "未配置 GH_PAT secret，跳过更新 FnDepot。"
+            exit 0
+          fi
+
+          # 计算安装包字节大小与 sha256
+          X86_SIZE=$(stat -c %s "docker.updater-x86.fpk")
+          ARM_SIZE=$(stat -c %s "docker.updater-arm.fpk")
+          X86_SHA256=$(sha256sum "docker.updater-x86.fpk" | awk '{print $1}')
+          ARM_SHA256=$(sha256sum "docker.updater-arm.fpk" | awk '{print $1}')
+          
+          # 构造下载链接
+          X86_URL="https://github.com/yuexps/docker.updater/releases/download/${TAG_NAME}/docker.updater-x86.fpk"
+          ARM_URL="https://github.com/yuexps/docker.updater/releases/download/${TAG_NAME}/docker.updater-arm.fpk"
+          
+          # 待同步更新的目标仓库列表
+          TARGET_REPOS=("yuexps/FnDepot")
+
+          for REPO in "${TARGET_REPOS[@]}"; do
+            echo "----------------------------------------"
+            echo "Processing: $REPO"
+            REPO_DIR="repo_$(echo "$REPO" | tr '/' '_')"
+            
+            git clone "https://x-access-token:${GH_PAT}@github.com/${REPO}.git" "$REPO_DIR" || {
+              echo "::warning::Clone $REPO failed, skipping."
+              continue
+            }
+            
+            pushd "$REPO_DIR" > /dev/null
+            
+            if [ -f "fnpack.json" ]; then
+              jq --arg ver "$VERSION" \
+                 --arg x86_url "$X86_URL" \
+                 --arg x86_sha "$X86_SHA256" \
+                 --argjson x86_size "$X86_SIZE" \
+                 --arg arm_url "$ARM_URL" \
+                 --arg arm_sha "$ARM_SHA256" \
+                 --argjson arm_size "$ARM_SIZE" \
+                 '
+                 .apps["docker.updater"].releases[$ver] = {
+                   "packages": {
+                     "x86": {
+                       "download_url": $x86_url,
+                       "sha256": $x86_sha,
+                       "size": $x86_size
+                     },
+                     "arm": {
+                       "download_url": $arm_url,
+                       "sha256": $arm_sha,
+                       "size": $arm_size
+                     }
+                   }
+                 }
+                 ' fnpack.json > fnpack.json.tmp && mv fnpack.json.tmp fnpack.json
+                 
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              
+              git add fnpack.json
+              if ! git diff --staged --quiet; then
+                git commit -m "chore: bump docker.updater to ${VERSION}"
+                BRANCH=$(git rev-parse --abbrev-ref HEAD)
+                git push "https://x-access-token:${GH_PAT}@github.com/${REPO}.git" "$BRANCH"
+                echo "Successfully updated $REPO ($BRANCH)"
+              else
+                echo "No changes detected in $REPO."
+              fi
+            else
+              echo "::warning::fnpack.json not found in $REPO."
+            fi
+            
+            popd > /dev/null
+          done

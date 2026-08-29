@@ -20,9 +20,11 @@ const mountApp = () => {
   app.mount('#app')
 }
 
-const useMock = import.meta.env.VITE_USE_MOCK === 'true' || localStorage.getItem('USE_MOCK') === 'true'
+// 开发模式下默认启用仿真系统，除非显式在环境变量或 localStorage 中关闭
+const isExplicitlyDisabled = import.meta.env.VITE_USE_MOCK === 'false' || localStorage.getItem('USE_MOCK') === 'false'
+const useMock = import.meta.env.DEV && !isExplicitlyDisabled
 
-if (import.meta.env.DEV && useMock) {
+if (useMock) {
   import('./utils/test').then(() => {
     mountApp()
   })

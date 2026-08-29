@@ -289,6 +289,12 @@ func apiUpdate(c *gin.Context) {
 // apiSettingsGet 获取全局配置
 func apiSettingsGet(c *gin.Context) {
 	autoUpdateEnabled := db.GetSetting("auto_update_enabled", "false") == "true"
+	autoUpdateWhitelistStr := db.GetSetting("auto_update_whitelist", "[]")
+	var autoUpdateWhitelist []string
+	_ = json.Unmarshal([]byte(autoUpdateWhitelistStr), &autoUpdateWhitelist)
+	if autoUpdateWhitelist == nil {
+		autoUpdateWhitelist = []string{}
+	}
 	checkType := db.GetSetting("check_type", "day")
 	checkValueStr := db.GetSetting("check_value", "1")
 	checkValue, _ := strconv.Atoi(checkValueStr)
@@ -352,6 +358,7 @@ func apiSettingsGet(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"auto_update_enabled":         autoUpdateEnabled,
+		"auto_update_whitelist":       autoUpdateWhitelist,
 		"temp_mirrors":                dockerhubMirrors,
 		"dockerhub_mirrors":           dockerhubMirrors,
 		"ghcr_mirrors":                ghcrMirrors,
