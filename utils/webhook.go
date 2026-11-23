@@ -13,7 +13,7 @@ import (
 // DefaultWebhookTemplateCustom 自定义/通用的 Webhook JSON 模板
 const DefaultWebhookTemplateCustom = `{
   "title": "【{status}】{container_name} {action_type}",
-  "content": "容器名称: {container_name}\n任务类型: {action_type}\n执行状态: {status}\n执行时间: {time}\n\n最近运行日志:\n{logs}",
+  "content": "容器名称: {container_name}\n任务类型: {action_type}\n执行状态: {status}\n执行时间: {time}\n\n执行详情与日志:\n{logs}",
   "type": "text"
 }`
 
@@ -28,7 +28,7 @@ const DefaultWebhookTemplateCheckCustom = `{
 const DefaultWebhookTemplateWechat = `{
   "msgtype": "markdown",
   "markdown": {
-    "content": "### 【{status}】{container_name} {action_type}\n> 容器名称: <font color=\"info\">{container_name}</font>\n> 任务类型: <font color=\"comment\">{action_type}</font>\n> 执行状态: {status}\n> 执行时间: <font color=\"comment\">{time}</font>\n\n最近运行日志:\n` + "```" + `\n{logs}\n` + "```" + `"
+    "content": "### 【{status}】{container_name} {action_type}\n> 容器名称: <font color=\"info\">{container_name}</font>\n> 任务类型: <font color=\"comment\">{action_type}</font>\n> 执行状态: {status}\n> 执行时间: <font color=\"comment\">{time}</font>\n\n执行详情与日志:\n` + "```" + `\n{logs}\n` + "```" + `"
   }
 }`
 
@@ -45,7 +45,7 @@ const DefaultWebhookTemplateDingtalk = `{
   "msgtype": "markdown",
   "markdown": {
     "title": "【{status}】{container_name}",
-    "text": "### 【{status}】{container_name} {action_type}\n- **容器名称**: {container_name}\n- **任务类型**: {action_type}\n- **执行状态**: {status}\n- **执行时间**: {time}\n\n最近运行日志:\n` + "```" + `\n{logs}\n` + "```" + `"
+    "text": "### 【{status}】{container_name} {action_type}\n- **容器名称**: {container_name}\n- **任务类型**: {action_type}\n- **执行状态**: {status}\n- **执行时间**: {time}\n\n执行详情与日志:\n` + "```" + `\n{logs}\n` + "```" + `"
   }
 }`
 
@@ -73,7 +73,7 @@ const DefaultWebhookTemplateFeishu = `{
             {"tag": "text", "text": "执行时间: {time}\n\n"}
           ],
           [
-            {"tag": "text", "text": "最近运行日志:\n{logs}"}
+            {"tag": "text", "text": "执行详情与日志:\n{logs}"}
           ]
         ]
       }

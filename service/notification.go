@@ -1,17 +1,24 @@
 package service
 
 import (
+	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"docker-updater/db"
 	"docker-updater/utils"
 )
 
 const (
-	NotifyActionUpdateCheck = "可用版本更新提醒"
-	NotifyActionUpdate      = "容器升级"
+	NotifyActionUpdateCheck  = "可用版本更新提醒"
+	NotifyActionUpdate       = "容器升级"
+	maxWebhookLogBytes       = 2800
+	webhookLogTruncateSuffix = "\n...(日志已截断，完整内容请在管理面板查看)"
 )
+
+// notifyDispatcher 通知发送函数变量，便于单元测试拦截
+var notifyDispatcher = SendNotification
 
 // SendNotification 发送统一通知报告（邮件或 Webhook）
 func SendNotification(containerName, actionType, statusName, logContent string) {
@@ -83,20 +90,69 @@ func SendNotification(containerName, actionType, statusName, logContent string) 
 	}
 }
 
-// escapeJSONString 转义 JSON 中的特殊字符与换行符
+// escapeJSONString 转义 JSON 中的特殊字符、换行符与控制字符
 func escapeJSONString(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `"`, `\"`)
-	s = strings.ReplaceAll(s, "\n", `\n`)
-	s = strings.ReplaceAll(s, "\r", `\r`)
-	s = strings.ReplaceAll(s, "\t", `\t`)
-	return s
+	var sb strings.Builder
+	sb.Grow(len(s))
+	for _, r := range s {
+		switch r {
+		case '\\':
+			sb.WriteString(`\\`)
+		case '"':
+			sb.WriteString(`\"`)
+		case '\n':
+			sb.WriteString(`\n`)
+		case '\r':
+			sb.WriteString(`\r`)
+		case '\t':
+			sb.WriteString(`\t`)
+		case '\b':
+			sb.WriteString(`\b`)
+		case '\f':
+			sb.WriteString(`\f`)
+		default:
+			if r < 0x20 {
+				sb.WriteString(fmt.Sprintf(`\u%04x`, r))
+			} else {
+				sb.WriteRune(r)
+			}
+		}
+	}
+	return sb.String()
+}
+
+// truncateUTF8 按最大字节数安全截断 UTF-8 字符串并附加提示后缀
+func truncateUTF8(s string, maxBytes int, suffix string) string {
+	if maxBytes <= 0 || len(s) <= maxBytes {
+		return s
+	}
+	limit := maxBytes - len(suffix)
+	if limit <= 0 {
+		limit = maxBytes
+		suffix = ""
+	}
+	cut := 0
+	for idx, r := range s {
+		runeLen := utf8.RuneLen(r)
+		if runeLen < 0 {
+			runeLen = 1
+		}
+		if idx+runeLen > limit {
+			break
+		}
+		cut = idx + runeLen
+	}
+	return s[:cut] + suffix
 }
 
 // renderTemplate 渲染通知模板
 func renderTemplate(tpl, containerName, actionType, statusName, logContent string, escapeJSON bool) string {
 	logs := logContent
 	if escapeJSON {
+		logs = truncateUTF8(logs, maxWebhookLogBytes, webhookLogTruncateSuffix)
+		containerName = escapeJSONString(containerName)
+		actionType = escapeJSONString(actionType)
+		statusName = escapeJSONString(statusName)
 		logs = escapeJSONString(logs)
 	}
 	r := strings.NewReplacer(

@@ -116,9 +116,13 @@ func RunScheduledCheck(isInitial bool) {
 		utils.LogInfo("启动定时镜像更新检查...")
 	}
 
-	// 获取扫描前待更新记录基数
-	var countBefore int64
-	db.DB.Model(&db.AvailableUpdate{}).Where("has_update = ?", true).Count(&countBefore)
+	// 获取扫描前待更新记录的远端 Digest 快照
+	var beforeList []db.AvailableUpdate
+	db.DB.Where("has_update = ?", true).Find(&beforeList)
+	beforeDigestMap := make(map[string]string, len(beforeList))
+	for _, item := range beforeList {
+		beforeDigestMap[item.ContainerName] = item.RemoteDigest
+	}
 
 	err := dockerclient.ScanLocalHostForUpdates(ctx, func(res dockerclient.UpdateCheckResult) {
 		updateEntry := db.AvailableUpdate{
@@ -148,16 +152,28 @@ func RunScheduledCheck(isInitial bool) {
 		service.GlobalObserver.OnStatusChange()
 	}
 
-	var countAfter int64
-	db.DB.Model(&db.AvailableUpdate{}).Where("has_update = ?", true).Count(&countAfter)
+	deferMap := loadActiveDeferredMap()
 
-	if countAfter > 0 && countAfter > countBefore {
-		// 汇总待更新容器特征明细
-		var list []db.AvailableUpdate
-		db.DB.Where("has_update = ?", true).Find(&list)
+	var allUpdates []db.AvailableUpdate
+	db.DB.Where("has_update = ?", true).Find(&allUpdates)
+
+	var activeUpdates []db.AvailableUpdate
+	hasNewOrChanged := false
+	for _, item := range allUpdates {
+		if deferMap[item.ContainerName] {
+			continue
+		}
+		activeUpdates = append(activeUpdates, item)
+		prevDigest, existed := beforeDigestMap[item.ContainerName]
+		if !existed || prevDigest != item.RemoteDigest {
+			hasNewOrChanged = true
+		}
+	}
+
+	if len(activeUpdates) > 0 && hasNewOrChanged {
 		var names []string
 		var details []string
-		for _, item := range list {
+		for _, item := range activeUpdates {
 			names = append(names, item.ContainerName)
 			locVerPart := ""
 			if item.LocalVersion != "" {
@@ -203,21 +219,8 @@ func RunScheduledCheck(isInitial bool) {
 		}
 	}
 
-	// 入队自动更新任务(过滤延迟保护期与白名单容器)
+	// 入队自动更新批次任务(过滤延迟保护期与白名单容器)
 	if db.GetSetting("auto_update_enabled", "false") == "true" {
-		var list []db.AvailableUpdate
-		db.DB.Where("has_update = ?", true).Find(&list)
-
-		var deferred []db.DeferredUpdate
-		db.DB.Find(&deferred)
-		deferMap := make(map[string]bool)
-		today := time.Now().Format("2006-01-02")
-		for _, d := range deferred {
-			if d.Until == "forever" || d.Until > today {
-				deferMap[d.ContainerName] = true
-			}
-		}
-
 		whitelistStr := db.GetSetting("auto_update_whitelist", "[]")
 		var whitelist []string
 		_ = json.Unmarshal([]byte(whitelistStr), &whitelist)
@@ -226,18 +229,34 @@ func RunScheduledCheck(isInitial bool) {
 			whitelistMap[name] = true
 		}
 
-		for _, item := range list {
-			if deferMap[item.ContainerName] {
-				continue
-			}
+		var autoTargets []string
+		for _, item := range activeUpdates {
 			if !whitelistMap[item.ContainerName] {
 				utils.LogInfo("自动更新: 容器 %s 未在白名单中，跳过自动升级", item.ContainerName)
 				continue
 			}
-			utils.LogInfo("自动更新: 容器 %s 命中白名单，加入升级队列...", item.ContainerName)
-			service.GlobalQueue.AddTask(item.ContainerName, service.TaskUpdate, "", true)
+			autoTargets = append(autoTargets, item.ContainerName)
+		}
+
+		if len(autoTargets) > 0 {
+			utils.LogInfo("自动更新: 共 %d 个容器命中白名单，加入批次升级队列: %s", len(autoTargets), strings.Join(autoTargets, ", "))
+			service.GlobalQueue.EnqueueAutoBatch(autoTargets)
 		}
 	}
+}
+
+// loadActiveDeferredMap 加载当前仍处于延迟更新保护期的容器集合
+func loadActiveDeferredMap() map[string]bool {
+	var deferred []db.DeferredUpdate
+	db.DB.Find(&deferred)
+	deferMap := make(map[string]bool, len(deferred))
+	today := time.Now().Format("2006-01-02")
+	for _, d := range deferred {
+		if d.Until == "forever" || d.Until > today {
+			deferMap[d.ContainerName] = true
+		}
+	}
+	return deferMap
 }
 
 // ReloadScheduler 热重载定时任务调度器

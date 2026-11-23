@@ -32,9 +32,14 @@ type Setting struct {
 // - temp_mirrors: 临时镜像加速源列表 (JSON 数组，如 ["https://mirror.com"])
 // - check_type: 定时检测周期类型 ("hour"/"day"/"week"/"month", 默认 "day")
 // - check_value: 定时检测周期数值 (整型，默认 1)
-// - smtp_enabled: 是否启用邮件通知 ("true"/"false")
+// - notify_enabled: 是否启用消息通知 ("true"/"false")
+// - notify_type: 通知渠道类型 ("email"/"webhook", 默认 "email")
+// - smtp_enabled: 是否启用邮件通知 ("true"/"false", 兼容旧配置)
 // - smtp_host, smtp_port, smtp_username, smtp_password (AES-256 加密), smtp_ssl, smtp_to
 // - smtp_subject_template, smtp_body_template
+// - smtp_subject_template_check, smtp_body_template_check
+// - webhook_url, webhook_method, webhook_type ("custom"/"wechat"/"dingtalk"/"feishu")
+// - webhook_template_*, webhook_template_check_*
 // - last_check_time: 上次检测更新时间 (UTC ISO8601 格式)
 ```
 
@@ -143,6 +148,7 @@ type RegistryCredential struct {
 ## 5. 事件循环与排队机制
 * **串行任务调度**: 任务处理器为单工循环。所有的升级任务和回滚任务排队推送至 `GlobalQueue` 执行。
 * **白名单自动升级过滤**: 定时检测命中新版本且开启自动更新时，系统仅将处于 `auto_update_whitelist` 白名单集合内且未受暂挂约束的容器加入升级排队，白名单之外的容器自动跳过。
+* **自动更新批次汇总通知**: 定时自动更新通过 `EnqueueAutoBatch` 以批次方式原子入队。批次内全部任务达到终态（成功/失败/取消）后汇总为 1 条通知统一推送（兼容邮件与 Webhook）；单容器保持单条明细，多容器输出统计摘要与逐容器结果；Webhook 推送自动执行全字段 JSON 转义与日志长度截断保护。
 * **状态实时推送**: 任务队列修改、容器启停及更新流式日志均触发 WS 事件广播订阅的前端。
 * **WebSocket 保活控制**:
   - `readPump`: 接收到 `{"type": "ping"}` 消息时，在写入 `c.send` 时必须使用 `select-default` 分支防范阻塞。协程头部采用 `defer recover()` 防止在 unregister 关闭 channel 时引起 `send on closed channel` 致命写 panic。

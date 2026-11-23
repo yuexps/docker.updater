@@ -294,11 +294,16 @@ func SendTestNotification(body TestNotificationSettings) (string, error) {
 	subject := renderTemplate(subjectTpl, "docker-updater", "测试通知", "测试成功", rawLogs, false)
 	bodyText := renderTemplate(bodyTpl, "docker-updater", "测试通知", "测试成功", rawLogs, false)
 
+	smtpPassword := body.SMTPPassword
+	if smtpPassword == "******" {
+		smtpPassword = db.GetSetting("smtp_password", "")
+	}
+
 	cfg := utils.SMTPConfig{
 		Host:     body.SMTPHost,
 		Port:     body.SMTPPort,
 		Username: body.SMTPUsername,
-		Password: body.SMTPPassword,
+		Password: smtpPassword,
 		SSL:      body.SMTPSSL,
 		To:       body.SMTPTo,
 	}

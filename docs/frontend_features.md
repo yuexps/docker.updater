@@ -161,7 +161,7 @@
     - 包含：Webhook URL、请求方法（POST/GET/PUT）。
     - 区分场景自定义 JSON Payload 模板。
     - 支持一键载入三大平台群机器人 Webhook Payload 预设：企业微信、钉钉、飞书、通用 JSON。
-  - **模板变量说明**：前端提示用户，邮件和 Webhook 的模板文本/Payload 中均可使用 `{container_name}`、`{action_type}`、`{status}`、`{time}` 和 `{logs}` 进行变量动态插值替换。
+  - **模板变量说明**：前端提示用户，邮件和 Webhook 的模板文本/Payload 中均可使用 `{container_name}`、`{action_type}`、`{status}`、`{time}` 和 `{logs}` 进行变量动态插值替换。自动更新多容器时按批次合并为一条通知推送，单容器时保持单条明细。
   - **通知连通性测试**：
     - 点击发送测试按钮，调用 POST `/settings/test-email` 并携带当前表单配置（不依赖已存库的设定）。
     - 若邮件发送成功或 Webhook 响应成功，前端展示成功；若失败，捕获返回的后端原生 Error 以及 Webhook 目标平台的原始 Response 内容（做 `80` 字符截短展示），便于用户诊断配置。
