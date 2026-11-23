@@ -196,11 +196,7 @@ func RunScheduledCheck(isInitial bool) {
 		utils.LogInfo("检测到有 %d 个服务需要升级更新: %s", len(names), strings.Join(names, ", "))
 
 		// 触发更新预警通知(仅在启用通知且禁用自动更新时生效)
-		notifyEnabled := db.GetSetting("notify_enabled", "")
-		if notifyEnabled == "" {
-			notifyEnabled = db.GetSetting("smtp_enabled", "false")
-		}
-		if notifyEnabled == "true" && db.GetSetting("auto_update_enabled", "false") != "true" {
+		if db.GetSetting("notify_enabled", "false") == "true" && db.GetSetting("auto_update_enabled", "false") != "true" {
 			go func(namesList []string, detailList []string) {
 				detailText := strings.Join(detailList, "\n")
 				containerLabel := ""

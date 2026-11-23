@@ -299,24 +299,14 @@ func apiSettingsGet(c *gin.Context) {
 	checkValueStr := db.GetSetting("check_value", "1")
 	checkValue, _ := strconv.Atoi(checkValueStr)
 
-	dockerhubMirrorsStr := db.GetSetting("dockerhub_mirrors", "")
+	dockerhubMirrorsStr := db.GetSetting("dockerhub_mirrors", "[]")
 	ghcrMirrorsStr := db.GetSetting("ghcr_mirrors", "[]")
 	var dockerhubMirrors []string
 	var ghcrMirrors []string
-
-	if dockerhubMirrorsStr == "" {
-		tempMirrorsStr := db.GetSetting("temp_mirrors", "[]")
-		_ = json.Unmarshal([]byte(tempMirrorsStr), &dockerhubMirrors)
-	} else {
-		_ = json.Unmarshal([]byte(dockerhubMirrorsStr), &dockerhubMirrors)
-	}
+	_ = json.Unmarshal([]byte(dockerhubMirrorsStr), &dockerhubMirrors)
 	_ = json.Unmarshal([]byte(ghcrMirrorsStr), &ghcrMirrors)
 
-	notifyEnabledStr := db.GetSetting("notify_enabled", "")
-	if notifyEnabledStr == "" {
-		notifyEnabledStr = db.GetSetting("smtp_enabled", "false")
-	}
-	notifyEnabled := notifyEnabledStr
+	notifyEnabled := db.GetSetting("notify_enabled", "false")
 	notifyType := db.GetSetting("notify_type", "email")
 
 	smtpHost := db.GetSetting("smtp_host", "")
@@ -328,7 +318,6 @@ func apiSettingsGet(c *gin.Context) {
 	}
 	smtpSSL := db.GetSetting("smtp_ssl", "true") == "true"
 	smtpTo := db.GetSetting("smtp_to", "")
-	smtpEnabled := notifyEnabled == "true" && notifyType == "email"
 	smtpSubjectTemplate := db.GetSetting("smtp_subject_template", utils.DefaultSMTPSubject)
 	smtpBodyTemplate := db.GetSetting("smtp_body_template", utils.DefaultSMTPBody)
 	smtpSubjectTemplateCheck := db.GetSetting("smtp_subject_template_check", utils.DefaultSMTPSubjectCheck)
@@ -359,14 +348,12 @@ func apiSettingsGet(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"auto_update_enabled":         autoUpdateEnabled,
 		"auto_update_whitelist":       autoUpdateWhitelist,
-		"temp_mirrors":                dockerhubMirrors,
 		"dockerhub_mirrors":           dockerhubMirrors,
 		"ghcr_mirrors":                ghcrMirrors,
 		"check_type":                  checkType,
 		"check_value":                 checkValue,
 		"notify_enabled":              notifyEnabled == "true",
 		"notify_type":                 notifyType,
-		"smtp_enabled":                smtpEnabled,
 		"smtp_host":                   smtpHost,
 		"smtp_port":                   smtpPort,
 		"smtp_username":               smtpUsername,

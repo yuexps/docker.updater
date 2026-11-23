@@ -44,7 +44,6 @@ class SimulationDatabase {
   containers: MockContainer[] = []
   images: MockImage[] = []
   settings: Record<string, any> = {
-    temp_mirrors: ['https://docker.m.daocloud.io', 'https://mirror.baidubce.com'],
     dockerhub_mirrors: ['https://docker.m.daocloud.io'],
     ghcr_mirrors: ['https://ghcr.nju.edu.cn'],
     check_type: 'day',
@@ -53,7 +52,6 @@ class SimulationDatabase {
     auto_update_whitelist: ['nginx-app', 'web-api'],
     notify_enabled: false,
     notify_type: 'email',
-    smtp_enabled: false,
     smtp_host: 'smtp.qq.com',
     smtp_port: '465',
     smtp_username: 'notification@example.com',

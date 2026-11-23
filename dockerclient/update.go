@@ -18,7 +18,6 @@ import (
 
 // UpdateOptions 容器更新参数选项
 type UpdateOptions struct {
-	TempMirrors      []string
 	DockerhubMirrors []string
 	GHCRMirrors      []string
 }
@@ -37,9 +36,6 @@ func pullImageWithMirrors(ctx context.Context, cli *client.Client, imageName str
 
 	if isDockerHub {
 		targetMirrors = opts.DockerhubMirrors
-		if len(targetMirrors) == 0 {
-			targetMirrors = opts.TempMirrors
-		}
 		registryName = "DockerHub"
 	} else if isGHCR {
 		targetMirrors = opts.GHCRMirrors

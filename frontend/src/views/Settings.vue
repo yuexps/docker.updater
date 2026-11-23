@@ -444,14 +444,12 @@ const dockerStore = useDockerStore()
 const settings = ref<SettingsData>({
   auto_update_enabled: false,
   auto_update_whitelist: [],
-  temp_mirrors: [],
   dockerhub_mirrors: [],
   ghcr_mirrors: [],
   check_type: 'day',
   check_value: 1,
   notify_enabled: false,
   notify_type: 'email',
-  smtp_enabled: false,
   smtp_host: '',
   smtp_port: '465',
   smtp_username: '',
@@ -707,13 +705,10 @@ const loadSettings = async () => {
       settings.value.auto_update_whitelist = []
     }
     if (!settings.value.dockerhub_mirrors) {
-      settings.value.dockerhub_mirrors = settings.value.temp_mirrors || []
+      settings.value.dockerhub_mirrors = []
     }
     if (!settings.value.ghcr_mirrors) {
       settings.value.ghcr_mirrors = []
-    }
-    if (!settings.value.temp_mirrors) {
-      settings.value.temp_mirrors = settings.value.dockerhub_mirrors
     }
     if (settings.value.notify_type === undefined || settings.value.notify_type === '') {
       settings.value.notify_type = 'email'
@@ -816,9 +811,6 @@ const addTempMirror = async () => {
 
   if (!settings.value[targetKey].includes(url)) {
     settings.value[targetKey].push(url)
-    if (targetKey === 'dockerhub_mirrors') {
-      settings.value.temp_mirrors = settings.value.dockerhub_mirrors
-    }
     newTempMirror.value = ''
     mirrorModalVisible.value = false
     await autoSaveSettings()
@@ -832,9 +824,6 @@ const removeMirror = async (type: 'dockerhub' | 'ghcr', index: number) => {
   const targetKey = type === 'dockerhub' ? 'dockerhub_mirrors' : 'ghcr_mirrors'
   if (settings.value[targetKey]) {
     settings.value[targetKey].splice(index, 1)
-    if (targetKey === 'dockerhub_mirrors') {
-      settings.value.temp_mirrors = settings.value.dockerhub_mirrors
-    }
     await autoSaveSettings()
   }
 }

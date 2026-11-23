@@ -19,14 +19,12 @@ var OnSettingsReload func()
 type GlobalSettings struct {
 	AutoUpdateEnabled        bool     `json:"auto_update_enabled"`
 	AutoUpdateWhitelist      []string `json:"auto_update_whitelist"`
-	TempMirrors              []string `json:"temp_mirrors"`
 	DockerhubMirrors         []string `json:"dockerhub_mirrors"`
 	GHCRMirrors              []string `json:"ghcr_mirrors"`
 	CheckType                string   `json:"check_type"`
 	CheckValue               int      `json:"check_value"`
 	NotifyEnabled            bool     `json:"notify_enabled"`
 	NotifyType               string   `json:"notify_type"`
-	SMTPEnabled              bool     `json:"smtp_enabled"` // 保持兼容
 	SMTPHost                 string   `json:"smtp_host"`
 	SMTPPort                 string   `json:"smtp_port"`
 	SMTPUsername             string   `json:"smtp_username"`
@@ -80,11 +78,7 @@ func SaveGlobalSettings(body GlobalSettings) error {
 	oldDockerhubStr := db.GetSetting("dockerhub_mirrors", "[]")
 	oldGHCRStr := db.GetSetting("ghcr_mirrors", "[]")
 
-	oldNotifyEnabledStr := db.GetSetting("notify_enabled", "")
-	if oldNotifyEnabledStr == "" {
-		oldNotifyEnabledStr = db.GetSetting("smtp_enabled", "false")
-	}
-	oldNotifyEnabled := oldNotifyEnabledStr == "true"
+	oldNotifyEnabled := db.GetSetting("notify_enabled", "false") == "true"
 	oldNotifyType := db.GetSetting("notify_type", "email")
 
 	oldSMTPHost := db.GetSetting("smtp_host", "")
@@ -115,7 +109,6 @@ func SaveGlobalSettings(body GlobalSettings) error {
 
 	_ = db.SetSetting("notify_enabled", strconv.FormatBool(body.NotifyEnabled))
 	_ = db.SetSetting("notify_type", body.NotifyType)
-	_ = db.SetSetting("smtp_enabled", strconv.FormatBool(body.NotifyEnabled)) // 兼容原 smtp_enabled
 	_ = db.SetSetting("smtp_host", body.SMTPHost)
 	_ = db.SetSetting("smtp_port", body.SMTPPort)
 	_ = db.SetSetting("smtp_username", body.SMTPUsername)
@@ -160,7 +153,6 @@ func SaveGlobalSettings(body GlobalSettings) error {
 
 	_ = db.SetSetting("dockerhub_mirrors", newDockerhubStr)
 	_ = db.SetSetting("ghcr_mirrors", newGHCRStr)
-	_ = db.SetSetting("temp_mirrors", newDockerhubStr) // 保持旧版本兼容
 
 	// 3. 使用 utils.SettingsDiffBuilder 构建增量对比日志
 	diff := utils.NewSettingsDiffBuilder()

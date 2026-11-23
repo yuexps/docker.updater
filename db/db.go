@@ -62,8 +62,35 @@ func InitDB() error {
 			&UpdateHistory{},
 			&RegistryCredential{},
 		)
+		if err == nil {
+			migrateLegacySettings()
+		}
 	})
 	return err
+}
+
+// migrateLegacySettings 将历史配置键一次性迁移至新键并清理旧键
+func migrateLegacySettings() {
+	migrations := []struct {
+		oldKey string
+		newKey string
+	}{
+		{oldKey: "smtp_enabled", newKey: "notify_enabled"},
+		{oldKey: "temp_mirrors", newKey: "dockerhub_mirrors"},
+	}
+
+	for _, m := range migrations {
+		var oldSetting Setting
+		if err := DB.First(&oldSetting, "key = ?", m.oldKey).Error; err != nil {
+			continue
+		}
+		var newSetting Setting
+		if err := DB.First(&newSetting, "key = ?", m.newKey).Error; err != nil {
+			_ = SetSetting(m.newKey, oldSetting.Value)
+			utils.LogInfo("配置迁移: 已将旧配置项 %s 迁移至 %s", m.oldKey, m.newKey)
+		}
+		_ = DB.Delete(&Setting{}, "key = ?", m.oldKey).Error
+	}
 }
 
 // GetSetting 获取配置项

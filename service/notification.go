@@ -22,12 +22,7 @@ var notifyDispatcher = SendNotification
 
 // SendNotification 发送统一通知报告（邮件或 Webhook）
 func SendNotification(containerName, actionType, statusName, logContent string) {
-	// 兼容原 smtp_enabled
-	enabled := db.GetSetting("notify_enabled", "")
-	if enabled == "" {
-		enabled = db.GetSetting("smtp_enabled", "false")
-	}
-	if enabled != "true" {
+	if db.GetSetting("notify_enabled", "false") != "true" {
 		return
 	}
 

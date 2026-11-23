@@ -29,18 +29,19 @@ type Setting struct {
 // 键映射:
 // - auto_update_enabled: 是否开启定时自动升级 ("true"/"false")
 // - auto_update_whitelist: 自动升级白名单容器名称列表 (JSON 数组，如 ["ddns-go"])
-// - temp_mirrors: 临时镜像加速源列表 (JSON 数组，如 ["https://mirror.com"])
+// - dockerhub_mirrors: DockerHub 镜像加速源列表 (JSON 数组，如 ["https://mirror.com"])
+// - ghcr_mirrors: GHCR 镜像加速源列表 (JSON 数组)
 // - check_type: 定时检测周期类型 ("hour"/"day"/"week"/"month", 默认 "day")
 // - check_value: 定时检测周期数值 (整型，默认 1)
 // - notify_enabled: 是否启用消息通知 ("true"/"false")
 // - notify_type: 通知渠道类型 ("email"/"webhook", 默认 "email")
-// - smtp_enabled: 是否启用邮件通知 ("true"/"false", 兼容旧配置)
 // - smtp_host, smtp_port, smtp_username, smtp_password (AES-256 加密), smtp_ssl, smtp_to
 // - smtp_subject_template, smtp_body_template
 // - smtp_subject_template_check, smtp_body_template_check
 // - webhook_url, webhook_method, webhook_type ("custom"/"wechat"/"dingtalk"/"feishu")
 // - webhook_template_*, webhook_template_check_*
 // - last_check_time: 上次检测更新时间 (UTC ISO8601 格式)
+// 注: InitDB 启动时会自动将历史键 smtp_enabled -> notify_enabled、temp_mirrors -> dockerhub_mirrors 一次性迁移并清理。
 ```
 
 ### db.AvailableUpdate (容器版本检测结果表)
@@ -100,7 +101,7 @@ type RegistryCredential struct {
     - 仅在用户手动触发更新检测且镜像属于 `docker commit` / `docker load` 离线镜像（`RepoDigests` 为空）或元数据检查无法判定时调用。
     - 通过 SDK 的 `ImagePull` 更新 Tag 元数据，比对最新镜像 ID 与运行容器镜像 ID。ID 相同判定无更新，ID 变动判定有更新。
   - **401 认证多协议兼容**: 自动识别 `WWW-Authenticate` 标头类型，兼容 OCI Bearer Token 机制与 HTTP Basic Auth 挑战标头。
-  - **Tag 列表多源加速轮询**: 远端 Tag 列表获取 (`GetRemoteTags`) 融入应用级 `temp_mirrors` 镜像加速源节点轮询。
+  - **Tag 列表多源加速轮询**: 远端 Tag 列表获取 (`GetRemoteTags`) 融入应用级 `dockerhub_mirrors` / `ghcr_mirrors` 镜像加速源节点轮询。
 
 ## 4. 加密与安全策略
 * **对称加密**: 使用 AES-256-GCM 算法。

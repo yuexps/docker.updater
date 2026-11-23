@@ -343,16 +343,12 @@ func (q *QueueManager) worker() {
 
 		var dockerhubMirrors []string
 		var ghcrMirrors []string
-		dockerhubMirrorsStr := db.GetSetting("dockerhub_mirrors", "")
-		if dockerhubMirrorsStr == "" {
-			dockerhubMirrorsStr = db.GetSetting("temp_mirrors", "[]")
-		}
+		dockerhubMirrorsStr := db.GetSetting("dockerhub_mirrors", "[]")
 		_ = json.Unmarshal([]byte(dockerhubMirrorsStr), &dockerhubMirrors)
 		ghcrMirrorsStr := db.GetSetting("ghcr_mirrors", "[]")
 		_ = json.Unmarshal([]byte(ghcrMirrorsStr), &ghcrMirrors)
 
 		opts := dockerclient.UpdateOptions{
-			TempMirrors:      dockerhubMirrors,
 			DockerhubMirrors: dockerhubMirrors,
 			GHCRMirrors:      ghcrMirrors,
 		}

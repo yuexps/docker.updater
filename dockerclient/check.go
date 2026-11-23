@@ -170,10 +170,7 @@ func getCandidateReferences(imageName string) []name.Reference {
 
 	var mirrors []string
 	if isDockerHub {
-		mirrorsStr := db.GetSetting("dockerhub_mirrors", "")
-		if mirrorsStr == "" {
-			mirrorsStr = db.GetSetting("temp_mirrors", "[]")
-		}
+		mirrorsStr := db.GetSetting("dockerhub_mirrors", "[]")
 		_ = json.Unmarshal([]byte(mirrorsStr), &mirrors)
 	} else if isGHCR {
 		mirrorsStr := db.GetSetting("ghcr_mirrors", "[]")

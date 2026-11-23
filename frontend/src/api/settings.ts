@@ -3,14 +3,12 @@ import apiClient from './client'
 export interface SettingsData {
   auto_update_enabled: boolean
   auto_update_whitelist: string[]
-  temp_mirrors: string[]
   dockerhub_mirrors: string[]
   ghcr_mirrors: string[]
   check_type: string
   check_value: number
   notify_enabled: boolean
   notify_type: string
-  smtp_enabled: boolean
   smtp_host: string
   smtp_port: string
   smtp_username: string
