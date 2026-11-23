@@ -1,6 +1,6 @@
 module docker-updater
 
-go 1.26.2
+go 1.27.3
 
 replace (
 	github.com/docker/distribution => github.com/docker/distribution v2.8.2+incompatible

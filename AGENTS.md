@@ -4,7 +4,7 @@
 **Docker Updater** 是飞牛系统 (FNOS) 的 Docker 容器升级管理器（`.fpk` 格式第三方应用）。提供 Web GUI 实现宿主机容器版本检测、一键升级、回滚、备份和镜像管理。
 
 ## 技术栈
-* **后端**: Go 1.26 + [Gin](https://github.com/gin-gonic/gin) + [GORM](https://gorm.io) + `gopkg.in/yaml.v3` (Compose YAML 解析)
+* **后端**: Go 1.27 + [Gin](https://github.com/gin-gonic/gin) + [GORM](https://gorm.io) + `gopkg.in/yaml.v3` (Compose YAML 解析)
 * **数据库**: SQLite (纯 Go 驱动 [glebarez/sqlite](https://github.com/glebarez/sqlite)，CGO-free)
 * **Docker SDK**: [docker/docker/client](https://github.com/moby/moby/tree/master/client) (不使用 CLI)
 * **通信**: WebSocket + SSE 实时流
